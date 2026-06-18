@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -7,20 +8,50 @@ export interface Project {
   request_id: string;
   final_key: string;
   detected_key: string;
-  progress_note: string; // The backend uses progress_note
-  timeline: string;
-  store_name: string;
-  store_code: string;
-  mer: string;
-  sr: string;
+  source_project_name: string;
   normalized_project_name: string;
-  plan_option: string;
+  detected_name_project?: string;
+  store_code: string;
+  store_name: string;
   status: string;
-  data_responser: string;
+  progress_note: string;
+  final_progress?: string;
+  progress_note_source?: string;
+  timeline: string;
+  plan_option: string;
+  data_responser?: string;
+  mer?: string;
+  sr?: string;
+  supplier?: string;
+  detected_supplier?: string;
+  vis_note?: string;
+  sr_note?: string;
   created_at: string;
 }
 
 export function useProjects() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const channel = supabase.channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'posm_projects'
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['projects'] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
   return useQuery({
     queryKey: ['projects'],
     queryFn: async () => {
@@ -32,20 +63,20 @@ export function useProjects() {
       if (error) throw error;
       return data as Project[];
     },
-    refetchInterval: 10000, // Tự động refetch mỗi 10s để hiển thị real-time giả lập
+    // Đã bỏ refetchInterval vì đã có Realtime
   });
 }
 
 
 
-export function useUpdateProjectProgress() {
+export function useUpdateProjectStatus() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, progress_note }: { id: string; progress_note: string }) => {
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
       const { data, error } = await supabase
         .from('posm_projects')
-        .update({ progress_note })
+        .update({ status })
         .eq('id', id)
         .select()
         .single();
