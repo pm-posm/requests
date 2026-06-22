@@ -27,6 +27,8 @@ export interface Project {
   vis_note?: string;
   sr_note?: string;
   created_at: string;
+  sheet_row_index?: number;
+  request_date?: string;
 }
 
 export function useProjects() {
