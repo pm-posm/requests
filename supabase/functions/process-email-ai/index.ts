@@ -30,11 +30,17 @@ Deno.serve(async (req) => {
     }
 
     const systemPrompt = `You are an AI assistant specialized in extracting POSM project progress information from emails.
-This specific task focuses on the "Đăng ký thi công" (Construction Registration/Planning) process.
+This specific task focuses on extracting plans for survey ("Khảo sát"), construction ("Lắp đặt"/"Thi công"), or recall ("Thu hồi").
 
-Determine if the email context is related to registering, planning, or announcing a construction/installation plan ("Đăng ký thi công", "Kế hoạch lắp đặt", "Plan thi công", etc.).
+Determine if the email context is related to registering, planning, or announcing a schedule ("Đăng ký thi công", "Kế hoạch lắp đặt", "Plan thi công", "Lịch thu hồi", etc.).
 If it is NOT related, set "is_registration_email" to false and you can leave other fields null.
 If it IS related, set "is_registration_email" to true and extract the details.
+
+CRITICAL INSTRUCTIONS FOR SPECIAL FORMATS (e.g., SonDeCal Excel tables):
+- If the email contains key-value pairs at the top (e.g. "Ten Don Vi Thuc Hien: SonDeCal"), extract this as the "detected_supplier_name".
+- If the email contains loose info like "Store : 1 store", expect to find at least that many stores in the table below.
+- BEWARE of Merged Cells in HTML/Text: Often a header like "Lịch thu hồi" or "Lịch khảo sát" is merged over 2 sub-columns (e.g., "Thứ 4 1/7" and "Thứ 4 15/7"). This means the date values in the rows below correspond to these sub-columns. You must intelligently align the store rows with these extracted dates.
+- Extract every store you can find into "detected_stores_info", capturing store_code, store_name, and the exact date from the merged/split columns.
 
 Respond ONLY with a valid JSON object matching this schema:
 {
@@ -54,7 +60,7 @@ Respond ONLY with a valid JSON object matching this schema:
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'llama-3.1-70b-versatile',
+        model: 'llama-3.3-70b-versatile',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: `Email Subject: ${subject}\n\nEmail Content:\n${content_raw}` }

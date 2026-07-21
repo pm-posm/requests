@@ -64,8 +64,11 @@ export default function Analytics({ projects, activeFilter, onFilterChange, view
     // Supplier distribution
     const supplierGroups: Record<string, Project[]> = {};
     projects.forEach(p => {
-      const supplier = p.supplier?.trim();
+      let supplier = p.supplier?.trim();
       if (supplier && supplier !== '-' && supplier !== 'Chưa rõ') {
+        // Chuẩn hóa tên nhà cung cấp
+        if (supplier.toLowerCase().replace(/\s+/g, '') === 'link4') supplier = 'Link 4';
+        
         if (!supplierGroups[supplier]) supplierGroups[supplier] = [];
         supplierGroups[supplier].push(p);
       }
@@ -100,34 +103,34 @@ export default function Analytics({ projects, activeFilter, onFilterChange, view
   return (
     <div className={viewMode === 'all' ? "p-4 sm:p-6 space-y-4 bg-slate-50/50 dark:bg-slate-900/20" : ""}>
       {(viewMode === 'stats' || viewMode === 'all') && (
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <button 
-          className={`flex-1 min-w-[120px] p-2 rounded-lg border text-left transition-all duration-200 hover:bg-slate-50 dark:hover:bg-slate-800 ${activeFilter === 'all' ? 'ring-2 ring-primary bg-primary/5 border-primary/20' : 'border-slate-200 dark:border-slate-800'}`}
+          className={`p-3 rounded-lg border text-left transition-all duration-200 hover:bg-slate-50 dark:hover:bg-slate-800 ${activeFilter === 'all' ? 'ring-2 ring-primary bg-primary/5 border-primary/20' : 'border-slate-200 dark:border-slate-800'}`}
           onClick={() => onFilterChange('all')}
         >
-          <div className="text-xs text-slate-500 mb-1 flex items-center gap-1"><KanbanSquare className="w-3 h-3"/> Tổng dự án</div>
-          <div className="text-xl font-bold">{stats.total}</div>
+          <div className="text-[11px] sm:text-xs text-slate-500 mb-1 flex items-center gap-1"><KanbanSquare className="w-3 h-3 shrink-0"/> <span className="truncate">Tổng request</span></div>
+          <div className="text-lg sm:text-xl font-bold">{stats.total}</div>
         </button>
         <button 
-          className={`flex-1 min-w-[120px] p-2 rounded-lg border text-left transition-all duration-200 hover:bg-slate-50 dark:hover:bg-slate-800 ${activeFilter === 'in_progress' ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20 border-blue-200' : 'border-slate-200 dark:border-slate-800'}`}
+          className={`p-3 rounded-lg border text-left transition-all duration-200 hover:bg-slate-50 dark:hover:bg-slate-800 ${activeFilter === 'in_progress' ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20 border-blue-200' : 'border-slate-200 dark:border-slate-800'}`}
           onClick={() => onFilterChange('in_progress')}
         >
-          <div className="text-xs text-slate-500 mb-1 flex items-center gap-1"><Clock className="w-3 h-3 text-blue-500"/> Đang xử lý</div>
-          <div className="text-xl font-bold text-blue-600">{stats.inProgress}</div>
+          <div className="text-[11px] sm:text-xs text-slate-500 mb-1 flex items-center gap-1"><Clock className="w-3 h-3 text-blue-500 shrink-0"/> <span className="truncate">Đang xử lý</span></div>
+          <div className="text-lg sm:text-xl font-bold text-blue-600">{stats.inProgress}</div>
         </button>
         <button 
-          className={`flex-1 min-w-[120px] p-2 rounded-lg border text-left transition-all duration-200 hover:bg-slate-50 dark:hover:bg-slate-800 ${activeFilter === 'cancelled' ? 'ring-2 ring-red-500 bg-red-50 dark:bg-red-900/20 border-red-200' : 'border-slate-200 dark:border-slate-800'}`}
+          className={`p-3 rounded-lg border text-left transition-all duration-200 hover:bg-slate-50 dark:hover:bg-slate-800 ${activeFilter === 'cancelled' ? 'ring-2 ring-red-500 bg-red-50 dark:bg-red-900/20 border-red-200' : 'border-slate-200 dark:border-slate-800'}`}
           onClick={() => onFilterChange('cancelled')}
         >
-          <div className="text-xs text-slate-500 mb-1 flex items-center gap-1"><XCircle className="w-3 h-3 text-red-500"/> Bị hủy / Từ chối</div>
-          <div className="text-xl font-bold text-red-600">{stats.cancelled}</div>
+          <div className="text-[11px] sm:text-xs text-slate-500 mb-1 flex items-center gap-1"><XCircle className="w-3 h-3 text-red-500 shrink-0"/> <span className="truncate">Bị hủy / Từ chối</span></div>
+          <div className="text-lg sm:text-xl font-bold text-red-600">{stats.cancelled}</div>
         </button>
         <button 
-          className={`flex-1 min-w-[120px] p-2 rounded-lg border text-left transition-all duration-200 hover:bg-slate-50 dark:hover:bg-slate-800 ${activeFilter === 'completed_progress' ? 'ring-2 ring-purple-500 bg-purple-50 dark:bg-purple-900/20 border-purple-200' : 'border-slate-200 dark:border-slate-800'}`}
+          className={`p-3 rounded-lg border text-left transition-all duration-200 hover:bg-slate-50 dark:hover:bg-slate-800 ${activeFilter === 'completed_progress' ? 'ring-2 ring-purple-500 bg-purple-50 dark:bg-purple-900/20 border-purple-200' : 'border-slate-200 dark:border-slate-800'}`}
           onClick={() => onFilterChange('completed_progress')}
         >
-          <div className="text-xs text-slate-500 mb-1 flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-purple-500"/> Thi công xong</div>
-          <div className="text-xl font-bold text-purple-600">{stats.completedProgress}</div>
+          <div className="text-[11px] sm:text-xs text-slate-500 mb-1 flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-purple-500 shrink-0"/> <span className="truncate">Thi công xong</span></div>
+          <div className="text-lg sm:text-xl font-bold text-purple-600">{stats.completedProgress}</div>
         </button>
       </div>
       )}
@@ -136,9 +139,9 @@ export default function Analytics({ projects, activeFilter, onFilterChange, view
         <div className={`grid grid-cols-1 ${viewMode === 'charts' ? 'lg:grid-cols-2 xl:grid-cols-3' : 'md:grid-cols-3'} gap-4 pt-2`}>
         <Card className="col-span-1 shadow-sm">
           <CardHeader className="py-2 px-4 border-b">
-            <CardTitle className="text-xs text-slate-500 uppercase font-bold tracking-wider">Phân bổ Trạng Thái</CardTitle>
+            <CardTitle className="text-xs text-slate-500 uppercase font-bold tracking-wider">Phân bổ trạng thái</CardTitle>
           </CardHeader>
-          <CardContent className="h-48 pb-2 pt-2">
+          <CardContent className="h-64 pb-2 pt-2">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -174,14 +177,14 @@ export default function Analytics({ projects, activeFilter, onFilterChange, view
           <CardHeader className="py-2 px-4 border-b">
             <CardTitle className="text-xs text-slate-500 uppercase font-bold tracking-wider">Tiến độ thi công</CardTitle>
           </CardHeader>
-          <CardContent className="h-48 pb-2 pt-2">
+          <CardContent className="h-64 pb-2 pt-2">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats.progressData} layout="vertical" margin={{ top: 0, right: 10, left: 100, bottom: 0 }} style={{ fontFamily: 'var(--font-sans)' }}>
+              <BarChart data={stats.progressData} layout="vertical" margin={{ top: 0, right: 10, left: 20, bottom: 0 }} style={{ fontFamily: 'var(--font-sans)' }}>
                 <XAxis type="number" hide />
-                <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 11, fontFamily: 'var(--font-sans)'}} />
+                <YAxis dataKey="name" type="category" width={180} tick={{fontSize: 11, fontFamily: 'var(--font-sans)'}} tickFormatter={(val) => val.length > 25 ? val.substring(0, 25) + '...' : val} />
                 <Tooltip contentStyle={{ fontFamily: 'var(--font-sans)' }} cursor={{fill: 'rgba(0,0,0,0.05)'}} />
                 <Bar 
-                  dataKey="value" fill="#8b5cf6" radius={[0, 4, 4, 0]} barSize={16}
+                  dataKey="value" fill="#8b5cf6" radius={[0, 4, 4, 0]} barSize={16} minPointSize={8}
                   onClick={(data: any) => {
                     setChartDetail({
                       title: `Tiến độ: ${data.name}`,
@@ -199,14 +202,14 @@ export default function Analytics({ projects, activeFilter, onFilterChange, view
           <CardHeader className="py-2 px-4 border-b">
             <CardTitle className="text-xs text-slate-500 uppercase font-bold tracking-wider">Top Nhà cung cấp</CardTitle>
           </CardHeader>
-          <CardContent className="h-48 pb-2 pt-2">
+          <CardContent className="h-64 pb-2 pt-2">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats.supplierData} layout="vertical" margin={{ top: 0, right: 10, left: 80, bottom: 0 }} style={{ fontFamily: 'var(--font-sans)' }}>
+              <BarChart data={stats.supplierData} layout="vertical" margin={{ top: 0, right: 10, left: 10, bottom: 0 }} style={{ fontFamily: 'var(--font-sans)' }}>
                 <XAxis type="number" hide />
-                <YAxis dataKey="name" type="category" width={80} tick={{fontSize: 11, fontFamily: 'var(--font-sans)'}} />
+                <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 11, fontFamily: 'var(--font-sans)'}} tickFormatter={(val) => val.length > 15 ? val.substring(0, 15) + '...' : val} />
                 <Tooltip contentStyle={{ fontFamily: 'var(--font-sans)' }} cursor={{fill: 'rgba(0,0,0,0.05)'}} />
                 <Bar 
-                  dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={16} 
+                  dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={16} minPointSize={8} 
                   onClick={(data: any) => {
                     setChartDetail({
                       title: `Nhà cung cấp: ${data.name}`,

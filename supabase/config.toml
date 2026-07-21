@@ -434,3 +434,47 @@ entrypoint = "./functions/process-email-ai/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/process-email-ai/*.html" ]
+
+[functions.download-drive-file]
+enabled = true
+verify_jwt = false
+import_map = "./functions/download-drive-file/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/download-drive-file/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/download-drive-file/*.html" ]
+
+[functions.upload-to-drive]
+enabled = true
+verify_jwt = false
+import_map = "./functions/upload-to-drive/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/upload-to-drive/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/upload-to-drive/*.html" ]
+
+[functions.project-folder-link]
+enabled = true
+verify_jwt = false
+import_map = "./functions/project-folder-link/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/project-folder-link/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/project-folder-link/*.html" ]
+
+[functions.cron-process-ai]
+enabled = true
+verify_jwt = false
+import_map = "./functions/cron-process-ai/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/cron-process-ai/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/cron-process-ai/*.html" ]

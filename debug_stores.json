@@ -1,0 +1,1535 @@
+[
+  {
+    "id": "c5fd5e30-4e17-42f9-ac40-16af78448b85",
+    "email_received_at": "2026-02-26T08:49:43+00:00",
+    "email_subject": "ĐĂNG KÝ LỊCH LẮP ĐẶT : 140566U01-U11 Simple Skin MT Multichannel Produce MDF SS Customize",
+    "ntxx_details": {
+      "stores": [
+        {
+          "code": "STR-BIG-00420",
+          "date": "02/03/2026",
+          "name": "Big C Dong Nai",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-00435",
+          "date": "02/03/2026",
+          "name": "GO! AN LAC",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-00436",
+          "date": "02/03/2026",
+          "name": "GO! CAN THO",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-00422",
+          "date": "02/03/2026",
+          "name": "GO! BINH DUONG",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-00423",
+          "date": "02/03/2026",
+          "name": "GO! DI AN",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-00455",
+          "date": "02/03/2026",
+          "name": "GO! DA LAT",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-00431",
+          "date": "02/03/2026",
+          "name": "GO! NGUYEN THI THAP",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-00421",
+          "date": "02/03/2026",
+          "name": "GO! TAN HIEP",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-00437",
+          "date": "02/03/2026",
+          "name": "GO! MY THO",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-00438",
+          "date": "02/03/2026",
+          "name": "GO! TRA VINH",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-07054",
+          "date": "02/03/2026",
+          "name": "GO! BEN TRE",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-07843",
+          "date": "02/03/2026",
+          "name": "GO! BA RIA",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-12536",
+          "date": "02/03/2026",
+          "name": "GO! BAC LIEU",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-00424",
+          "date": "02/03/2026",
+          "name": "GO! DA NA NANG",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-00425",
+          "date": "02/03/2026",
+          "name": "GO! HUE",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-00426",
+          "date": "02/03/2026",
+          "name": "GO! VINH",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-00453",
+          "date": "02/03/2026",
+          "name": "GO! QUY NHON",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-00452",
+          "date": "02/03/2026",
+          "name": "GO! NHA TRANG",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-00454",
+          "date": "02/03/2026",
+          "name": "GO! QUANG NGAI",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-00456",
+          "date": "02/03/2026",
+          "name": "GO! BUON ME THUOT",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-00444",
+          "date": "02/03/2026",
+          "name": "GO! THANG LONG",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-00450",
+          "date": "02/03/2026",
+          "name": "GO! HAI PHONG",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-00446",
+          "date": "02/03/2026",
+          "name": "GO! VINH PHUC",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-00448",
+          "date": "02/03/2026",
+          "name": "GO! GIA LAM",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-00427",
+          "date": "02/03/2026",
+          "name": "GO! THANH HOA",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-00429",
+          "date": "02/03/2026",
+          "name": "GO! NINH BINH",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-00445",
+          "date": "02/03/2026",
+          "name": "GO! VIET TRI",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-00451",
+          "date": "02/03/2026",
+          "name": "GO! HA LONG",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        },
+        {
+          "code": "STR-BIG-00447",
+          "date": "02/03/2026",
+          "name": "GO! BAC GIANG",
+          "time": "",
+          "address": "SonDeCal",
+          "category": "SS Customize Simple",
+          "quantity": null
+        }
+      ],
+      "supplier": "SonDeCal",
+      "email_type": "install_schedule"
+    }
+  },
+  {
+    "id": "4989f616-c69a-4177-b8c6-d91e11f244ce",
+    "email_received_at": "2026-03-02T11:04:20+00:00",
+    "email_subject": "RE: ĐĂNG KÝ LỊCH LẮP ĐẶT : 140566U01-U11 Simple Skin MT Multichannel Produce MDF SS Customize",
+    "ntxx_details": {
+      "stores": [
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! DONG NAI",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! AN LAC",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! CAN THO",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! BINH DUONG",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! DI AN",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! NGUYEN THI THAP",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! TAN HIEP",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! MY THO",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! TRA VINH",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! BEN TRE",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! BA RIA",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! BAC LIEU",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! DA NANG",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! HUE",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! VINH",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! QUY NHON",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! NHA TRANG",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! HAI PHONG",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! THANH HOA",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! NINH BINH",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! HA LONG",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! BAC GIANG",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! DA LAT",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! QUANG NGAI",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! BUON ME THUOT",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! THANG LONG",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! VINH PHUC",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! LONG BIEN (Gia Lâm)",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! VIET TRI",
+          "time": "",
+          "address": "",
+          "category": "Simple Skin MT Multichannel Produce MDF SS Customize",
+          "quantity": "1"
+        }
+      ],
+      "supplier": "SDC",
+      "email_type": "install_schedule"
+    }
+  },
+  {
+    "id": "82aadd9a-3f8d-432c-8a5d-1839ea70f1c0",
+    "email_received_at": "2026-02-27T04:49:26+00:00",
+    "email_subject": "Re: ĐĂNG KÝ LỊCH LẮP ĐẶT : 140566U01-U11 Simple Skin MT Multichannel Produce MDF SS Customize",
+    "ntxx_details": {
+      "stores": [],
+      "supplier": "SonDeCal",
+      "email_type": "install_reply"
+    }
+  },
+  {
+    "id": "6612070e-1311-4788-8eab-26ea4f78d687",
+    "email_received_at": "2026-03-02T11:06:45+00:00",
+    "email_subject": "RE: [External] - RE: ĐĂNG KÝ LỊCH LẮP ĐẶT : 140566U01-U11 Simple Skin MT Multichannel Produce MDF SS Customize",
+    "ntxx_details": {
+      "stores": [
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! DONG NAI",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! AN LAC",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! CAN THO",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! BINH DUONG",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! DI AN",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! NGUYEN THI THAP",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! TAN HIEP",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! MY THO",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! TRA VINH",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! BEN TRE",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! BA RIA",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! BAC LIEU",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! DA NA-NG",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! HUE",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! VINH",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! QUY NHON",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! NHA TRANG",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! HAI PHONG",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! THANH HOA",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! NINH BINH",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! HA LONG",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! BAC GIANG",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! DA LAT",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! QUANG NGAI",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! BUON ME THUOT",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! THANG LONG",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! VINH PHUC",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! LONG BIEN (Gia Lâm)",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! VIET TRI",
+          "time": "",
+          "address": "",
+          "category": "W1000 x H1400 x D1000mm",
+          "quantity": 1
+        }
+      ],
+      "supplier": "SDC",
+      "email_type": "install_schedule"
+    }
+  },
+  {
+    "id": "0289af24-12a9-4af8-b397-26703b663e72",
+    "email_received_at": "2026-03-03T01:49:12+00:00",
+    "email_subject": "RE: [External] - RE: ĐĂNG KÝ LỊCH LẮP ĐẶT : 140566U01-U11 Simple Skin MT Multichannel Produce MDF SS Customize",
+    "ntxx_details": {
+      "stores": [],
+      "supplier": "SDC",
+      "email_type": "install_reply"
+    }
+  },
+  {
+    "id": "7d907604-f1b5-4190-81ef-f0ab5e4ffe64",
+    "email_received_at": "2026-02-09T02:13:34+00:00",
+    "email_subject": "[Duyệt Brief] : [140566U01-U11 Simple Skin MT Multichannel Produce MDF SS Customize]",
+    "ntxx_details": null
+  },
+  {
+    "id": "8070d823-e801-448e-b8be-33de71d0d124",
+    "email_received_at": "2026-02-10T04:26:53+00:00",
+    "email_subject": "[Duyệt Brief] : [140566U01-U11 Simple Skin MT Multichannel Produce MDF SS Customize]",
+    "ntxx_details": null
+  },
+  {
+    "id": "94b1f140-d39d-4612-b800-91c1e3f0851b",
+    "email_received_at": "2026-03-04T10:23:34+00:00",
+    "email_subject": "RE: [External] - RE: ĐĂNG KÝ LỊCH LẮP ĐẶT : 140566U01-U11 Simple Skin MT Multichannel Produce MDF SS Customize",
+    "ntxx_details": {
+      "stores": [],
+      "supplier": "",
+      "email_type": "install_reply"
+    }
+  },
+  {
+    "id": "6c307303-b5bd-4b77-8e92-3e5c01351aa6",
+    "email_received_at": "2026-03-09T04:56:43+00:00",
+    "email_subject": "RE: [External] - RE: ĐĂNG KÝ LỊCH LẮP ĐẶT : 140566U01-U11 Simple Skin MT Multichannel Produce MDF SS Customize",
+    "ntxx_details": null
+  },
+  {
+    "id": "b97dc7ce-59f3-4986-bed5-fde615e709db",
+    "email_received_at": "2026-03-11T08:20:54+00:00",
+    "email_subject": "RE: [External] - RE: ĐĂNG KÝ LỊCH LẮP ĐẶT : 140566U01-U11 Simple Skin MT Multichannel Produce MDF SS Customize",
+    "ntxx_details": null
+  },
+  {
+    "id": "50fd2021-5c7b-45cb-8772-e3c4281044a4",
+    "email_received_at": "2026-04-14T11:29:42+00:00",
+    "email_subject": "RE: ĐĂNG KÝ LỊCH LẮP ĐẶT : 140566U01-U11 Simple Skin MT Multichannel Produce MDF SS Customize",
+    "ntxx_details": null
+  },
+  {
+    "id": "470fbf1b-475e-4e7d-ab24-a830b32a8b47",
+    "email_received_at": "2026-04-15T03:23:03+00:00",
+    "email_subject": "Re: [External] - RE: ĐĂNG KÝ LỊCH LẮP ĐẶT : 140566U01-U11 Simple Skin MT Multichannel Produce MDF SS Customize",
+    "ntxx_details": null
+  },
+  {
+    "id": "60830191-0820-45e1-a2ee-0fccef39f75b",
+    "email_received_at": "2026-04-15T04:28:25+00:00",
+    "email_subject": "RE: [External] - RE: ĐĂNG KÝ LỊCH LẮP ĐẶT : 140566U01-U11 Simple Skin MT Multichannel Produce MDF SS Customize",
+    "ntxx_details": null
+  },
+  {
+    "id": "94a2ef68-4b9f-4441-b87a-be3d6fc3bc5f",
+    "email_received_at": "2026-04-15T07:49:32+00:00",
+    "email_subject": "Re: [External] - RE: ĐĂNG KÝ LỊCH LẮP ĐẶT : 140566U01-U11 Simple Skin MT Multichannel Produce MDF SS Customize",
+    "ntxx_details": null
+  },
+  {
+    "id": "067784fb-c434-44d5-a16f-682dfa2a9084",
+    "email_received_at": "2026-03-04T09:09:15+00:00",
+    "email_subject": "RE: [External] - RE: ĐĂNG KÝ LỊCH LẮP ĐẶT : 140566U01-U11 Simple Skin MT Multichannel Produce MDF SS Customize",
+    "ntxx_details": {
+      "stores": [
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! DONG NAI",
+          "time": "",
+          "address": "",
+          "category": "",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! AN LAC",
+          "time": "",
+          "address": "",
+          "category": "",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! CAN THO",
+          "time": "",
+          "address": "",
+          "category": "",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! DI AN",
+          "time": "",
+          "address": "",
+          "category": "",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! NGUYEN THI THAP",
+          "time": "",
+          "address": "",
+          "category": "",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! TAN HIEP",
+          "time": "",
+          "address": "",
+          "category": "",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! BAC LIEU",
+          "time": "",
+          "address": "",
+          "category": "",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! DA NANG",
+          "time": "",
+          "address": "",
+          "category": "",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! VINH",
+          "time": "",
+          "address": "",
+          "category": "",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! QUY NHON",
+          "time": "",
+          "address": "",
+          "category": "",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! QUANG NGAI",
+          "time": "",
+          "address": "",
+          "category": "",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! THANG LONG",
+          "time": "",
+          "address": "",
+          "category": "",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! LONG BIEN (Gia Lâm)",
+          "time": "",
+          "address": "",
+          "category": "",
+          "quantity": ""
+        }
+      ],
+      "supplier": "",
+      "email_type": "install_schedule"
+    }
+  },
+  {
+    "id": "a9dc922e-dbd8-483b-b7f9-967918579e56",
+    "email_received_at": "2026-03-04T10:01:11+00:00",
+    "email_subject": "RE: [External] - RE: ĐĂNG KÝ LỊCH LẮP ĐẶT : 140566U01-U11 Simple Skin MT Multichannel Produce MDF SS Customize",
+    "ntxx_details": {
+      "stores": [
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! NGUYEN THI THAP",
+          "time": "",
+          "address": "",
+          "category": "",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! TAN HIEP",
+          "time": "",
+          "address": "",
+          "category": "",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! VINH",
+          "time": "",
+          "address": "",
+          "category": "",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! LONG BIEN (Gia Lâm)",
+          "time": "",
+          "address": "",
+          "category": "",
+          "quantity": ""
+        }
+      ],
+      "supplier": "Indicia",
+      "email_type": "install_schedule"
+    }
+  },
+  {
+    "id": "c993448c-616a-411e-b4b1-30238444c073",
+    "email_received_at": "2026-03-05T09:43:30+00:00",
+    "email_subject": "RE: [External] - RE: ĐĂNG KÝ LỊCH LẮP ĐẶT : 140566U01-U11 Simple Skin MT Multichannel Produce MDF SS Customize",
+    "ntxx_details": {
+      "stores": [
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! BINH DUONG",
+          "time": "",
+          "address": "",
+          "category": "Islands customize (ụ Customize)",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! DA LAT",
+          "time": "",
+          "address": "",
+          "category": "Islands customize (ụ Customize)",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! NINH THUẬN",
+          "time": "",
+          "address": "",
+          "category": "Islands customize (ụ Customize)",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! PHÚ THẠNH",
+          "time": "",
+          "address": "",
+          "category": "Islands customize (ụ Customize)",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! MY THO",
+          "time": "",
+          "address": "",
+          "category": "Islands customize (ụ Customize)",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! TRA VINH",
+          "time": "",
+          "address": "",
+          "category": "Islands customize (ụ Customize)",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! BEN TRE",
+          "time": "",
+          "address": "",
+          "category": "Islands customize (ụ Customize)",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! BÀ RỊA",
+          "time": "",
+          "address": "",
+          "category": "Islands customize (ụ Customize)",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! BAC LIEU",
+          "time": "",
+          "address": "",
+          "category": "Islands customize (ụ Customize)",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! HUE",
+          "time": "",
+          "address": "",
+          "category": "Islands customize (ụ Customize)",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! HẢI DƯƠNG",
+          "time": "",
+          "address": "",
+          "category": "Islands customize (ụ Customize)",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! QUI NHON",
+          "time": "",
+          "address": "",
+          "category": "Islands customize (ụ Customize)",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! NHA TRANG",
+          "time": "",
+          "address": "",
+          "category": "Islands customize (ụ Customize)",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! QUANG NGAI",
+          "time": "",
+          "address": "",
+          "category": "Islands customize (ụ Customize)",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! BUON MA THUOT",
+          "time": "",
+          "address": "",
+          "category": "Islands customize (ụ Customize)",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! THANG LONG",
+          "time": "",
+          "address": "",
+          "category": "Islands customize (ụ Customize)",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! HAI PHONG",
+          "time": "",
+          "address": "",
+          "category": "Islands customize (ụ Customize)",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! VINH PHUC",
+          "time": "",
+          "address": "",
+          "category": "Islands customize (ụ Customize)",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! THÁI NGUYÊN",
+          "time": "",
+          "address": "",
+          "category": "Islands customize (ụ Customize)",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! THANH HOA",
+          "time": "",
+          "address": "",
+          "category": "Islands customize (ụ Customize)",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! NINH BINH",
+          "time": "",
+          "address": "",
+          "category": "Islands customize (ụ Customize)",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! VIET TRI",
+          "time": "",
+          "address": "",
+          "category": "Islands customize (ụ Customize)",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! HA LONG",
+          "time": "",
+          "address": "",
+          "category": "Islands customize (ụ Customize)",
+          "quantity": ""
+        },
+        {
+          "code": "",
+          "date": "",
+          "name": "GO! BAC GIANG",
+          "time": "",
+          "address": "",
+          "category": "Islands customize (ụ Customize)",
+          "quantity": ""
+        }
+      ],
+      "supplier": "SDC (Sơn Decal)",
+      "email_type": "install_schedule"
+    }
+  },
+  {
+    "id": "a78823c7-b801-4f19-93ad-5430a0d5a3d3",
+    "email_received_at": "2026-03-09T07:59:38+00:00",
+    "email_subject": "Fw: [External] - RE: ĐĂNG KÝ LỊCH LẮP ĐẶT : 140566U01-U11 Simple Skin MT Multichannel Produce MDF SS Customize",
+    "ntxx_details": {
+      "stores": [],
+      "supplier": null,
+      "email_type": "install_reply"
+    }
+  },
+  {
+    "id": "af665eec-6e4a-44fd-869d-a5d24e6370bc",
+    "email_received_at": "2026-03-09T04:55:40+00:00",
+    "email_subject": "RE: ĐĂNG KÝ LỊCH LẮP ĐẶT : 140566U01-U11 Simple Skin MT Multichannel Produce MDF SS Customize",
+    "ntxx_details": {
+      "stores": [
+        {
+          "code": null,
+          "date": null,
+          "name": "GO! BINH DUONG",
+          "time": null,
+          "address": null,
+          "category": null,
+          "quantity": null
+        },
+        {
+          "code": null,
+          "date": null,
+          "name": "GO! NGUYEN THI THAP",
+          "time": null,
+          "address": null,
+          "category": null,
+          "quantity": null
+        },
+        {
+          "code": null,
+          "date": null,
+          "name": "GO! TAN HIEP",
+          "time": null,
+          "address": null,
+          "category": null,
+          "quantity": null
+        },
+        {
+          "code": null,
+          "date": null,
+          "name": "GO! MY THO",
+          "time": null,
+          "address": null,
+          "category": null,
+          "quantity": null
+        },
+        {
+          "code": null,
+          "date": null,
+          "name": "GO! TRA VINH",
+          "time": null,
+          "address": null,
+          "category": null,
+          "quantity": null
+        },
+        {
+          "code": null,
+          "date": null,
+          "name": "GO! BEN TRE",
+          "time": null,
+          "address": null,
+          "category": null,
+          "quantity": null
+        },
+        {
+          "code": null,
+          "date": null,
+          "name": "GO! BA RIA",
+          "time": null,
+          "address": null,
+          "category": null,
+          "quantity": null
+        },
+        {
+          "code": null,
+          "date": null,
+          "name": "GO! BAC LIEU",
+          "time": null,
+          "address": null,
+          "category": null,
+          "quantity": null
+        },
+        {
+          "code": null,
+          "date": "09/03",
+          "name": "GO! HUE",
+          "time": null,
+          "address": null,
+          "category": null,
+          "quantity": null
+        },
+        {
+          "code": null,
+          "date": "10-11/03",
+          "name": "GO! VINH",
+          "time": null,
+          "address": null,
+          "category": null,
+          "quantity": null
+        },
+        {
+          "code": null,
+          "date": "09/03",
+          "name": "GO! QUY NHON",
+          "time": null,
+          "address": null,
+          "category": null,
+          "quantity": null
+        },
+        {
+          "code": null,
+          "date": null,
+          "name": "GO! NHA TRANG",
+          "time": null,
+          "address": null,
+          "category": null,
+          "quantity": null
+        },
+        {
+          "code": null,
+          "date": "10-11/03",
+          "name": "GO! HAI PHONG",
+          "time": null,
+          "address": null,
+          "category": null,
+          "quantity": null
+        },
+        {
+          "code": null,
+          "date": "10-11/03",
+          "name": "GO! THANH HOA",
+          "time": null,
+          "address": null,
+          "category": null,
+          "quantity": null
+        },
+        {
+          "code": null,
+          "date": "10-11/03",
+          "name": "GO! NINH BINH",
+          "time": null,
+          "address": null,
+          "category": null,
+          "quantity": null
+        },
+        {
+          "code": null,
+          "date": "10-11/03",
+          "name": "GO! HA LONG",
+          "time": null,
+          "address": null,
+          "category": null,
+          "quantity": null
+        },
+        {
+          "code": null,
+          "date": "10-11/03",
+          "name": "GO! BAC GIANG",
+          "time": null,
+          "address": null,
+          "category": null,
+          "quantity": null
+        },
+        {
+          "code": null,
+          "date": null,
+          "name": "GO! DA LAT",
+          "time": null,
+          "address": null,
+          "category": null,
+          "quantity": null
+        },
+        {
+          "code": null,
+          "date": "09/03",
+          "name": "GO! QUANG NGAI",
+          "time": null,
+          "address": null,
+          "category": null,
+          "quantity": null
+        },
+        {
+          "code": null,
+          "date": null,
+          "name": "GO! BUON ME THUOT",
+          "time": null,
+          "address": null,
+          "category": null,
+          "quantity": null
+        },
+        {
+          "code": null,
+          "date": "10-11/03",
+          "name": "GO! THANG LONG",
+          "time": null,
+          "address": null,
+          "category": null,
+          "quantity": null
+        },
+        {
+          "code": null,
+          "date": "10-11/03",
+          "name": "GO! VINH PHUC",
+          "time": null,
+          "address": null,
+          "category": null,
+          "quantity": null
+        },
+        {
+          "code": null,
+          "date": "10-11/03",
+          "name": "GO! LONG BIEN (Gia Lâm)",
+          "time": null,
+          "address": null,
+          "category": null,
+          "quantity": null
+        },
+        {
+          "code": null,
+          "date": "10-11/03",
+          "name": "GO! VIET TRI",
+          "time": null,
+          "address": null,
+          "category": null,
+          "quantity": null
+        }
+      ],
+      "supplier": "Sondecal",
+      "email_type": "install_schedule"
+    }
+  }
+]

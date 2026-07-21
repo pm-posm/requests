@@ -1,0 +1,1 @@
+ALTER TABLE project_activities ADD COLUMN IF NOT EXISTS message_id TEXT;

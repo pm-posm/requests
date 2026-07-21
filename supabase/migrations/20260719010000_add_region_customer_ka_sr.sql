@@ -1,0 +1,7 @@
+-- Thêm các cột cho Phase 2
+ALTER TABLE project_store_items
+ADD COLUMN IF NOT EXISTS region TEXT,
+ADD COLUMN IF NOT EXISTS customer TEXT,
+ADD COLUMN IF NOT EXISTS ka TEXT,
+ADD COLUMN IF NOT EXISTS sr TEXT,
+ADD COLUMN IF NOT EXISTS custom_files JSONB DEFAULT '[]'::jsonb;
