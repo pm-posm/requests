@@ -14,12 +14,13 @@ import { useDashboardStore } from '@/stores/useDashboardStore';
 // Deployed Web App URL for Apps Script Reverse Sync (Version 5 - Active)
 const DEFAULT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxLRsNBMc4MguQlCOdgmlO6NRsfPG9AltjFCnS8I7GRMwZPNeiVCaqLiDc_vwpbogcK/exec';
 
-// Official Progress Options strictly matching Column Q on BaoHanh_Model & Column Y on Mer View 2026
+// Official Progress Options strictly matching Data Validation rules on BaoHanh_Model & Mer View 2026
 const WARRANTY_PROGRESS_OPTIONS = [
-  'Not started',
+  'Not Started',
   'Vis - Đã gửi RQ tới Agency',
-  'Tiếp nhận / Đang xử lý',
-  'Hoàn thành',
+  'Tiếp nhận',
+  'Gửi lịch đăng ký',
+  'Hoàn Thành',
   'Cancelled'
 ];
 
@@ -150,14 +151,15 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
       
       // FIX PROGRESS MISMATCH: Check & Normalize string matching for select dropdown
       const rawProg = record.tien_do || (record as any).progress || (record as any).status || '';
-      let matchedProg = 'Not started';
+      let matchedProg = 'Not Started';
       if (rawProg) {
         const norm = String(rawProg).toLowerCase().trim();
-        if (norm.includes('hoàn thành')) matchedProg = 'Hoàn thành';
+        if (norm.includes('hoàn thành')) matchedProg = 'Hoàn Thành';
         else if (norm.includes('gửi rq') || norm.includes('đã gửi')) matchedProg = 'Vis - Đã gửi RQ tới Agency';
-        else if (norm.includes('tiếp nhận') || norm.includes('đang xử lý')) matchedProg = 'Tiếp nhận / Đang xử lý';
+        else if (norm.includes('lịch') || norm.includes('đăng ký')) matchedProg = 'Gửi lịch đăng ký';
+        else if (norm.includes('tiếp nhận')) matchedProg = 'Tiếp nhận';
         else if (norm.includes('cancel')) matchedProg = 'Cancelled';
-        else if (norm.includes('not started') || norm.includes('mới tạo')) matchedProg = 'Not started';
+        else if (norm.includes('not started') || norm.includes('mới tạo')) matchedProg = 'Not Started';
         else matchedProg = rawProg;
       }
       setTienDo(matchedProg);

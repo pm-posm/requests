@@ -185,16 +185,17 @@ export default function TrackingWarranty() {
       setEditProjectCode(selectedItem.projectCode || '');
       setEditSupplier(selectedItem.supplier || '');
 
-      // Normalize progress string to match <option> values
+      // Normalize progress string to match exact Google Sheet Data Validation rules
       const rawProg = selectedItem.progress || '';
-      let matchedProg = 'Not started';
+      let matchedProg = 'Not Started';
       if (rawProg) {
         const norm = String(rawProg).toLowerCase().trim();
-        if (norm.includes('hoàn thành')) matchedProg = 'Hoàn thành';
+        if (norm.includes('hoàn thành')) matchedProg = 'Hoàn Thành';
         else if (norm.includes('gửi rq') || norm.includes('đã gửi')) matchedProg = 'Vis - Đã gửi RQ tới Agency';
-        else if (norm.includes('tiếp nhận') || norm.includes('đang xử lý')) matchedProg = 'Tiếp nhận / Đang xử lý';
+        else if (norm.includes('lịch') || norm.includes('đăng ký')) matchedProg = 'Gửi lịch đăng ký';
+        else if (norm.includes('tiếp nhận')) matchedProg = 'Tiếp nhận';
         else if (norm.includes('cancel')) matchedProg = 'Cancelled';
-        else if (norm.includes('not started') || norm.includes('mới tạo')) matchedProg = 'Not started';
+        else if (norm.includes('not started') || norm.includes('mới tạo')) matchedProg = 'Not Started';
         else matchedProg = rawProg;
       }
       setEditProgress(matchedProg);
@@ -1279,10 +1280,11 @@ export default function TrackingWarranty() {
                     onChange={(e) => setEditProgress(e.target.value)}
                     className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500/20 text-xs font-semibold text-foreground cursor-pointer"
                   >
-                    <option value="Not started">⚪ Not started (Mới tạo)</option>
+                    <option value="Not Started">⚪ Not Started (Mới tạo)</option>
                     <option value="Vis - Đã gửi RQ tới Agency">🔵 Vis - Đã gửi RQ tới Agency (Đã gửi mail)</option>
-                    <option value="Tiếp nhận / Đang xử lý">🔵 Tiếp nhận / Đang xử lý (Supplier đang sửa)</option>
-                    <option value="Hoàn thành">🟢 Hoàn thành (Đã hoàn tất bảo hành)</option>
+                    <option value="Tiếp nhận">🔵 Tiếp nhận (Agency tiếp nhận)</option>
+                    <option value="Gửi lịch đăng ký">📅 Gửi lịch đăng ký (Đã hẹn lịch sửa)</option>
+                    <option value="Hoàn Thành">🟢 Hoàn Thành (Đã hoàn tất bảo hành)</option>
                     <option value="Cancelled">🔴 Cancelled (Đã hủy yêu cầu)</option>
                   </select>
                 </div>

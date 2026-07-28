@@ -31,7 +31,7 @@ const WARRANTY_CONFIG = {
   
   VALUE_PHUONG_AN_BAO_HANH: 'Supplier bảo hành',
   VALUE_STATUS_BAO_HANH: 'Supplier Bảo Hành',
-  VALUE_TIEN_DO_NOT_STARTED: 'Not started',
+  VALUE_TIEN_DO_NOT_STARTED: 'Not Started',
   VALUE_TIEN_DO_DA_GUI_MAIL: 'Vis - Đã gửi RQ tới Agency',
   VALUE_HOAN_THANH: 'Hoàn Thành',
   VALUE_CANCELLED: 'Cancelled'
