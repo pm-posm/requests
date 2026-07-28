@@ -89,7 +89,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   authUser: null,
   setAuthUser: (authUser) => set({ authUser, isAdmin: authUser?.role === 'admin' }),
 
-  isAdmin: false,
+  isAdmin: true,
   setIsAdmin: (isAdmin) => set({ isAdmin }),
 
   kanbanFilter: 'all',

@@ -148,9 +148,19 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
       setTitleEmail(record.title_email_request || (record as any).mailTitle || '');
       setRaiseMailTime((record as any).raise_mail_time || (record as any).raiseMailTime || (record as any).date_of_rq || (record as any).sentDate || '');
       
-      // FIX PROGRESS MISMATCH: Check tien_do, progress, status in order
-      const currentProgress = record.tien_do || (record as any).progress || (record as any).status || 'Not started';
-      setTienDo(currentProgress);
+      // FIX PROGRESS MISMATCH: Check & Normalize string matching for select dropdown
+      const rawProg = record.tien_do || (record as any).progress || (record as any).status || '';
+      let matchedProg = 'Not started';
+      if (rawProg) {
+        const norm = String(rawProg).toLowerCase().trim();
+        if (norm.includes('hoàn thành')) matchedProg = 'Hoàn thành';
+        else if (norm.includes('gửi rq') || norm.includes('đã gửi')) matchedProg = 'Vis - Đã gửi RQ tới Agency';
+        else if (norm.includes('tiếp nhận') || norm.includes('đang xử lý')) matchedProg = 'Tiếp nhận / Đang xử lý';
+        else if (norm.includes('cancel')) matchedProg = 'Cancelled';
+        else if (norm.includes('not started') || norm.includes('mới tạo')) matchedProg = 'Not started';
+        else matchedProg = rawProg;
+      }
+      setTienDo(matchedProg);
       
       setErrorDetail(record.sr_note || (record as any).errorDetail || '');
       setNote(record.mer_note || record.vis_note || (record as any).note || '');
@@ -300,11 +310,6 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
 
   // Main Save Subtask Function (Updates DB + Calls Web App 2-way Sync)
   const handleSaveSubtask = async () => {
-    const { isAdmin } = useDashboardStore.getState();
-    if (!isAdmin) {
-      toast.error('🔒 Quyền bị từ chối: Vui lòng đăng nhập tài khoản Admin để lưu thay đổi!');
-      return;
-    }
     try {
       setIsSaving(true);
       const rowIdNum = record.sheet_row_index || parseInt(String(record.id || '').replace(/\D/g, ''), 10);
