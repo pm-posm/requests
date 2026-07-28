@@ -273,13 +273,14 @@ export default function ModelTest() {
                                         console.warn('Lỗi gọi Edge Function:', efErr);
                                     }
 
-                                    // 2. Kích hoạt GitHub Action Workflow Dispatch (nếu có VITE_GITHUB_TOKEN & VITE_GITHUB_REPO)
-                                    const ghRepo = import.meta.env.VITE_GITHUB_REPO || 'thanglh9-maker/posm-dashboard';
+                                    // 2. Kích hoạt GitHub Action Workflow Dispatch (thanglh9-maker/PM-POSM manual-sync.yml)
+                                    const ghRepo = import.meta.env.VITE_GITHUB_REPO || 'thanglh9-maker/PM-POSM';
                                     const ghToken = import.meta.env.VITE_GITHUB_TOKEN;
 
                                     if (ghToken) {
                                         try {
-                                            const ghRes = await fetch(`https://api.github.com/repos/${ghRepo}/dispatches`, {
+                                            // Gọi endpoint workflow_dispatch tới manual-sync.yml
+                                            const ghRes = await fetch(`https://api.github.com/repos/${ghRepo}/actions/workflows/manual-sync.yml/dispatches`, {
                                                 method: 'POST',
                                                 headers: {
                                                     'Authorization': `Bearer ${ghToken}`,
@@ -287,23 +288,38 @@ export default function ModelTest() {
                                                     'Content-Type': 'application/json'
                                                 },
                                                 body: JSON.stringify({
-                                                    event_type: 'sync-emails'
+                                                    ref: 'main'
                                                 })
                                             });
 
                                             if (ghRes.ok || ghRes.status === 204) {
-                                                toast.success('🚀 Đã gửi lệnh trigger GitHub Action Workflow thành công!', { id: 'sync_mail_toast' });
+                                                toast.success('🚀 Đã gửi lệnh trigger GitHub Action (PM-POSM manual-sync.yml) thành công!', { id: 'sync_mail_toast' });
                                                 syncSuccess = true;
                                             } else {
-                                                const errText = await ghRes.text();
-                                                console.error('GitHub Action dispatch error:', errText);
-                                                toast.error(`⚠️ Lỗi GitHub Dispatch (${ghRes.status}): Vui lòng kiểm tra VITE_GITHUB_TOKEN`, { id: 'sync_mail_toast' });
+                                                // Thử fallback sang repository_dispatch
+                                                const fallbackRes = await fetch(`https://api.github.com/repos/${ghRepo}/dispatches`, {
+                                                    method: 'POST',
+                                                    headers: {
+                                                        'Authorization': `Bearer ${ghToken}`,
+                                                        'Accept': 'application/vnd.github.v3+json',
+                                                        'Content-Type': 'application/json'
+                                                    },
+                                                    body: JSON.stringify({ event_type: 'sync-emails' })
+                                                });
+                                                if (fallbackRes.ok || fallbackRes.status === 204) {
+                                                    toast.success('🚀 Đã gửi lệnh trigger GitHub Action thành công!', { id: 'sync_mail_toast' });
+                                                    syncSuccess = true;
+                                                } else {
+                                                    const errText = await ghRes.text();
+                                                    console.error('GitHub Action dispatch error:', errText);
+                                                    toast.error(`⚠️ Lỗi GitHub Dispatch (${ghRes.status}): Kiểm tra Token có quyền workflow`, { id: 'sync_mail_toast' });
+                                                }
                                             }
                                         } catch (ghErr: any) {
                                             console.error('Lỗi kết nối GitHub API:', ghErr);
                                         }
                                     } else if (!syncSuccess) {
-                                        toast.success('🚀 Đã gửi lệnh quét ngầm CSDL! (Để kích hoạt GitHub Action từ giao diện, cần thêm VITE_GITHUB_TOKEN vào .env.local)', { id: 'sync_mail_toast' });
+                                        toast.success('🚀 Đã gửi lệnh quét ngầm! (Để bấm nút trên Web chạy thẳng GitHub Action PM-POSM, cần cấu hình VITE_GITHUB_TOKEN)', { id: 'sync_mail_toast' });
                                     } else {
                                         toast.success('🚀 Đã gửi lệnh kích hoạt quét Mail 4 giai đoạn thành công!', { id: 'sync_mail_toast' });
                                     }
