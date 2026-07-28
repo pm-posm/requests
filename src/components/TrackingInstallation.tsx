@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Papa from 'papaparse';
 import { 
   Search, Loader2, RefreshCw, AlertCircle, ChevronDown, ChevronUp, ChevronRight,
-  CheckCircle2, AlertTriangle, Hammer, ClipboardList, Filter, FileSpreadsheet
+  CheckCircle2, AlertTriangle, Hammer, ClipboardList, Filter, FileSpreadsheet, Table, BarChart3
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -83,6 +83,7 @@ const COLUMN_MAPPING: Record<string, keyof InstallationRow> = {
 const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1Ud0eGEiyKzR9mZu1DTul-WF3rUif7ams580D9fYgung/export?format=csv&gid=0';
 
 export default function TrackingInstallation() {
+  const [activeModuleTab, setActiveModuleTab] = useState<'DATA_LIST' | 'ANALYST'>('DATA_LIST');
   const [rawData, setRawData] = useState<InstallationRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -389,6 +390,36 @@ export default function TrackingInstallation() {
         </button>
       </div>
 
+      {/* MODULE INTERNAL NAVIGATION SUB-TABS */}
+      <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 w-fit">
+        <button
+          onClick={() => setActiveModuleTab('DATA_LIST')}
+          className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeModuleTab === 'DATA_LIST'
+              ? 'bg-white dark:bg-slate-900 text-sky-600 dark:text-sky-400 shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <Table className="w-4 h-4" />
+          <span>Danh Sách Dữ Liệu</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 font-mono">
+            {groupedProjects.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveModuleTab('ANALYST')}
+          className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeModuleTab === 'ANALYST'
+              ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <BarChart3 className="w-4 h-4" />
+          <span>Báo Cáo & Thống Kê (Analyst)</span>
+        </button>
+      </div>
+
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800 shadow-sm">
           <Loader2 className="h-10 w-10 animate-spin text-emerald-500 mb-4" />
@@ -403,85 +434,91 @@ export default function TrackingInstallation() {
         </div>
       ) : (
         <>
-          {/* KPI Dashboard Cards - Standard PM View */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            
-            <Card className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden">
-              <CardContent className="p-4 flex flex-col justify-between h-full">
-                <div className="flex justify-between items-start">
-                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tổng dự án</span>
-                  <div className="p-1 rounded bg-slate-50 dark:bg-slate-800 text-slate-500">
-                    <ClipboardList className="h-4 w-4" />
-                  </div>
-                </div>
-                <div className="mt-3">
-                  <span className="text-2xl font-bold text-slate-950 dark:text-slate-50">{stats.totalProjects}</span>
-                  <span className="block text-xs text-slate-400 mt-0.5">({stats.totalStores} Cửa hàng)</span>
-                </div>
-              </CardContent>
-            </Card>
+          {/* TAB 1: DEDICATED ANALYST / REPORTS WORKSPACE */}
+          {activeModuleTab === 'ANALYST' && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              {/* KPI Dashboard Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <Card className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden">
+                  <CardContent className="p-4 flex flex-col justify-between h-full">
+                    <div className="flex justify-between items-start">
+                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tổng dự án</span>
+                      <div className="p-1 rounded bg-slate-50 dark:bg-slate-800 text-slate-500">
+                        <ClipboardList className="h-4 w-4" />
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <span className="text-2xl font-bold text-slate-950 dark:text-slate-50">{stats.totalProjects}</span>
+                      <span className="block text-xs text-slate-400 mt-0.5">({stats.totalStores} Cửa hàng)</span>
+                    </div>
+                  </CardContent>
+                </Card>
 
-            <Card className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden border-l-4 border-l-emerald-500">
-              <CardContent className="p-4 flex flex-col justify-between h-full">
-                <div className="flex justify-between items-start">
-                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Đã hoàn thành</span>
-                  <div className="p-1 rounded bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400">
-                    <CheckCircle2 className="h-4 w-4" />
-                  </div>
-                </div>
-                <div className="mt-3">
-                  <span className="text-2xl font-bold text-slate-950 dark:text-slate-50">{stats.completed}</span>
-                  <span className="block text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium">Tỷ lệ: {stats.installCompletedRate}%</span>
-                </div>
-              </CardContent>
-            </Card>
+                <Card className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden border-l-4 border-l-emerald-500">
+                  <CardContent className="p-4 flex flex-col justify-between h-full">
+                    <div className="flex justify-between items-start">
+                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Đã hoàn thành</span>
+                      <div className="p-1 rounded bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle2 className="h-4 w-4" />
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <span className="text-2xl font-bold text-slate-950 dark:text-slate-50">{stats.completed}</span>
+                      <span className="block text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium">Tỷ lệ: {stats.installCompletedRate}%</span>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden border-l-4 border-l-blue-500">
+                  <CardContent className="p-4 flex flex-col justify-between h-full">
+                    <div className="flex justify-between items-start">
+                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Đang thi công</span>
+                      <div className="p-1 rounded bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400">
+                        <Hammer className="h-4 w-4" />
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <span className="text-2xl font-bold text-slate-950 dark:text-slate-50">{stats.installing}</span>
+                      <span className="block text-xs text-slate-400 mt-0.5">Cửa hàng chờ/thi công</span>
+                    </div>
+                  </CardContent>
+                </Card>
 
-            <Card className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden border-l-4 border-l-blue-500">
-              <CardContent className="p-4 flex flex-col justify-between h-full">
-                <div className="flex justify-between items-start">
-                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Đang thi công</span>
-                  <div className="p-1 rounded bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400">
-                    <Hammer className="h-4 w-4" />
-                  </div>
-                </div>
-                <div className="mt-3">
-                  <span className="text-2xl font-bold text-slate-950 dark:text-slate-50">{stats.installing}</span>
-                  <span className="block text-xs text-slate-400 mt-0.5">Cửa hàng chờ/thi công</span>
-                </div>
-              </CardContent>
-            </Card>
+                <Card className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden border-l-4 border-l-rose-500">
+                  <CardContent className="p-4 flex flex-col justify-between h-full">
+                    <div className="flex justify-between items-start">
+                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Lỗi nghiệm thu</span>
+                      <div className="p-1 rounded bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400">
+                        <AlertTriangle className="h-4 w-4" />
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <span className="text-2xl font-bold text-slate-950 dark:text-slate-50">{stats.qcFailed}</span>
+                      <span className="block text-xs text-rose-600 dark:text-rose-400 mt-0.5 font-medium">Cửa hàng lỗi QC</span>
+                    </div>
+                  </CardContent>
+                </Card>
 
-            <Card className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden border-l-4 border-l-rose-500">
-              <CardContent className="p-4 flex flex-col justify-between h-full">
-                <div className="flex justify-between items-start">
-                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Lỗi nghiệm thu</span>
-                  <div className="p-1 rounded bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400">
-                    <AlertTriangle className="h-4 w-4" />
-                  </div>
-                </div>
-                <div className="mt-3">
-                  <span className="text-2xl font-bold text-slate-950 dark:text-slate-50">{stats.qcFailed}</span>
-                  <span className="block text-xs text-rose-600 dark:text-rose-400 mt-0.5 font-medium">Cửa hàng lỗi QC</span>
-                </div>
-              </CardContent>
-            </Card>
+                <Card className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden border-l-4 border-l-amber-500">
+                  <CardContent className="p-4 flex flex-col justify-between h-full">
+                    <div className="flex justify-between items-start">
+                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Cần Bảo Hành</span>
+                      <div className="p-1 rounded bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400">
+                        <RefreshCw className="h-4 w-4" />
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <span className="text-2xl font-bold text-slate-950 dark:text-slate-50">{stats.warranty}</span>
+                      <span className="block text-xs text-slate-400 mt-0.5">Đang yêu cầu bảo hành</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          )}
 
-            <Card className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden border-l-4 border-l-amber-500">
-              <CardContent className="p-4 flex flex-col justify-between h-full">
-                <div className="flex justify-between items-start">
-                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Cần Bảo Hành</span>
-                  <div className="p-1 rounded bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400">
-                    <RefreshCw className="h-4 w-4" />
-                  </div>
-                </div>
-                <div className="mt-3">
-                  <span className="text-2xl font-bold text-slate-950 dark:text-slate-50">{stats.warranty}</span>
-                  <span className="block text-xs text-slate-400 mt-0.5">Đang yêu cầu bảo hành</span>
-                </div>
-              </CardContent>
-            </Card>
-
-          </div>
+          {/* TAB 2: CLEAN OPERATIONAL DATA LIST & FILTERS WORKSPACE */}
+          {activeModuleTab === 'DATA_LIST' && (
+            <div className="space-y-6 animate-in fade-in duration-200">
 
           {/* Filtering Area */}
           <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/60 dark:border-slate-800 shadow-sm space-y-4">
@@ -930,11 +967,11 @@ export default function TrackingInstallation() {
 
               </div>
             )}
-
-          </div>
+            </div>
+            </div>
+          )}
         </>
       )}
-
     </div>
   );
 }

@@ -68,6 +68,7 @@ export interface ActivityRow {
     drive_folder_id?: string;
     drive_url?: string;
     status?: string;
+    merged_from_project?: string;
     activity_attachments?: AttachmentRow[];
     activity_subtype?: 'SCHEDULE' | 'REPORT' | string;
 }

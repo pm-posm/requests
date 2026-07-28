@@ -97,9 +97,14 @@ export function ActivityDetailCard({ activity, projectGroup, onProcessData }: {
     return (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                     <Mail className="w-4 h-4 text-slate-400" />
                     <h4 className="font-medium text-sm text-slate-700 dark:text-slate-200">{activity.title_mail || 'Không có tiêu đề'}</h4>
+                    {(activity as any).merged_from_project && (
+                        <span className="bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 font-bold px-2 py-0.5 rounded text-[10px] border border-sky-200 dark:border-sky-800">
+                            📌 Đã gộp từ: {(activity as any).merged_from_project}
+                        </span>
+                    )}
                 </div>
                 <div className="text-xs">
                     {activity.thread_id ? (

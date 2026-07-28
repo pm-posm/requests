@@ -1,11 +1,13 @@
 import React from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
+import { supabase, checkIsAdminUser } from '@/lib/supabase';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import toast from 'react-hot-toast';
 
-const Analytics = React.lazy(() => import('./Analytics'));
+import Analytics from './Analytics';
+import ModelTest from './ModelTest';
 const TrackingProject = React.lazy(() => import('./TrackingProject'));
 import NewRequestForm from './NewRequestForm';
 import StoreLookup from './StoreLookup';
@@ -13,10 +15,11 @@ import { Sidebar } from './layout/Sidebar';
 import { Topbar } from './layout/Topbar';
 const Personalization = React.lazy(() => import('./Personalization'));
 const ProjectDetail = React.lazy(() => import('./ProjectDetail'));
-const ModelTest = React.lazy(() => import('./ModelTest'));
 const TrackingInstallation = React.lazy(() => import('./TrackingInstallation'));
 const TrackingNtxx = React.lazy(() => import('./TrackingNtxx'));
+const TrackingWarranty = React.lazy(() => import('./TrackingWarranty'));
 import { StoreContactPage } from '../pages/StoreContactPage';
+import { StorePlanBoardPage } from '../pages/StorePlanBoardPage';
 
 import { useDashboardStore } from '@/stores/useDashboardStore';
 import { useDashboardData } from '@/hooks/useDashboardData';
@@ -24,16 +27,38 @@ import { DashboardStoreList } from './Dashboard/DashboardStoreList';
 import { DashboardOverview } from './Dashboard/DashboardOverview';
 import { DashboardStoreView } from './Dashboard/DashboardStoreView';
 import { ProjectDetailModal } from './Dashboard/ProjectDetailModal';
+import { AuthModal } from '@/components/AuthModal';
+
+function DashboardStoreViewRouteWrapper() {
+  const { storeCode } = useParams<{ storeCode: string }>();
+  const setSelectedStore = useDashboardStore(state => state.setSelectedStore);
+  const setRequestMenu = useDashboardStore(state => state.setRequestMenu);
+
+  React.useEffect(() => {
+    if (storeCode) {
+      setSelectedStore(decodeURIComponent(storeCode));
+      setRequestMenu('store_view');
+    }
+  }, [storeCode, setSelectedStore, setRequestMenu]);
+
+  return <DashboardStoreView />;
+}
 
 export default function Dashboard() {
-  const { 
-    searchTerm, setSearchTerm, 
-    isAdmin, setIsAdmin,
-    isNewRequestOpen, setIsNewRequestOpen,
-    mainMenu, setMainMenu,
-    requestMenu, setRequestMenu,
-    setSelectedStore, kanbanFilter, setKanbanFilter
-  } = useDashboardStore();
+  const searchTerm = useDashboardStore(s => s.searchTerm);
+  const setSearchTerm = useDashboardStore(s => s.setSearchTerm);
+  const isAdmin = useDashboardStore(s => s.isAdmin);
+  const setIsAdmin = useDashboardStore(s => s.setIsAdmin);
+  const setAuthUser = useDashboardStore(s => s.setAuthUser);
+  const isNewRequestOpen = useDashboardStore(s => s.isNewRequestOpen);
+  const setIsNewRequestOpen = useDashboardStore(s => s.setIsNewRequestOpen);
+  const mainMenu = useDashboardStore(s => s.mainMenu);
+  const setMainMenu = useDashboardStore(s => s.setMainMenu);
+  const requestMenu = useDashboardStore(s => s.requestMenu);
+  const setRequestMenu = useDashboardStore(s => s.setRequestMenu);
+  const setSelectedStore = useDashboardStore(s => s.setSelectedStore);
+  const kanbanFilter = useDashboardStore(s => s.kanbanFilter);
+  const setKanbanFilter = useDashboardStore(s => s.setKanbanFilter);
 
   const { isLoading, filteredProjects } = useDashboardData();
 
@@ -42,56 +67,81 @@ export default function Dashboard() {
   const [isSyncingGmail, setIsSyncingGmail] = React.useState(false);
   const [isMobileOpen, setIsMobileOpen] = React.useState(false);
   const [showAdminConfirm, setShowAdminConfirm] = React.useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = React.useState(false);
   
   const queryClient = useQueryClient();
 
-  const handleSync = async () => {
+  // Listen to Supabase Auth State Changes for secure session & role management
+  React.useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        const email = session.user.email || '';
+        const isAdminUser = checkIsAdminUser(session.user);
+        setAuthUser({ id: session.user.id, email, role: isAdminUser ? 'admin' : 'user' });
+        setIsAdmin(isAdminUser);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        const email = session.user.email || '';
+        const isAdminUser = checkIsAdminUser(session.user);
+        setAuthUser({ id: session.user.id, email, role: isAdminUser ? 'admin' : 'user' });
+        setIsAdmin(isAdminUser);
+      } else {
+        setAuthUser(null);
+        setIsAdmin(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [setAuthUser, setIsAdmin]);
+
+  const handleSync = React.useCallback(async () => {
     try {
       setIsSyncing(true);
       const { data, error } = await supabase.functions.invoke('sync-mer-view');
       if (error) throw error;
-      alert(data.message || 'Đồng bộ thành công!');
+      toast.success(data.message || 'Đồng bộ thành công!');
       queryClient.invalidateQueries({ queryKey: ['projects'] });
     } catch (error: any) {
       console.error('Lỗi đồng bộ:', error);
-      alert('Lỗi đồng bộ: ' + error.message);
+      toast.error('Lỗi đồng bộ: ' + (error.message || 'Đồng bộ thất bại'));
     } finally {
       setIsSyncing(false);
     }
-  };
+  }, [queryClient]);
 
-  const handleSyncGmail = async () => {
+  const handleSyncGmail = React.useCallback(async () => {
     try {
       setIsSyncingGmail(true);
       const { data, error } = await supabase.functions.invoke('cron-sync-gmail');
       if (error) throw error;
-      alert(data.message + ` (Đã cào ${data.processed} email mới, Bỏ qua ${data.skipped} email cũ)`);
+      toast.success(data.message + ` (Đã cào ${data.processed} email mới, Bỏ qua ${data.skipped} email cũ)`);
       queryClient.invalidateQueries({ queryKey: ['project_activities_with_attachments_all'] });
     } catch (error: any) {
       console.error('Lỗi đồng bộ Gmail:', error);
-      alert('Lỗi đồng bộ Gmail: ' + error.message);
+      toast.error('Lỗi đồng bộ Gmail: ' + (error.message || 'Thất bại'));
     } finally {
       setIsSyncingGmail(false);
     }
-  };
+  }, [queryClient]);
 
-  const handleAdminToggle = () => {
+  const handleAdminToggle = React.useCallback(() => {
     if (isAdmin) {
       setShowAdminConfirm(true);
     } else {
-      const pwd = prompt("Nhập mật khẩu Admin để hiển thị tính năng ẩn:");
-      if (pwd === "admin123") {
-        setIsAdmin(true);
-      } else if (pwd !== null) {
-        alert("Sai mật khẩu!");
-      }
+      setIsAuthModalOpen(true);
     }
-  };
+  }, [isAdmin]);
 
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex h-screen w-full items-center justify-center bg-slate-900 text-slate-200">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-sky-500" />
+          <span className="text-xs font-mono text-slate-400">Đang tải dữ liệu Dashboard...</span>
+        </div>
       </div>
     );
   }
@@ -123,76 +173,106 @@ export default function Dashboard() {
             </div>
           }>
             <Routes>
-              <Route path="/project/:id/*" element={<ProjectDetail />} />
-              <Route path="/" element={
-                <>
-                  {mainMenu === 'analytics' ? (
-                    <div className="absolute inset-0 p-4 md:p-6 overflow-y-auto custom-scrollbar bg-background">
-                      <div className="max-w-7xl mx-auto">
-                        <Analytics 
-                          projects={filteredProjects || []} 
-                          activeFilter={kanbanFilter} 
-                          onFilterChange={setKanbanFilter} 
-                          viewMode="charts"
-                        />
-                      </div>
-                    </div>
-                  ) : mainMenu === 'tong_du_an' ? (
-                    <div className="absolute inset-0 p-4 md:p-6 overflow-y-auto custom-scrollbar bg-background">
-                      <div className="max-w-7xl mx-auto">
-                        <TrackingProject searchTerm={searchTerm} />
-                      </div>
-                    </div>
-                  ) : mainMenu === 'personalization' ? (
-                    <div className="absolute inset-0 p-0 overflow-y-auto custom-scrollbar bg-background">
-                      <Personalization globalSearchTerm={searchTerm} />
-                    </div>
-                  ) : mainMenu === 'model_test' ? (
-                    <div className="absolute inset-0 p-4 md:p-6 overflow-y-auto custom-scrollbar bg-background">
-                      <div className="max-w-7xl mx-auto">
-                        <ModelTest />
-                      </div>
-                    </div>
-                  ) : mainMenu === 'tracking_installation' ? (
-                    <div className="absolute inset-0 p-4 md:p-6 overflow-y-auto custom-scrollbar bg-background">
-                      <div className="max-w-7xl mx-auto">
-                        <TrackingInstallation />
-                      </div>
-                    </div>
-                  ) : mainMenu === 'tracking_ntxx' ? (
-                    <div className="absolute inset-0 p-4 md:p-6 overflow-y-auto custom-scrollbar bg-background">
-                      <div className="max-w-7xl mx-auto">
-                        <TrackingNtxx />
-                      </div>
-                    </div>
-                  ) : mainMenu === 'store_contact' ? (
-                    <StoreContactPage />
-                  ) : mainMenu === 'request' && requestMenu === 'store_list' ? (
-                    <DashboardStoreList />
-                  ) : mainMenu === 'request' && requestMenu === 'overview' ? (
-                    <DashboardOverview />
-                  ) : mainMenu === 'request' && requestMenu === 'store_view' ? (
-                    <DashboardStoreView />
-                  ) : null}
-                </>
+              {/* Analytics Route */}
+              <Route path="/analytics" element={
+                <div className="absolute inset-0 p-4 md:p-6 overflow-y-auto custom-scrollbar bg-background">
+                  <div className="max-w-7xl mx-auto">
+                    <Analytics />
+                  </div>
+                </div>
               } />
+
+              {/* Requests Routes */}
+              <Route path="/requests" element={<DashboardOverview />} />
+              <Route path="/requests/overview" element={<DashboardOverview />} />
+              <Route path="/requests/stores" element={<DashboardStoreList />} />
+              <Route path="/requests/store/:storeCode" element={<DashboardStoreViewRouteWrapper />} />
+
+              {/* Master Projects Routes */}
+              <Route path="/projects" element={
+                <div className="absolute inset-0 p-4 md:p-6 overflow-y-auto custom-scrollbar bg-background">
+                  <div className="max-w-7xl mx-auto">
+                    <ModelTest />
+                  </div>
+                </div>
+              } />
+              <Route path="/project/:id/*" element={<ProjectDetail />} />
+
+              {/* Store Plan Board Routes */}
+              <Route path="/store-plan" element={<StorePlanBoardPage />} />
+              <Route path="/store-plan/:storeCode" element={<StorePlanBoardPage />} />
+
+              {/* Contacts / Master Stores Route */}
+              <Route path="/contacts" element={<StoreContactPage />} />
+
+              {/* Operations / Tracking Routes */}
+              <Route path="/tracking/warranty" element={
+                <div className="absolute inset-0 p-4 md:p-6 overflow-y-auto custom-scrollbar bg-background">
+                  <div className="max-w-7xl mx-auto">
+                    <TrackingWarranty />
+                  </div>
+                </div>
+              } />
+              <Route path="/tracking/ntxx" element={
+                <div className="absolute inset-0 p-4 md:p-6 overflow-y-auto custom-scrollbar bg-background">
+                  <div className="max-w-7xl mx-auto">
+                    <TrackingNtxx />
+                  </div>
+                </div>
+              } />
+              <Route path="/tracking/installation" element={
+                <div className="absolute inset-0 p-4 md:p-6 overflow-y-auto custom-scrollbar bg-background">
+                  <div className="max-w-7xl mx-auto">
+                    <TrackingInstallation />
+                  </div>
+                </div>
+              } />
+
+              {/* Personalization */}
+              <Route path="/personalization" element={
+                <div className="absolute inset-0 p-0 overflow-y-auto custom-scrollbar bg-background">
+                  <Personalization globalSearchTerm={searchTerm} />
+                </div>
+              } />
+
+              {/* Default Fallback Redirects */}
+              <Route path="/" element={<Navigate to="/requests" replace />} />
+              <Route path="*" element={<Navigate to="/requests" replace />} />
             </Routes>
           </React.Suspense>
         </div>
-        <ConfirmDialog 
-            isOpen={showAdminConfirm}
-            onClose={() => setShowAdminConfirm(false)}
-            onConfirm={() => setIsAdmin(false)}
-            title="Thoát chế độ Admin"
-            description="Bạn có chắc chắn muốn thoát chế độ Admin? Bạn sẽ cần nhập lại mật khẩu để vào lại."
-            confirmText="Đồng ý thoát"
-        />
       </main>
 
       <ProjectDetailModal />
-      
-      <StoreLookup open={isStoreLookupOpen} onOpenChange={setIsStoreLookupOpen} />
-      <NewRequestForm open={isNewRequestOpen} onOpenChange={setIsNewRequestOpen} />
+
+      <NewRequestForm 
+        open={isNewRequestOpen}
+        onOpenChange={setIsNewRequestOpen}
+      />
+
+      <StoreLookup 
+        open={isStoreLookupOpen}
+        onOpenChange={setIsStoreLookupOpen}
+      />
+
+      <ConfirmDialog 
+        isOpen={showAdminConfirm}
+        onClose={() => setShowAdminConfirm(false)}
+        onConfirm={async () => {
+          await supabase.auth.signOut();
+          setIsAdmin(false);
+          setAuthUser(null);
+          setShowAdminConfirm(false);
+        }}
+        title="Đăng xuất chế độ Admin?"
+        description="Phiên làm việc của Admin sẽ được đăng xuất an toàn khỏi Supabase."
+        confirmText="Đăng xuất Admin"
+      />
+
+      <AuthModal 
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+      />
 
     </div>
   );

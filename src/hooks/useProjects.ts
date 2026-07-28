@@ -35,8 +35,8 @@ export function useProjects() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const channelId = `schema-db-changes-${Math.random()}`;
-    const channel = supabase.channel(channelId)
+    let debounceTimer: NodeJS.Timeout | null = null;
+    const channel = supabase.channel('posm-projects-realtime-global')
       .on(
         'postgres_changes',
         {
@@ -45,12 +45,16 @@ export function useProjects() {
           table: 'posm_projects'
         },
         () => {
-          queryClient.invalidateQueries({ queryKey: ['projects'] });
+          if (debounceTimer) clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => {
+            queryClient.invalidateQueries({ queryKey: ['projects'] });
+          }, 500);
         }
       )
       .subscribe();
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       supabase.removeChannel(channel);
     };
   }, [queryClient]);

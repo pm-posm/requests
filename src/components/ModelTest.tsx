@@ -1,22 +1,20 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useProjects, type Project } from '@/hooks/useProjects';
-import { Loader2, Search } from 'lucide-react';
+import { Loader2, Search, Table, BarChart3 } from 'lucide-react';
 import type { ProjectGroup, ActivityRow } from '@/types';
 import { ProjectTable } from './ProjectList/ProjectTable';
-import { StoreManagerModal } from './StoreManager/StoreManagerModal';
+import { ProjectCommandCenterHeader } from './Dashboard/ProjectCommandCenterHeader';
 
 export default function ModelTest() {
+    const queryClient = useQueryClient();
     const navigate = useNavigate();
     const { data: projects, isLoading: projectsLoading } = useProjects();
+    const [activeModuleTab, setActiveModuleTab] = React.useState<'DATA_LIST' | 'ANALYST'>('DATA_LIST');
     const [searchTerm, setSearchTerm] = React.useState('');
-
-    // States for Excel import modal
-    const [showUnifiedModal, setShowUnifiedModal] = React.useState<boolean>(false);
-    const [importingProject, setImportingProject] = React.useState<ProjectGroup | null>(null);
-    const [downloadFileId, setDownloadFileId] = React.useState<string | undefined>(undefined);
+    const [activeQuickFilter, setActiveQuickFilter] = React.useState<'ALL' | 'ACTIVE' | 'COMPLETED' | 'HIGH_STORE_COUNT'>('ALL');
 
     // Fetch unified project activities and their attachments
     const { data: activities, isLoading: activitiesLoading } = useQuery<ActivityRow[]>({
@@ -42,6 +40,34 @@ export default function ModelTest() {
             return data || [];
         }
     });
+
+    // Fetch raw requests to build Request ID -> Project Map
+    const { data: rawRequests = [] } = useQuery<any[]>({
+        queryKey: ['raw_requests_subtask_mapping'],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from('raw_requests')
+                .select('request_id, ma_du_an, title_email_request')
+                .not('request_id', 'is', null);
+            if (error) return [];
+            return data || [];
+        }
+    });
+
+    // Build Request ID map indexed by project keys/names
+    const requestsMap = React.useMemo(() => {
+        const map: Record<string, string[]> = {};
+        rawRequests.forEach(r => {
+            if (!r.request_id) return;
+            const rid = r.request_id.trim();
+            const keys = [r.ma_du_an?.trim(), r.title_email_request?.trim()].filter(Boolean);
+            keys.forEach(k => {
+                if (!map[k]) map[k] = [];
+                if (!map[k].includes(rid)) map[k].push(rid);
+            });
+        });
+        return map;
+    }, [rawRequests]);
 
     // Gom nhóm các hoạt động theo final_project
     const groupedProjects = React.useMemo(() => {
@@ -98,102 +124,146 @@ export default function ModelTest() {
             // Lấy trạng thái của dự án từ bảng posm_projects
             const matchedProj = projects?.find(p => p.final_key === fp || p.source_key === group.key_project || p.source_project_name === group.name_project);
             const status = matchedProj?.status || computedStatus;
-            
+
             return {
                 ...group,
-                stats: { customer, storeCount, supplier, phase, posmType, status }
+                stats: {
+                    storeCount,
+                    totalStores,
+                    publishedStores,
+                    draftCount,
+                    customer,
+                    supplier,
+                    phase,
+                    posmType,
+                    status
+                }
             };
-        }).sort((a, b) => b.final_project.localeCompare(a.final_project));
+        });
     }, [activities, overviews, projects]);
 
-    // Hàm so khớp bản ghi Model với bảng posm_projects
-    const findMatchedProject = React.useCallback((group: ProjectGroup): Project | null => {
-        if (!projects || projects.length === 0) return null;
-
-        return projects.find(p => {
-            const keyMatch = p.source_key && group.key_project && 
-                p.source_key.trim().toLowerCase() === group.key_project.trim().toLowerCase();
-            
-            const nameMatch = p.source_project_name && group.name_project && 
-                p.source_project_name.trim().toLowerCase() === group.name_project.trim().toLowerCase();
-            
-            const finalKeyMatch = p.final_key && group.final_project && 
-                p.final_key.trim().toLowerCase() === group.final_project.trim().toLowerCase();
-
-            return !!(keyMatch || nameMatch || finalKeyMatch);
-        }) || null;
-    }, [projects]);
-
-    // Lọc dữ liệu hiển thị theo tìm kiếm
+    // Lọc theo từ khóa tìm kiếm & quick filter
     const filteredGroups = React.useMemo(() => {
-        if (!groupedProjects) return [];
-        if (!searchTerm) return groupedProjects;
+        return groupedProjects.filter(g => {
+            const term = searchTerm.toLowerCase().trim();
+            const matchesSearch = !term || 
+                (g.final_project || '').toLowerCase().includes(term) ||
+                (g.key_project || '').toLowerCase().includes(term) ||
+                (g.name_project || '').toLowerCase().includes(term) ||
+                (g.stats?.customer || '').toLowerCase().includes(term) ||
+                (g.stats?.supplier || '').toLowerCase().includes(term) ||
+                (g.stats?.posmType || '').toLowerCase().includes(term);
 
-        const term = searchTerm.toLowerCase();
-        return groupedProjects.filter(group => {
-            const matchedProj = findMatchedProject(group);
-            return (
-                group.final_project.toLowerCase().includes(term) ||
-                (group.key_project || '').toLowerCase().includes(term) ||
-                (group.name_project || '').toLowerCase().includes(term) ||
-                (matchedProj?.store_name || '').toLowerCase().includes(term) ||
-                (matchedProj?.store_code || '').toLowerCase().includes(term)
-            );
+            const isFinished = g.activities?.every(a => {
+                const st = (a.status || '').toLowerCase();
+                const prog = ((a as any).tien_do || '').toLowerCase();
+                return st.includes('done') || st.includes('hoàn thành') || prog.includes('done') || prog.includes('hoàn thành');
+            });
+
+            if (activeQuickFilter === 'ACTIVE') {
+                return matchesSearch && (!isFinished || !g.activities || g.activities.length === 0);
+            }
+            if (activeQuickFilter === 'COMPLETED') {
+                return matchesSearch && isFinished && g.activities && g.activities.length > 0;
+            }
+            if (activeQuickFilter === 'HIGH_STORE_COUNT') {
+                return matchesSearch && (g.stats?.storeCount || 0) > 0;
+            }
+            return matchesSearch;
         });
-    }, [groupedProjects, searchTerm, findMatchedProject]);
+    }, [groupedProjects, searchTerm, activeQuickFilter]);
 
-    const isLoading = projectsLoading || activitiesLoading || overviewsLoading;
+    const findMatchedProject = (group: ProjectGroup): Project | null => {
+        if (!projects) return null;
+        return projects.find(p => p.final_key === group.final_project || p.source_key === group.key_project || p.source_project_name === group.name_project) || null;
+    };
 
-    if (isLoading) {
+    // FIX POINT 2: Navigate directly to the dedicated full-page Project Detail component route (/project/:id)!
+    const handleRowClick = (group: ProjectGroup) => {
+        navigate(`/project/${encodeURIComponent(group.final_project)}`);
+    };
+
+    if (activitiesLoading || overviewsLoading || projectsLoading) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-[400px] gap-3">
-                <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
-                <p className="text-sm text-slate-500 font-medium">Đang tải và tổng hợp dữ liệu POSM Projects...</p>
+            <div className="flex h-64 items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
         );
     }
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500 relative z-0 pb-12">
-            <div className="absolute top-0 left-0 w-full h-[400px] overflow-hidden -z-10 pointer-events-none opacity-40">
-                <div className="absolute -top-40 -right-40 w-96 h-96 bg-indigo-500 rounded-full mix-blend-multiply filter blur-[128px] opacity-20"></div>
-                <div className="absolute top-0 -left-40 w-96 h-96 bg-purple-500 rounded-full mix-blend-multiply filter blur-[128px] opacity-20"></div>
+        <div className="space-y-4">
+            {/* MODULE INTERNAL NAVIGATION SUB-TABS */}
+            <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 w-fit">
+                <button
+                    onClick={() => setActiveModuleTab('DATA_LIST')}
+                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                        activeModuleTab === 'DATA_LIST'
+                            ? 'bg-white dark:bg-slate-900 text-sky-600 dark:text-sky-400 shadow-sm'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                >
+                    <Table className="w-4 h-4" />
+                    <span>Danh Sách Dữ Liệu</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 font-mono">
+                        {filteredGroups.length}
+                    </span>
+                </button>
+
+                <button
+                    onClick={() => setActiveModuleTab('ANALYST')}
+                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                        activeModuleTab === 'ANALYST'
+                            ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-sm'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                >
+                    <BarChart3 className="w-4 h-4" />
+                    <span>Báo Cáo & Thống Kê (Analyst)</span>
+                </button>
             </div>
-            
-            {/* Header & Local Search */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                <div className="relative w-full sm:max-w-md group">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 group-focus-within:text-neutral-900 transition-colors" />
-                    <input
-                        type="text"
-                        placeholder="Tìm kiếm dự án..."
-                        className="w-full pl-9 pr-4 py-2 bg-white border border-neutral-200 focus:border-neutral-300 focus:ring-4 focus:ring-neutral-100 rounded-md text-sm outline-none transition-all shadow-sm"
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
+
+            {/* TAB 1: DEDICATED ANALYST / REPORTS WORKSPACE */}
+            {activeModuleTab === 'ANALYST' && (
+                <div className="space-y-4 animate-in fade-in duration-200">
+                    <ProjectCommandCenterHeader
+                        groups={groupedProjects}
+                        activeQuickFilter={activeQuickFilter}
+                        onSelectQuickFilter={setActiveQuickFilter}
                     />
                 </div>
-            </div>
+            )}
 
-            {/* Bảng dữ liệu Project (Table View) */}
-            <div className="relative z-0">
-                <ProjectTable 
-                    groups={filteredGroups}
-                    findMatchedProject={findMatchedProject}
-                    onRowClick={(group) => navigate(`/project/${group.final_project}`)}
-                />
-            </div>
+            {/* TAB 2: CLEAN OPERATIONAL DATA LIST WORKSPACE */}
+            {activeModuleTab === 'DATA_LIST' && (
+                <div className="space-y-4 animate-in fade-in duration-200">
+                    {/* Header & Search */}
+                    <div className="flex items-center justify-between gap-4">
+                        <div className="relative flex-1 max-w-md">
+                            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <input 
+                                type="text" 
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                placeholder="Tìm kiếm mã dự án, tên dự án, khách hàng, supplier..."
+                                className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                        </div>
+                    </div>
 
-            {showUnifiedModal && importingProject && (
-                <StoreManagerModal 
-                    projectGroup={importingProject} 
-                    downloadFileId={downloadFileId}
-                    setDownloadFileId={setDownloadFileId}
-                    onClose={() => {
-                        setShowUnifiedModal(false);
-                        setImportingProject(null);
-                        setDownloadFileId(undefined);
-                    }} 
-                />
+                    {/* Table */}
+                    <ProjectTable 
+                        groups={filteredGroups}
+                        findMatchedProject={findMatchedProject}
+                        onRowClick={handleRowClick}
+                        requestsMap={requestsMap}
+                        onRefresh={() => {
+                            queryClient.invalidateQueries({ queryKey: ['project_activities_with_attachments_all'] });
+                            queryClient.invalidateQueries({ queryKey: ['projects'] });
+                            queryClient.invalidateQueries({ queryKey: ['raw_requests'] });
+                        }}
+                    />
+                </div>
             )}
         </div>
     );

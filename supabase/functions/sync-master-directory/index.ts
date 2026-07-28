@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
             throw new Error('Không thể lấy Access Token từ Google')
         }
 
-        // Cấu hình Google Sheet
+        // Cấu hình Google Sheet Contact (01.13.2025)
         const sheetId = '1Lct6U-pSOCpGUEGG_uDrjS5joQCJA4UvC66-QrkDKgE'
         const range = '01.13.2025!A2:AA'
 
@@ -67,15 +67,17 @@ Deno.serve(async (req) => {
                 store_level: row[5] || null,  
                 province: row[6] || null,     
                 district: row[7] || null,     
-                sr: row[14] || null,          // Cột O (Index 14)
-                sr_email: row[16] || null,    // Cột Q (Index 16)
-                sr_phone: row[17] || null,    // Cột R (Index 17)
-                mer_name: row[26] || null,    // Cột AA (Index 26)
+                sr_name: row[14] || null,        // Cột O (Index 14 - SR Name)
+                sr_email: row[16] || null,       // Cột Q (Index 16 - SR Email)
+                sr_phone: row[17] || null,       // Cột R (Index 17 - SR Phone 1)
+                sr_phone_2: row[18] || null,     // Cột S (Index 18 - SR Phone 2)
+                opsup_name: row[21] || null,     // Cột V (Index 21 - OPSUP Name)
+                opsup_email: row[22] || null,    // Cột W (Index 22 - OPSUP Email)
+                mer_name: row[26] || null,       // Cột AA (Index 26 - Merchandiser)
             }
-        }).filter((r: any) => r.store_code && r.store_name) // Chỉ lấy các dòng có mã CH và Tên CH
+        }).filter((r: any) => r.store_code && r.store_name)
 
         if (parsedData.length > 0) {
-            // Upsert vào Supabase (chia nhỏ nếu mảng quá lớn, nhưng Supabase upsert thường cân được ~10k dòng/lần)
             const chunkSize = 1000
             for (let i = 0; i < parsedData.length; i += chunkSize) {
                 const chunk = parsedData.slice(i, i + chunkSize)

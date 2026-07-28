@@ -10,6 +10,7 @@ interface MasterStoreTabProps {
     phases: StorePhase[];
     visTechs: any[];
     suppliers: any[];
+    customFields?: any[];
     updateField: (id: string, field: string, value: any) => void;
     onDelete: (id: string) => void;
     onBulkDelete: (ids: string[]) => void;
@@ -24,7 +25,7 @@ interface MasterStoreTabProps {
 }
 
 export function MasterStoreTab({
-    storeItems, phases, visTechs, suppliers,
+    storeItems, phases, visTechs, suppliers, customFields = [],
     updateField, onDelete, onBulkDelete, onOpenPhaseModal,
     onBulkVisTech, onBulkSupplier, onBulkPhase,
     onPublish, isPublishing,
@@ -214,6 +215,7 @@ export function MasterStoreTab({
                     phases={phases}
                     visTechs={visTechs}
                     suppliers={suppliers}
+                    customFields={customFields}
                     updateField={updateField}
                     selectedIds={selectedIds}
                     onSelectAll={handleSelectAll}

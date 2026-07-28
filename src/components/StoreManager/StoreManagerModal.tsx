@@ -5,6 +5,7 @@ import type { ProjectGroup, StoreItem } from '@/types';
 import { useExcelImport } from '@/hooks/useExcelImport';
 import { useStoreManager } from '@/hooks/useStoreManager';
 import { useStorePhasesByProject, useUpsertStorePhase, useBulkUpsertStorePhases } from '@/hooks/useStorePhases';
+import { useCustomFields } from '@/hooks/useCustomFields';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 
@@ -34,6 +35,7 @@ export function StoreManagerModal({ projectGroup, downloadFileId, setDownloadFil
     const excel = useExcelImport(projectGroup, downloadFileId, setDownloadFileId);
     const store = useStoreManager(projectGroup);
     const { data: phases = [] } = useStorePhasesByProject(projectGroup.final_project);
+    const { fields: customFields = [] } = useCustomFields(projectGroup.final_project);
     const upsertPhase = useUpsertStorePhase(projectGroup.final_project);
     const bulkUpsertPhases = useBulkUpsertStorePhases(projectGroup.final_project);
 

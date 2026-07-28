@@ -1,8 +1,9 @@
 import React from 'react';
 import { supabase } from '@/lib/supabase';
-import { Search, RefreshCw, BookUser, ExternalLink } from 'lucide-react';
+import { Search, RefreshCw, BookUser, ExternalLink, Filter, Store, Sparkles } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useQuery } from '@tanstack/react-query';
+import { syncMasterStoreDirectoryFromCSV, getLiveMasterContactMap } from '@/services/sheetSyncService';
 
 export function StoreContactPage() {
     const [search, setSearch] = React.useState('');
@@ -12,15 +13,18 @@ export function StoreContactPage() {
     const [merFilter, setMerFilter] = React.useState('');
     const [page, setPage] = React.useState(0);
     const pageSize = 50;
-    
+
     const [isSyncing, setIsSyncing] = React.useState(false);
 
-    // Debounce search
+    // STRICT CHECK: Only active when user typed a search term OR selected at least 1 filter dropdown!
+    const hasActiveFilter = Boolean(search.trim() || regionFilter || customerFilter || merFilter);
+
+    // Debounce search input
     React.useEffect(() => {
         const timer = setTimeout(() => {
             setSearch(searchInput);
             setPage(0); // Reset page on new search
-        }, 500);
+        }, 400);
         return () => clearTimeout(timer);
     }, [searchInput]);
 
@@ -29,7 +33,7 @@ export function StoreContactPage() {
         setPage(0);
     }, [regionFilter, customerFilter, merFilter]);
 
-    // Fetch filters options
+    // Fetch master filter dropdown options
     const { data: filterOptions } = useQuery({
         queryKey: ['master_filters'],
         queryFn: async () => {
@@ -43,7 +47,7 @@ export function StoreContactPage() {
         staleTime: 5 * 60 * 1000
     });
 
-    // Fetch store directory (Paginated & Filtered)
+    // Fetch store directory (STRICTLY ENABLED ONLY WHEN FILTERS ARE ACTIVE)
     const { data: storesData, isLoading, refetch } = useQuery({
         queryKey: ['master_stores_directory', search, regionFilter, customerFilter, merFilter, page],
         queryFn: async () => {
@@ -69,8 +73,27 @@ export function StoreContactPage() {
                 .range(page * pageSize, (page + 1) * pageSize - 1);
             
             if (error) throw error;
-            return { data: data || [], count: count || 0 };
-        }
+
+            // Enrich with live map from Google Sheet Contact (01.13.2025)
+            const liveMap = await getLiveMasterContactMap();
+            const enrichedStores = (data || []).map(s => {
+                const live = s.store_code ? liveMap.get(s.store_code.toUpperCase().trim()) : null;
+                return {
+                    ...s,
+                    sr_name: live?.sr_name || s.sr_name || s.sr,
+                    sr_email: live?.sr_email || s.sr_email,
+                    sr_phone: live?.sr_phone || s.sr_phone,
+                    sr_phone_2: live?.sr_phone_2 || s.sr_phone_2,
+                    opsup_name: live?.opsup_name || s.opsup_name,
+                    opsup_email: live?.opsup_email || s.opsup_email,
+                    opsup_phone: live?.opsup_phone || s.opsup_phone,
+                    mer_name: live?.mer_name || s.mer_name
+                };
+            });
+
+            return { data: enrichedStores, count: count || 0 };
+        },
+        enabled: hasActiveFilter // STRICT REQUIREMENT: DO NOT QUERY WHEN NO FILTER/SEARCH IS ACTIVE
     });
 
     const stores = storesData?.data || [];
@@ -79,14 +102,12 @@ export function StoreContactPage() {
 
     const handleSync = async () => {
         setIsSyncing(true);
-        const loadingToast = toast.loading('Đang đồng bộ dữ liệu từ Google Sheet...');
+        const loadingToast = toast.loading('Đang đồng bộ dữ liệu trực tiếp từ Google Sheet Contact (01.13.2025)...');
         try {
-            const { data, error } = await supabase.functions.invoke('sync-master-directory');
-            if (error) throw error;
-            if (!data.success) throw new Error(data.error || 'Lỗi không xác định');
-            
-            toast.success(data.message || 'Đồng bộ thành công!', { id: loadingToast });
-            refetch();
+            await getLiveMasterContactMap(true);
+            const res = await syncMasterStoreDirectoryFromCSV();
+            toast.success(res.message, { id: loadingToast });
+            if (hasActiveFilter) refetch();
         } catch (err: any) {
             console.error("Sync error:", err);
             toast.error(err.message || 'Có lỗi xảy ra khi đồng bộ', { id: loadingToast });
@@ -108,7 +129,7 @@ export function StoreContactPage() {
                             <BookUser className="w-8 h-8 text-indigo-600" />
                             Store Contact
                         </h1>
-                        <p className="text-slate-500 mt-1">Danh bạ cửa hàng Master (Đồng bộ từ Google Sheet)</p>
+                        <p className="text-slate-500 mt-1">Danh bạ cửa hàng Master (Chỉ hiển thị khi có Bộ lọc hoặc Tìm kiếm)</p>
                     </div>
 
                     <div className="flex items-center gap-3">
@@ -131,140 +152,200 @@ export function StoreContactPage() {
                     </div>
                 </div>
 
-                {/* Search & Filters */}
+                {/* Search & Filters Bar */}
                 <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col gap-4">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                         <div className="relative w-full max-w-md">
                             <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                             <input 
-                                type="text"
-                                placeholder="Tìm kiếm theo mã CH hoặc tên CH..."
+                                type="text" 
                                 value={searchInput}
-                                onChange={e => setSearchInput(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-indigo-500 transition-colors text-sm"
+                                onChange={(e) => setSearchInput(e.target.value)}
+                                placeholder="Gõ Mã CH hoặc Tên CH để tìm kiếm..."
+                                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-slate-800 dark:text-white"
                             />
                         </div>
-                        <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-slate-500">
-                                Đang xem: <span className="text-indigo-600 dark:text-indigo-400">{Math.min(page * pageSize + 1, totalStores)} - {Math.min((page + 1) * pageSize, totalStores)}</span> / {totalStores}
-                            </span>
-                            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
-                                <button 
-                                    onClick={() => setPage(p => Math.max(0, p - 1))}
-                                    disabled={page === 0 || isLoading}
-                                    className="px-3 py-1.5 text-xs font-bold rounded hover:bg-white dark:hover:bg-slate-700 disabled:opacity-50 transition-colors"
-                                >
-                                    Trước
-                                </button>
-                                <span className="text-xs font-bold px-2">{page + 1} / {Math.max(1, totalPages)}</span>
-                                <button 
-                                    onClick={() => setPage(p => p + 1)}
-                                    disabled={page >= totalPages - 1 || isLoading}
-                                    className="px-3 py-1.5 text-xs font-bold rounded hover:bg-white dark:hover:bg-slate-700 disabled:opacity-50 transition-colors"
-                                >
-                                    Sau
-                                </button>
+
+                        {/* Pagination indicator */}
+                        {hasActiveFilter && (
+                            <div className="flex items-center gap-2 text-sm text-slate-500 font-medium">
+                                <span>Đang xem: {stores.length > 0 ? page * pageSize + 1 : 0} - {Math.min((page + 1) * pageSize, totalStores)} / {totalStores} cửa hàng</span>
+                                <div className="flex items-center gap-1 ml-2">
+                                    <button 
+                                        disabled={page === 0}
+                                        onClick={() => setPage(p => p - 1)}
+                                        className="px-3 py-1 bg-slate-100 dark:bg-slate-700 rounded-lg disabled:opacity-40 hover:bg-slate-200 font-bold text-xs"
+                                    >
+                                        Trước
+                                    </button>
+                                    <span className="px-2 font-mono text-xs">{page + 1} / {totalPages || 1}</span>
+                                    <button 
+                                        disabled={page >= totalPages - 1}
+                                        onClick={() => setPage(p => p + 1)}
+                                        className="px-3 py-1 bg-slate-100 dark:bg-slate-700 rounded-lg disabled:opacity-40 hover:bg-slate-200 font-bold text-xs"
+                                    >
+                                        Sau
+                                    </button>
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </div>
-                    
-                    <div className="flex flex-wrap items-center gap-3">
+
+                    {/* Filter Selects */}
+                    <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-100 dark:border-slate-700">
                         <select 
-                            value={regionFilter} 
-                            onChange={e => setRegionFilter(e.target.value)}
-                            className="text-sm px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:border-indigo-500 cursor-pointer min-w-[150px]"
+                            value={regionFilter}
+                            onChange={(e) => setRegionFilter(e.target.value)}
+                            className="px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                         >
                             <option value="">Tất cả Vùng miền</option>
                             {filterOptions?.regions?.map(r => (
                                 <option key={r} value={r}>{r}</option>
                             ))}
                         </select>
+
                         <select 
-                            value={customerFilter} 
-                            onChange={e => setCustomerFilter(e.target.value)}
-                            className="text-sm px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:border-indigo-500 cursor-pointer min-w-[150px]"
+                            value={customerFilter}
+                            onChange={(e) => setCustomerFilter(e.target.value)}
+                            className="px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                         >
-                            <option value="">Tất cả Khách hàng</option>
+                            <option value="">Tất cả Hệ thống</option>
                             {filterOptions?.customers?.map(c => (
                                 <option key={c} value={c}>{c}</option>
                             ))}
                         </select>
+
                         <select 
-                            value={merFilter} 
-                            onChange={e => setMerFilter(e.target.value)}
-                            className="text-sm px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:border-indigo-500 cursor-pointer min-w-[150px]"
+                            value={merFilter}
+                            onChange={(e) => setMerFilter(e.target.value)}
+                            className="px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                         >
                             <option value="">Tất cả Merchandiser</option>
                             {filterOptions?.mers?.map(m => (
                                 <option key={m} value={m}>{m}</option>
                             ))}
                         </select>
+
+                        {hasActiveFilter && (
+                            <button
+                                onClick={() => {
+                                    setSearch('');
+                                    setSearchInput('');
+                                    setRegionFilter('');
+                                    setCustomerFilter('');
+                                    setMerFilter('');
+                                }}
+                                className="px-3 py-2 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-xl transition-colors cursor-pointer"
+                            >
+                                Xóa bộ lọc
+                            </button>
+                        )}
                     </div>
                 </div>
 
-                {/* Table */}
-                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden flex flex-col h-[600px]">
-                    <div className="overflow-x-auto flex-1 custom-scrollbar">
-                        <table className="w-full text-left border-collapse">
-                            <thead className="sticky top-0 bg-slate-50 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200 dark:border-slate-700 z-10">
-                                <tr>
-                                    <th className="p-4 text-xs font-black text-slate-500 uppercase whitespace-nowrap">Mã CH</th>
-                                    <th className="p-4 text-xs font-black text-slate-500 uppercase whitespace-nowrap">Cửa hàng</th>
-                                    <th className="p-4 text-xs font-black text-slate-500 uppercase whitespace-nowrap">Khách hàng</th>
-                                    <th className="p-4 text-xs font-black text-slate-500 uppercase whitespace-nowrap">Địa chỉ & Vùng</th>
-                                    <th className="p-4 text-xs font-black text-slate-500 uppercase whitespace-nowrap">Sales Rep (SR)</th>
-                                    <th className="p-4 text-xs font-black text-slate-500 uppercase whitespace-nowrap">Merchandiser</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {isLoading ? (
-                                    <tr>
-                                        <td colSpan={7} className="p-8 text-center text-slate-400">Đang tải dữ liệu...</td>
-                                    </tr>
-                                ) : stores.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={6} className="p-8 text-center text-slate-400">Không tìm thấy cửa hàng nào</td>
-                                    </tr>
-                                ) : (
-                                    stores.map((store: any) => (
-                                        <tr key={store.store_code} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                                            <td className="p-4">
-                                                <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 px-2 py-1 rounded-md">
-                                                    {store.store_code}
-                                                </span>
-                                            </td>
-                                            <td className="p-4 text-sm font-semibold text-slate-700 dark:text-slate-300">
-                                                {store.store_name}
-                                            </td>
-                                            <td className="p-4">
-                                                <div className="flex flex-col gap-1">
-                                                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">{store.customer || '-'}</span>
-                                                    {store.ka && <span className="text-[11px] font-bold text-slate-500 tracking-wide uppercase">{store.ka}</span>}
-                                                </div>
-                                            </td>
-                                            <td className="p-4">
-                                                <div className="flex flex-col gap-1">
-                                                    {store.region && <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-400 px-1.5 py-0.5 rounded w-max uppercase tracking-wider">{store.region}</span>}
-                                                    <span className="text-xs text-slate-500 dark:text-slate-400">
-                                                        {[store.district, store.province].filter(Boolean).join(', ') || 'Chưa cập nhật địa chỉ'}
-                                                    </span>
-                                                </div>
-                                            </td>
-                                            <td className="p-4 text-xs font-medium text-slate-600 dark:text-slate-400">
-                                                <div className="flex flex-col gap-0.5">
-                                                    <span className="font-bold text-slate-700 dark:text-slate-300">{store.sr || '-'}</span>
-                                                    {store.sr_phone && <span className="text-[11px] text-slate-500">{store.sr_phone}</span>}
-                                                    {store.sr_email && <span className="text-[10px] text-indigo-500 hover:underline">{store.sr_email}</span>}
-                                                </div>
-                                            </td>
-                                            <td className="p-4 text-xs font-bold text-slate-600 dark:text-slate-400">{store.mer_name || '-'}</td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
+                {/* Conditional Rendering */}
+                {!hasActiveFilter ? (
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-12 border border-slate-200 dark:border-slate-700 text-center flex flex-col items-center justify-center space-y-4 shadow-sm my-6">
+                        <div className="p-4 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-2xl">
+                            <Search className="w-10 h-10 animate-bounce" />
+                        </div>
+                        <div className="max-w-md space-y-1">
+                            <h3 className="text-base font-bold text-slate-800 dark:text-white">
+                                Vui lòng nhập từ khóa hoặc chọn Bộ lọc để hiển thị
+                            </h3>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                                Để chống giật lag và tối ưu hiệu năng, hệ thống mặc định **không hiển thị toàn bộ 11,000+ cửa hàng**. Hãy chọn Vùng miền, Hệ thống, Merchandiser hoặc gõ Tên/Mã CH để tìm kiếm.
+                            </p>
+                        </div>
                     </div>
-                </div>
+                ) : isLoading ? (
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-12 text-center text-slate-400 font-medium border border-slate-100 dark:border-slate-700">
+                        Đang tìm kiếm cửa hàng...
+                    </div>
+                ) : stores.length === 0 ? (
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-12 text-center text-slate-400 font-medium border border-slate-100 dark:border-slate-700">
+                        Không tìm thấy cửa hàng nào phù hợp với từ khóa / bộ lọc hiện tại.
+                    </div>
+                ) : (
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs">
+                                <thead className="bg-slate-100/70 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
+                                    <tr>
+                                        <th className="p-4">Mã CH</th>
+                                        <th className="p-4">Cửa hàng</th>
+                                        <th className="p-4">Hệ thống (KA/Customer)</th>
+                                        <th className="p-4">Địa chỉ & Vùng</th>
+                                        <th className="p-4">Sales Rep (SR)</th>
+                                        <th className="p-4">Ops Supervisor (OPSUP)</th>
+                                        <th className="p-4">Merchandiser</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 dark:divide-slate-700 text-slate-700 dark:text-slate-300">
+                                    {stores.map((s: any, idx: number) => {
+                                        const srNameVal = s.sr_name && isNaN(Number(s.sr_name)) ? s.sr_name : s.sr && isNaN(Number(s.sr)) ? s.sr : '';
+                                        const srPhone1 = s.sr_phone || (s.sr_name && !isNaN(Number(s.sr_name)) ? s.sr_name : '');
+                                        const srPhone2 = s.sr_phone_2 || '';
+
+                                        return (
+                                            <tr key={s.id || `${s.store_code}_${idx}`} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                                                <td className="p-4">
+                                                    <span className="font-mono font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-1 rounded-md border border-indigo-100 dark:border-indigo-800">
+                                                        {s.store_code}
+                                                    </span>
+                                                </td>
+                                                <td className="p-4 font-bold text-slate-900 dark:text-white">
+                                                    {s.store_name}
+                                                </td>
+                                                <td className="p-4 font-semibold text-slate-600 dark:text-slate-400">
+                                                    {s.customer ? `${s.customer}${s.ka ? ` / ${s.ka}` : ''}` : '-'}
+                                                </td>
+                                                <td className="p-4">
+                                                    <div>{s.address || '-'}</div>
+                                                    <div className="text-[10px] text-slate-400">{s.district}, {s.province} ({s.region})</div>
+                                                </td>
+
+                                                {/* Sales Rep (SR) (Tên Cột O, Email Cột Q, SĐT 1 Cột R, SĐT 2 Cột S) */}
+                                                <td className="p-4 space-y-0.5">
+                                                    <div className="font-bold text-slate-900 dark:text-white text-xs">
+                                                        {srNameVal || <span className="text-slate-400 font-normal">Chưa có tên SR</span>}
+                                                    </div>
+                                                    {s.sr_email && (
+                                                        <div className="text-[11px] text-indigo-600 dark:text-indigo-400 font-mono truncate max-w-[160px]">
+                                                            ✉️ {s.sr_email}
+                                                        </div>
+                                                    )}
+                                                    <div className="text-[10px] text-slate-500 font-mono flex flex-wrap gap-1">
+                                                        {srPhone1 && <span>📞 SĐT 1: {srPhone1}</span>}
+                                                        {srPhone2 && <span>• SĐT 2: {srPhone2}</span>}
+                                                    </div>
+                                                </td>
+
+                                                {/* Ops Supervisor (OPSUP) (Tên Cột V, Email Cột W) */}
+                                                <td className="p-4 space-y-0.5">
+                                                    <div className="font-bold text-slate-800 dark:text-slate-200 text-xs">
+                                                        {s.opsup_name || <span className="text-slate-400 font-normal">-</span>}
+                                                    </div>
+                                                    {s.opsup_email && (
+                                                        <div className="text-[11px] text-blue-600 dark:text-blue-400 font-mono truncate max-w-[160px]">
+                                                            ✉️ {s.opsup_email}
+                                                        </div>
+                                                    )}
+                                                </td>
+
+                                                {/* Merchandiser (Cột AA) */}
+                                                <td className="p-4 font-bold text-slate-800 dark:text-slate-200">
+                                                    {s.mer_name || '-'}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+
+                            </table>
+                        </div>
+                    </div>
+                )}
 
             </div>
         </div>

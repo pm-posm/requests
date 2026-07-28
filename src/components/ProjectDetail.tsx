@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { StoreManagerModal } from './StoreManager/StoreManagerModal';
-import { ArrowLeft, Loader2, Mail, FileSpreadsheet, X, History as HistoryIcon, FolderUp, Store, Trash2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Mail, FileSpreadsheet, X, History as HistoryIcon, FolderUp, Store, Trash2, Layers, Scissors } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ActivityRow, ProjectGroup } from '@/types';
@@ -9,6 +9,10 @@ import { ActivityDetailCard } from './Dashboard/ActivityDetailCard';
 import { StoreItemsList } from './Dashboard/StoreItemsList';
 import toast from 'react-hot-toast';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { InDetailMergeModal } from './ProjectList/InDetailMergeModal';
+import { InDetailSplitModal } from './ProjectList/InDetailSplitModal';
+
+import { useDashboardStore } from '@/stores/useDashboardStore';
 
 type PhaseType = 'BRIEF' | 'NTXX' | 'SURVEY' | 'INSTALLATION';
 
@@ -16,10 +20,24 @@ export default function ProjectDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const projectCode = decodeURIComponent(id || '');
+  const { isAdmin } = useDashboardStore();
+
+  const handleAdminAction = (actionFn: () => void) => {
+    if (!isAdmin) {
+      toast.error('🔒 Quyền bị từ chối: Vui lòng đăng nhập tài khoản Admin để thao tác!');
+      return;
+    }
+    actionFn();
+  };
 
   const [activePhaseModal, setActivePhaseModal] = useState<PhaseType | null>(null);
   const [showExtractModal, setShowExtractModal] = useState(false);
   const [downloadFileId, setDownloadFileId] = useState<string | undefined>();
+
+  const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
+  const [isSplitModalOpen, setIsSplitModalOpen] = useState(false);
+
+  const queryClient = useQueryClient();
 
   const { data: projectGroups, isLoading: isGroupsLoading } = useQuery({
       queryKey: ['project_groups', projectCode],
@@ -102,7 +120,21 @@ export default function ProjectDetail() {
           
           <div className="flex items-center gap-2 shrink-0">
             <button 
-              onClick={() => setShowExtractModal(true)}
+              onClick={() => handleAdminAction(() => setIsMergeModalOpen(true))}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-bold text-xs shadow-sm transition-all cursor-pointer"
+            >
+              <Layers className="w-3.5 h-3.5" /> 🔗 Gộp Dự Án
+            </button>
+
+            <button 
+              onClick={() => handleAdminAction(() => setIsSplitModalOpen(true))}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold text-xs shadow-sm transition-all cursor-pointer"
+            >
+              <Scissors className="w-3.5 h-3.5" /> ✂️ Tách Dự Án
+            </button>
+
+            <button 
+              onClick={() => handleAdminAction(() => setShowExtractModal(true))}
               className="flex items-center gap-2 px-3 py-1.5 bg-primary hover:opacity-90 text-primary-foreground rounded-lg font-semibold text-xs shadow-sm transition-opacity"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" /> Trung tâm Xử lý Dữ liệu
@@ -112,10 +144,10 @@ export default function ProjectDetail() {
 
         {/* Phase Action Buttons */}
         <div className="flex items-center gap-2 pb-3 overflow-x-auto custom-scrollbar">
-           <PhaseButton label="Brief" count={getPhaseCount('BRIEF')} onClick={() => setActivePhaseModal('BRIEF')} />
-           <PhaseButton label="NTXX" count={getPhaseCount('NTXX')} onClick={() => setActivePhaseModal('NTXX')} />
-           <PhaseButton label="Khảo sát" count={getPhaseCount('SURVEY')} onClick={() => setActivePhaseModal('SURVEY')} />
-           <PhaseButton label="Lắp đặt" count={getPhaseCount('INSTALLATION')} onClick={() => setActivePhaseModal('INSTALLATION')} />
+           <PhaseButton label="Brief" count={getPhaseCount('BRIEF')} onClick={() => handleAdminAction(() => setActivePhaseModal('BRIEF'))} />
+           <PhaseButton label="NTXX" count={getPhaseCount('NTXX')} onClick={() => handleAdminAction(() => setActivePhaseModal('NTXX'))} />
+           <PhaseButton label="Khảo sát" count={getPhaseCount('SURVEY')} onClick={() => handleAdminAction(() => setActivePhaseModal('SURVEY'))} />
+           <PhaseButton label="Lắp đặt" count={getPhaseCount('INSTALLATION')} onClick={() => handleAdminAction(() => setActivePhaseModal('INSTALLATION'))} />
         </div>
       </div>
 
@@ -147,20 +179,42 @@ export default function ProjectDetail() {
 
       {/* Phase Modal Overlay */}
       {activePhaseModal && (
-          <PhaseModal 
-              phase={activePhaseModal} 
-              group={projectGroupForExtract} 
-              onClose={() => setActivePhaseModal(null)} 
-              onProcessData={(fileId) => {
-                  setActivePhaseModal(null);
-                  setDownloadFileId(fileId);
-                  setShowExtractModal(true);
-              }}
-          />
+        <PhaseModal 
+          phase={activePhaseModal} 
+          group={projectGroupForExtract} 
+          onClose={() => setActivePhaseModal(null)} 
+          onProcessData={(fileId) => {
+            setActivePhaseModal(null);
+            setDownloadFileId(fileId);
+            setShowExtractModal(true);
+          }}
+        />
       )}
+
+      <InDetailMergeModal
+        isOpen={isMergeModalOpen}
+        onClose={() => setIsMergeModalOpen(false)}
+        currentProjectKey={projectCode}
+        onSuccess={(targetKey) => {
+          queryClient.invalidateQueries({ queryKey: ['project_groups'] });
+          navigate(`/project/${encodeURIComponent(targetKey)}`);
+        }}
+      />
+
+      <InDetailSplitModal
+        isOpen={isSplitModalOpen}
+        onClose={() => setIsSplitModalOpen(false)}
+        currentProjectKey={projectCode}
+        activities={activities as ActivityRow[]}
+        onSuccess={(newKey) => {
+          queryClient.invalidateQueries({ queryKey: ['project_groups'] });
+          navigate(`/project/${encodeURIComponent(newKey)}`);
+        }}
+      />
     </div>
   );
 }
+
 
 function PhaseModal({ phase, group, onClose, onProcessData }: { phase: PhaseType, group: ProjectGroup, onClose: () => void, onProcessData: (fileId: string) => void }) {
   const [activeTab, setActiveTab] = useState<'emails' | 'history' | 'manual'>('emails');

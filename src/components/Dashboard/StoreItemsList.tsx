@@ -5,9 +5,11 @@ import { ModernPhaseModal } from './ModernPhaseModal';
 import { useStoreItemsData } from '@/hooks/useStoreItemsData';
 import { supabase } from '@/lib/supabase';
 import { useStorePhasesByProject } from '@/hooks/useStorePhases';
+import { useCustomFields } from '@/hooks/useCustomFields';
 import { StoreItemsHeader } from './StoreItemsHeader';
 import { StoreItemsTable } from './StoreItemsTable';
 import { StoreItemsLogs } from './StoreItemsLogs';
+import { ManageFieldsModal } from '../StoreManager/modals/ManageFieldsModal';
 import { Toaster } from 'react-hot-toast';
 
 export function StoreItemsList({ 
@@ -30,6 +32,7 @@ export function StoreItemsList({
     const [drawerItem, setDrawerItem] = React.useState<StoreItem | null>(null);
     const [drawerPhase, setDrawerPhase] = React.useState('');
     const [showManageModal, setShowManageModal] = React.useState(false);
+    const [showManageFieldsModal, setShowManageFieldsModal] = React.useState(false);
 
     const {
         storeItems,
@@ -51,7 +54,7 @@ export function StoreItemsList({
     } = useStoreItemsData(finalProjectName, onlyPublished, activeTab);
 
     const { data: phases = [] } = useStorePhasesByProject(finalProjectName);
-
+    const { fields = [] } = useCustomFields(finalProjectName);
     if (isLoading) return <div className="text-xs text-slate-400 py-1.5 animate-pulse pl-3">Đang tải danh sách store...</div>;
     if (!storeItems || storeItems.length === 0) return null;
 
@@ -72,6 +75,7 @@ export function StoreItemsList({
                 errors={errors}
                 pending={pending}
                 setShowManageModal={setShowManageModal}
+                setShowManageFieldsModal={setShowManageFieldsModal}
             />
 
             <ManageMasterDataModal
@@ -85,12 +89,19 @@ export function StoreItemsList({
                 onDeleteVisTech={(id) => deleteVisTechMutation.mutate(id)}
             />
 
+            <ManageFieldsModal
+                isOpen={showManageFieldsModal}
+                onClose={() => setShowManageFieldsModal(false)}
+                projectId={finalProjectName}
+            />
+
             {activeTab === 'stores' ? (
                 <StoreItemsTable 
                     storeItems={storeItems}
                     phases={phases}
                     visTechs={visTechs}
                     suppliers={suppliers}
+                    customFields={fields}
                 />
             ) : (
                 <StoreItemsLogs logs={logs} isLoadingLogs={isLoadingLogs} />

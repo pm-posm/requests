@@ -8,6 +8,7 @@ interface MasterStoreTableProps {
     phases: StorePhase[];           // all phases for this project
     visTechs: any[];
     suppliers: any[];
+    customFields?: any[];
     updateField: (id: string, field: string, value: any) => void;
     selectedIds: Set<string>;
     onSelectAll: (checked: boolean) => void;
@@ -19,7 +20,7 @@ interface MasterStoreTableProps {
 
 export function MasterStoreTable({
     storeItems, phases,
-    visTechs, suppliers,
+    visTechs, suppliers, customFields = [],
     updateField,
     selectedIds, onSelectAll, onSelectOne,
     onUpdateExpectedDate, onBulkExpectedDate,
@@ -68,6 +69,11 @@ export function MasterStoreTable({
                         <th className="p-2.5 font-bold min-w-[80px]">KA</th>
                         <th className="p-2.5 font-bold min-w-[80px]">SR</th>
                         <th className="p-2.5 font-bold min-w-[100px]">Hạng mục</th>
+                        {customFields.map(f => (
+                            <th key={f.field_key} className="p-2.5 font-bold min-w-[120px]">
+                                {f.field_name}
+                            </th>
+                        ))}
 
                         {/* Vis-Tech with bulk dropdown */}
                         <th className="p-2.5 font-bold min-w-[120px]">
@@ -112,6 +118,7 @@ export function MasterStoreTable({
                                 phaseData={phaseMap.get(item.id) ?? null}
                                 visTechs={visTechs}
                                 suppliers={suppliers}
+                                customFields={customFields}
                                 updateField={updateField}
                                 checked={selectedIds.has(item.id)}
                                 onCheck={onSelectOne}

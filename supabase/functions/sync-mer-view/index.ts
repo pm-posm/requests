@@ -207,8 +207,13 @@ serve(async (req) => {
     let upsertedData: any[] = [];
 
     if (bulkUpdateList.length > 0) {
+        // Deduplicate by ID to prevent ON CONFLICT DO UPDATE errors
+        const uniqueUpdateMap = new Map();
+        bulkUpdateList.forEach(item => uniqueUpdateMap.set(item.id, item));
+        const safeBulkUpdateList = Array.from(uniqueUpdateMap.values());
+
         const { data, error } = await supabase.from('posm_projects')
-            .upsert(bulkUpdateList)
+            .upsert(safeBulkUpdateList)
             .select('id, sheet_row_index');
             
         if (error) throw new Error("Lỗi Bulk Update: " + error.message);

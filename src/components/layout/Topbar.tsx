@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Search, Loader2, RefreshCw, Settings, Menu, Bell, User, MoreVertical } from 'lucide-react';
+import { Search, Loader2, RefreshCw, Settings, Menu, Bell, User, MoreVertical, Link2, ShieldCheck } from 'lucide-react';
 import { useDashboardStore } from '@/stores/useDashboardStore';
+import toast from 'react-hot-toast';
 
 interface TopbarProps {
   searchTerm: string;
@@ -108,9 +109,37 @@ export function Topbar({
           </div>
         )}
         
-        <button onClick={handleAdminToggle} className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg transition-colors" title="Cài đặt hệ thống">
-          <Settings className="h-4 w-4" />
+        <button 
+          onClick={() => {
+            navigator.clipboard.writeText(window.location.href);
+            toast.success('📋 Đã sao chép đường dẫn chia sẻ!');
+          }} 
+          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-sky-50 dark:bg-sky-950 text-sky-700 dark:text-sky-300 hover:bg-sky-100 rounded-lg text-xs font-bold transition-all border border-sky-200 dark:border-sky-800 cursor-pointer" 
+          title="Sao chép đường dẫn trực tiếp màn hình này"
+        >
+          <Link2 className="h-3.5 w-3.5" />
+          <span className="hidden md:inline">Copy Link</span>
         </button>
+
+        {isAdmin ? (
+          <button 
+            onClick={handleAdminToggle} 
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900 rounded-lg text-xs font-bold transition-all border border-emerald-200 dark:border-emerald-800 cursor-pointer"
+            title="Quyền Quản Trị Admin đang hoạt động. Bấm để đăng xuất."
+          >
+            <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span className="hidden sm:inline">Admin Active</span>
+          </button>
+        ) : (
+          <button 
+            onClick={handleAdminToggle} 
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-xs font-bold transition-all border border-slate-200 dark:border-slate-700 cursor-pointer"
+            title="Bấm để đăng nhập tài khoản Admin Quản Trị"
+          >
+            <Settings className="h-3.5 w-3.5 text-slate-500" />
+            <span className="hidden sm:inline">Đăng Nhập Admin</span>
+          </button>
+        )}
 
         <div className="h-4 w-px bg-border mx-1 hidden sm:block" />
 

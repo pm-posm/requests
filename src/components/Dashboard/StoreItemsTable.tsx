@@ -8,6 +8,7 @@ interface StoreItemsTableProps {
     phases: any[];
     visTechs: any[];
     suppliers: any[];
+    customFields?: any[];
 }
 
 export function StoreItemsTable({
@@ -15,6 +16,7 @@ export function StoreItemsTable({
     phases,
     visTechs,
     suppliers,
+    customFields = [],
 }: StoreItemsTableProps) {
     const phaseMap = React.useMemo(() => {
         const m = new Map<string, any>();
@@ -56,6 +58,11 @@ export function StoreItemsTable({
                         <th className="p-3 font-semibold border-b border-border min-w-[120px]">Hạng mục</th>
                         <th className="p-3 font-semibold border-b border-border min-w-[100px]">Vis-tech</th>
                         <th className="p-3 font-semibold border-b border-border min-w-[120px]">Supplier</th>
+                        {customFields.map(f => (
+                            <th key={f.field_key} className="p-3 font-semibold border-b border-border min-w-[120px]">
+                                {f.field_name}
+                            </th>
+                        ))}
                         <th className="p-3 font-semibold border-b border-border min-w-[100px]">Tiến độ hiện tại</th>
                         <th className="p-3 font-semibold border-b border-border min-w-[140px]">Ngày dự kiến</th>
                         <th className="p-3 font-semibold border-b border-border min-w-[120px]">Ngày thực tế</th>
@@ -86,6 +93,14 @@ export function StoreItemsTable({
                                 <td className="p-3 text-xs text-slate-600 dark:text-slate-400 font-medium">{item.category || "—"}</td>
                                 <td className="p-3 text-[11px] font-semibold text-slate-700 dark:text-slate-300">{item.vis_tech || "—"}</td>
                                 <td className="p-3 text-[11px] font-semibold text-slate-700 dark:text-slate-300">{item.supplier_name || "—"}</td>
+                                {customFields.map(f => {
+                                    const val = item.custom_properties?.[f.field_key];
+                                    return (
+                                        <td key={f.field_key} className="p-3 text-[11px] text-slate-600 dark:text-slate-400 font-medium">
+                                            {val !== undefined && val !== null && val !== "" ? String(val) : "—"}
+                                        </td>
+                                    );
+                                })}
                                 <td className="p-3 text-[11px] font-bold text-slate-700 dark:text-slate-300">{currentPhase || "—"}</td>
                                 <td className="p-3 text-[10px] font-medium text-slate-500 dark:text-slate-400">
                                     {phaseData?.expected_start ? (

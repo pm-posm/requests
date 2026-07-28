@@ -2,9 +2,26 @@ import { create } from 'zustand';
 import type { Project } from '@/hooks/useProjects';
 import type { FilterType } from '@/components/Analytics';
 
-type MainMenuType = 'request' | 'tong_du_an' | 'analytics' | 'personalization' | 'model_test' | 'tracking_installation' | 'store_contact' | 'tracking_ntxx';
+type MainMenuType = 'request' | 'tong_du_an' | 'analytics' | 'personalization' | 'model_test' | 'tracking_installation' | 'store_contact' | 'tracking_ntxx' | 'store_plan' | 'master_stores' | 'tracking_warranty';
 type RequestMenuType = 'overview' | 'store_list' | 'store_view';
 type PlanOptionFilterType = 'all' | 'csp_ka' | 'mer_quick_fix' | 'supplier_warranty';
+
+export interface PrefillRequestData {
+  assetCode?: string;
+  itemName?: string;
+  storeCode?: string;
+  storeName?: string;
+  vendorName?: string;
+  vendorHotline?: string;
+  expiryDate?: string;
+  note?: string;
+}
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  role: 'admin' | 'user' | 'guest';
+}
 
 interface DashboardState {
   searchTerm: string;
@@ -15,6 +32,12 @@ interface DashboardState {
 
   isNewRequestOpen: boolean;
   setIsNewRequestOpen: (open: boolean) => void;
+
+  prefillRequestData: PrefillRequestData | null;
+  setPrefillRequestData: (data: PrefillRequestData | null) => void;
+
+  authUser: AuthUser | null;
+  setAuthUser: (user: AuthUser | null) => void;
 
   isAdmin: boolean;
   setIsAdmin: (isAdmin: boolean) => void;
@@ -60,20 +83,19 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   isNewRequestOpen: false,
   setIsNewRequestOpen: (open) => set({ isNewRequestOpen: open }),
 
-  isAdmin: localStorage.getItem('isAdmin') === 'true',
-  setIsAdmin: (isAdmin) => {
-    if (isAdmin) {
-      localStorage.setItem('isAdmin', 'true');
-    } else {
-      localStorage.removeItem('isAdmin');
-    }
-    set({ isAdmin });
-  },
+  prefillRequestData: null,
+  setPrefillRequestData: (data) => set({ prefillRequestData: data }),
+
+  authUser: null,
+  setAuthUser: (authUser) => set({ authUser, isAdmin: authUser?.role === 'admin' }),
+
+  isAdmin: false,
+  setIsAdmin: (isAdmin) => set({ isAdmin }),
 
   kanbanFilter: 'all',
   setKanbanFilter: (filter) => set({ kanbanFilter: filter }),
 
-  mainMenu: 'model_test',
+  mainMenu: 'request',
   setMainMenu: (menu) => set({ mainMenu: menu }),
 
   requestMenu: 'overview',

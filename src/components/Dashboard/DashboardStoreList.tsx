@@ -4,7 +4,10 @@ import { Badge } from '@/components/ui/badge';
 import { useDashboardStore } from '@/stores/useDashboardStore';
 import { useDashboardData } from '@/hooks/useDashboardData';
 
+import { useNavigate } from 'react-router-dom';
+
 export function DashboardStoreList() {
+  const navigate = useNavigate();
   const { 
     filterRegion, setFilterRegion, 
     filterKA, setFilterKA, 
@@ -64,7 +67,10 @@ export function DashboardStoreList() {
             return (
               <button
                 key={store}
-                onClick={() => { setRequestMenu('store_view'); setSelectedStore(store); }}
+                onClick={() => {
+                  setSelectedStore(store);
+                  navigate('/requests/store/' + encodeURIComponent(store));
+                }}
                 className="flex flex-col gap-3 p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl hover:border-indigo-300 dark:hover:border-indigo-700 hover:shadow-md transition-all group text-left"
               >
                 <div className="flex items-start gap-3 w-full">

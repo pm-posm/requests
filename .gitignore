@@ -4,4 +4,11 @@ dist-ssr/
 *.local
 .env
 .env.*
+secrets.env
+*.log
+logs/
+backup/
+debug_*.json
+patch_*.cjs
+apply_*.cjs
 .DS_Store

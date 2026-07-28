@@ -19,6 +19,7 @@ interface MasterStoreRowProps {
     phaseData?: StorePhase | null;
     visTechs: any[];
     suppliers: any[];
+    customFields?: any[];
     updateField: (id: string, field: string, value: any) => void;
     checked: boolean;
     onCheck: (id: string, checked: boolean) => void;
@@ -38,7 +39,7 @@ function formatDateRange(phase?: StorePhase | null) {
 }
 
 export function MasterStoreRow({
-    item, phaseData, visTechs, suppliers,
+    item, phaseData, visTechs, suppliers, customFields = [],
     updateField,
     checked, onCheck, onUpdateExpectedDate,
     onStatusClick
@@ -97,6 +98,17 @@ export function MasterStoreRow({
             <td className="p-2 min-w-[100px]">
                 <EditableCell value={item.category} onSave={v => updateField(item.id, 'category', v)} placeholder="Hạng mục..." />
             </td>
+
+            {/* Custom Fields */}
+            {customFields.map(f => (
+                <td key={f.field_key} className="p-2 min-w-[120px]">
+                    <EditableCell 
+                        value={item.custom_properties?.[f.field_key]?.toString() || ''} 
+                        onSave={v => updateField(item.id, 'custom_properties', { ...(item.custom_properties || {}), [f.field_key]: v })} 
+                        placeholder={`${f.field_name}...`} 
+                    />
+                </td>
+            ))}
 
             {/* Vis-Tech */}
             <td className="p-2 min-w-[120px]">

@@ -2,9 +2,9 @@ import React from 'react';
 import { 
   BarChart3, Inbox, FolderOpen, PanelLeftClose, PanelLeftOpen, 
   ListTodo, KanbanSquare, ClipboardCheck, BookUser, 
-  Briefcase, Search, Settings, ChevronRight, Menu, X, Rocket, Factory
+  Briefcase, Search, Settings, ChevronRight, Menu, X, Rocket, Factory, ShieldCheck
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 interface SidebarProps {
   mainMenu: string;
@@ -21,14 +21,14 @@ export function Sidebar({
   mainMenu, setMainMenu, requestMenu, setRequestMenu, setSelectedStore, setIsNewRequestOpen, isMobileOpen, setIsMobileOpen
 }: SidebarProps) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const pathname = location.pathname;
   const [isCollapsed, setIsCollapsed] = React.useState(false);
 
-  const handleMenuClick = (menu: string) => {
-    navigate('/');
-    setMainMenu(menu);
-    if (menu !== 'request') setRequestMenu('overview');
-    setSelectedStore(null);
-    if (window.innerWidth < 768) setIsMobileOpen(false); // Close on mobile after click
+  const handleRouteClick = (path: string, menuKey?: string) => {
+    navigate(path);
+    if (menuKey) setMainMenu(menuKey);
+    if (window.innerWidth < 768) setIsMobileOpen(false);
   };
 
   const sidebarWidth = isCollapsed ? 'w-[68px]' : 'w-[260px]';
@@ -51,17 +51,17 @@ export function Sidebar({
         ${sidebarWidth} ${mobileTranslate} md:translate-x-0
       `}>
         {/* Workspace Header */}
-        <div className="h-14 px-4 flex items-center justify-between border-b border-border shrink-0">
+        <div className="h-14 px-4 flex items-center justify-between border-b border-border shrink-0 bg-sky-600 text-white">
           {!isCollapsed && (
-            <div className="flex items-center gap-2.5 font-bold text-foreground tracking-tight">
-              <div className="bg-primary text-primary-foreground p-1.5 rounded-lg shadow-sm">
+            <div className="flex items-center gap-2.5 font-bold tracking-tight text-white cursor-pointer" onClick={() => handleRouteClick('/requests')}>
+              <div className="bg-white/20 p-1.5 rounded-lg shadow-sm text-white">
                 <Rocket className="w-4 h-4" />
               </div>
-              <span className="truncate">Workspace</span>
+              <span className="truncate text-sm uppercase tracking-wide">POSM Management</span>
             </div>
           )}
           {isCollapsed && (
-            <div className="bg-primary text-primary-foreground p-1.5 rounded-lg mx-auto shadow-sm">
+            <div className="bg-white/20 p-1.5 rounded-lg mx-auto shadow-sm text-white cursor-pointer" onClick={() => handleRouteClick('/requests')}>
               <Rocket className="w-4 h-4" />
             </div>
           )}
@@ -71,40 +71,36 @@ export function Sidebar({
                if (window.innerWidth >= 768) setIsCollapsed(!isCollapsed);
                else setIsMobileOpen(false);
             }}
-            className={`p-1.5 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-md transition-colors ${isCollapsed ? 'hidden' : ''}`}
+            className="p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-md transition-colors cursor-pointer"
+            title={isCollapsed ? "Mở rộng Sidebar" : "Thu gọn Sidebar"}
           >
-            {window.innerWidth < 768 ? <X className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+            {window.innerWidth < 768 ? <X className="w-4 h-4" /> : isCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
           </button>
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6 custom-scrollbar text-sm">
           {/* OVERVIEW SECTION */}
           <div>
-            {!isCollapsed && <h4 className="px-3 mb-2 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Tổng quan</h4>}
+            {!isCollapsed && <h4 className="px-3 mb-2 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Tổng quan</h4>}
             <div className="space-y-0.5">
               <SidebarItem 
-                icon={<BarChart3 />} label="Dashboard" 
-                active={mainMenu === 'analytics'} 
+                icon={<BarChart3 />} label="Dashboard Báo Cáo" 
+                active={pathname.startsWith('/analytics')} 
                 isCollapsed={isCollapsed}
-                onClick={() => handleMenuClick('analytics')} 
+                onClick={() => handleRouteClick('/analytics', 'analytics')} 
               />
               <SidebarItem 
                 icon={<Inbox />} label="Xử lý Request" 
-                active={mainMenu === 'request'} 
+                active={pathname.startsWith('/requests')} 
                 isCollapsed={isCollapsed}
-                onClick={() => handleMenuClick('request')} 
+                onClick={() => handleRouteClick('/requests', 'request')} 
               />
-              {!isCollapsed && mainMenu === 'request' && (
-                <div className="pl-9 pr-2 py-1 space-y-0.5">
+              {!isCollapsed && (
+                <div className="pl-6 pr-2 py-1 space-y-0.5 border-l border-slate-200 dark:border-slate-800 ml-5 my-1">
                   <SubSidebarItem 
-                    label="Tất cả request" 
-                    active={requestMenu === 'overview'} 
-                    onClick={() => { setRequestMenu('overview'); setSelectedStore(null); }} 
-                  />
-                  <SubSidebarItem 
-                    label="Cửa hàng liên quan" 
-                    active={requestMenu === 'store_list' || requestMenu === 'store_view'} 
-                    onClick={() => { setRequestMenu('store_list'); setSelectedStore(null); }} 
+                    label="Tất cả Request (Overview)" 
+                    active={pathname === '/requests' || pathname === '/requests/overview'} 
+                    onClick={() => handleRouteClick('/requests', 'request')} 
                   />
                 </div>
               )}
@@ -117,15 +113,15 @@ export function Sidebar({
             <div className="space-y-0.5">
               <SidebarItem 
                 icon={<FolderOpen />} label="Tổng hợp dự án" 
-                active={mainMenu === 'tong_du_an'} 
+                active={pathname.startsWith('/projects') || pathname.startsWith('/project')} 
                 isCollapsed={isCollapsed}
-                onClick={() => handleMenuClick('tong_du_an')} 
+                onClick={() => handleRouteClick('/projects', 'tong_du_an')} 
               />
               <SidebarItem 
                 icon={<KanbanSquare />} label="Bảng kế hoạch" 
-                active={mainMenu === 'model_test'} 
+                active={pathname.startsWith('/store-plan')} 
                 isCollapsed={isCollapsed}
-                onClick={() => handleMenuClick('model_test')} 
+                onClick={() => handleRouteClick('/store-plan', 'store_plan')} 
               />
             </div>
           </div>
@@ -135,16 +131,22 @@ export function Sidebar({
             {!isCollapsed && <h4 className="px-3 mb-2 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Vận hành & Giám sát</h4>}
             <div className="space-y-0.5">
               <SidebarItem 
-                icon={<Factory />} label="Nghiệm thu Xuất xưởng" 
-                active={mainMenu === 'tracking_ntxx'} 
+                icon={<ShieldCheck />} label="Bảo Hành & Đổi Trả" 
+                active={pathname.startsWith('/tracking/warranty')} 
                 isCollapsed={isCollapsed}
-                onClick={() => handleMenuClick('tracking_ntxx')} 
+                onClick={() => handleRouteClick('/tracking/warranty', 'tracking_warranty')} 
+              />
+              <SidebarItem 
+                icon={<Factory />} label="Nghiệm thu Xuất xưởng" 
+                active={pathname.startsWith('/tracking/ntxx')} 
+                isCollapsed={isCollapsed}
+                onClick={() => handleRouteClick('/tracking/ntxx', 'tracking_ntxx')} 
               />
               <SidebarItem 
                 icon={<ClipboardCheck />} label="Theo dõi Lắp đặt" 
-                active={mainMenu === 'tracking_installation'} 
+                active={pathname.startsWith('/tracking/installation')} 
                 isCollapsed={isCollapsed}
-                onClick={() => handleMenuClick('tracking_installation')} 
+                onClick={() => handleRouteClick('/tracking/installation', 'tracking_installation')} 
               />
             </div>
           </div>
@@ -154,77 +156,70 @@ export function Sidebar({
             {!isCollapsed && <h4 className="px-3 mb-2 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Dữ liệu</h4>}
             <div className="space-y-0.5">
               <SidebarItem 
-                icon={<ListTodo />} label="Việc của tôi" 
-                active={mainMenu === 'personalization'} 
-                isCollapsed={isCollapsed}
-                onClick={() => handleMenuClick('personalization')} 
-              />
-              <SidebarItem 
                 icon={<BookUser />} label="Danh bạ Cửa hàng" 
-                active={mainMenu === 'store_contact'} 
+                active={pathname.startsWith('/contacts')} 
                 isCollapsed={isCollapsed}
-                onClick={() => handleMenuClick('store_contact')} 
+                onClick={() => handleRouteClick('/contacts', 'master_stores')} 
               />
             </div>
           </div>
         </nav>
 
-        <div className="p-4 border-t border-border shrink-0 bg-card">
-          {isCollapsed ? (
-            <button 
-              onClick={() => setIsCollapsed(false)}
-              className="w-full flex items-center justify-center p-2 text-muted-foreground hover:bg-secondary hover:text-foreground rounded-lg transition-colors"
-            >
-              <PanelLeftOpen className="w-5 h-5" />
-            </button>
-          ) : (
-            <button 
-              onClick={() => {
-                 setIsNewRequestOpen(true);
-                 if (window.innerWidth < 768) setIsMobileOpen(false);
-              }}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm"
-            >
-              + Tạo mới
-            </button>
-          )}
+
+        {/* Footer Action */}
+        <div className="p-3 border-t border-border shrink-0">
+          <button 
+            onClick={() => setIsNewRequestOpen(true)}
+            className={`
+              w-full flex items-center justify-center gap-2 
+              bg-primary text-primary-foreground font-semibold 
+              py-2.5 px-3 rounded-lg shadow-sm hover:opacity-90 transition-all text-xs
+            `}
+          >
+            <span className="text-base font-bold">+</span>
+            {!isCollapsed && <span>Tạo mới</span>}
+          </button>
         </div>
       </aside>
     </>
   );
 }
 
-function SidebarItem({ icon, label, active, isCollapsed, onClick }: any) {
+function SidebarItem({ icon, label, active, isCollapsed, onClick }: { icon: React.ReactNode, label: string, active?: boolean, isCollapsed?: boolean, onClick: () => void }) {
   return (
-    <button 
+    <button
       onClick={onClick}
       title={isCollapsed ? label : undefined}
-      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] transition-all group ${
-        active 
+      className={`
+        w-full flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-all text-left
+        ${active 
           ? 'bg-primary/10 text-primary font-semibold' 
-          : 'text-muted-foreground hover:bg-secondary hover:text-foreground font-medium'
-      } ${isCollapsed ? 'justify-center px-0' : ''}`}
+          : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+        }
+        ${isCollapsed ? 'justify-center px-0' : ''}
+      `}
     >
-      <span className={`w-[18px] h-[18px] shrink-0 [&>svg]:w-full [&>svg]:h-full transition-colors ${active ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'}`}>
-        {icon}
+      <span className={`shrink-0 ${active ? 'text-primary' : 'text-muted-foreground'}`}>
+        {React.cloneElement(icon as React.ReactElement<any>, { className: 'w-4 h-4' })}
       </span>
       {!isCollapsed && <span className="truncate">{label}</span>}
     </button>
   );
 }
 
-function SubSidebarItem({ label, active, onClick }: any) {
+function SubSidebarItem({ label, active, onClick }: { label: string, active?: boolean, onClick: () => void }) {
   return (
-    <button 
+    <button
       onClick={onClick}
-      className={`w-full text-left px-3 py-1.5 rounded-md text-xs transition-all flex items-center gap-2 ${
-        active 
-          ? 'text-primary font-semibold bg-primary/5' 
-          : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-      }`}
+      className={`
+        w-full text-left px-3 py-1.5 rounded-md text-xs transition-colors truncate
+        ${active 
+          ? 'text-primary font-bold bg-primary/5' 
+          : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+        }
+      `}
     >
-      <span className={`w-1 h-1 rounded-full ${active ? 'bg-primary' : 'bg-transparent'}`} />
-      {label}
+      • {label}
     </button>
   );
 }
