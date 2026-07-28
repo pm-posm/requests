@@ -257,23 +257,73 @@ export default function ModelTest() {
                             onClick={async () => {
                                 try {
                                     setIsTriggeringSync(true);
-                                    toast.success('🚀 Đã gửi lệnh đồng bộ Mail 4 giai đoạn! Dữ liệu đang được quét ngầm...');
+                                    toast.loading('🚀 Đang gửi lệnh kích hoạt đồng bộ Mail 4 giai đoạn...', { id: 'sync_mail_toast' });
                                     
+                                    let syncSuccess = false;
+
+                                    // 1. Kích hoạt Supabase Edge Function (cron-sync-gmail)
                                     try {
-                                        await supabase.from('sync_jobs').insert({ status: 'pending', created_at: new Date().toISOString() });
+                                        const { data: edgeData, error: edgeErr } = await supabase.functions.invoke('cron-sync-gmail');
+                                        if (edgeErr) {
+                                            console.warn('Edge Function sync-gmail warning:', edgeErr);
+                                        } else {
+                                            syncSuccess = true;
+                                        }
+                                    } catch (efErr: any) {
+                                        console.warn('Lỗi gọi Edge Function:', efErr);
+                                    }
+
+                                    // 2. Kích hoạt GitHub Action Workflow Dispatch (nếu có VITE_GITHUB_TOKEN & VITE_GITHUB_REPO)
+                                    const ghRepo = import.meta.env.VITE_GITHUB_REPO || 'thanglh9-maker/posm-dashboard';
+                                    const ghToken = import.meta.env.VITE_GITHUB_TOKEN;
+
+                                    if (ghToken) {
+                                        try {
+                                            const ghRes = await fetch(`https://api.github.com/repos/${ghRepo}/dispatches`, {
+                                                method: 'POST',
+                                                headers: {
+                                                    'Authorization': `Bearer ${ghToken}`,
+                                                    'Accept': 'application/vnd.github.v3+json',
+                                                    'Content-Type': 'application/json'
+                                                },
+                                                body: JSON.stringify({
+                                                    event_type: 'sync-emails'
+                                                })
+                                            });
+
+                                            if (ghRes.ok || ghRes.status === 204) {
+                                                toast.success('🚀 Đã gửi lệnh trigger GitHub Action Workflow thành công!', { id: 'sync_mail_toast' });
+                                                syncSuccess = true;
+                                            } else {
+                                                const errText = await ghRes.text();
+                                                console.error('GitHub Action dispatch error:', errText);
+                                                toast.error(`⚠️ Lỗi GitHub Dispatch (${ghRes.status}): Vui lòng kiểm tra VITE_GITHUB_TOKEN`, { id: 'sync_mail_toast' });
+                                            }
+                                        } catch (ghErr: any) {
+                                            console.error('Lỗi kết nối GitHub API:', ghErr);
+                                        }
+                                    } else if (!syncSuccess) {
+                                        toast.success('🚀 Đã gửi lệnh quét ngầm CSDL! (Để kích hoạt GitHub Action từ giao diện, cần thêm VITE_GITHUB_TOKEN vào .env.local)', { id: 'sync_mail_toast' });
+                                    } else {
+                                        toast.success('🚀 Đã gửi lệnh kích hoạt quét Mail 4 giai đoạn thành công!', { id: 'sync_mail_toast' });
+                                    }
+
+                                    // 3. Ghi log sync job
+                                    try {
+                                        await supabase.from('sync_jobs').insert({ status: 'triggered', created_at: new Date().toISOString() });
                                     } catch (_err) {
                                         // Ignore RLS or schema mismatch
                                     }
-                                    
-                                    // Refetch queries
+
+                                    // Refetch data
                                     setTimeout(() => {
                                         queryClient.invalidateQueries({ queryKey: ['project_activities_with_attachments_all'] });
                                         queryClient.invalidateQueries({ queryKey: ['projects'] });
                                         queryClient.invalidateQueries({ queryKey: ['project_overviews_rpc'] });
                                         setIsTriggeringSync(false);
-                                    }, 2000);
+                                    }, 2500);
                                 } catch (e: any) {
-                                    toast.error('Lỗi gửi lệnh đồng bộ: ' + (e.message || 'Thất bại'));
+                                    toast.error('Lỗi gửi lệnh đồng bộ: ' + (e.message || 'Thất bại'), { id: 'sync_mail_toast' });
                                     setIsTriggeringSync(false);
                                 }
                             }}
@@ -282,7 +332,7 @@ export default function ModelTest() {
                             title="Kích hoạt quét Mail tự động 4 giai đoạn (Brief, Khảo Sát, Lắp Đặt, NTXX)"
                         >
                             <RefreshCw className={`w-3.5 h-3.5 ${isTriggeringSync ? 'animate-spin' : ''}`} />
-                            <span>{isTriggeringSync ? 'Đang gửi lệnh...' : 'Đồng bộ Mail Dự Án'}</span>
+                            <span>{isTriggeringSync ? 'Đang gửi lệnh...' : '⚡ Đồng bộ Mail Dự Án'}</span>
                         </button>
                     </div>
 
