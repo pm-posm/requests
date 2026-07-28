@@ -445,6 +445,23 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
             )}
           </div>
 
+          {/* READ-ONLY BANNER NOTICE */}
+          <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl text-xs text-amber-900 dark:text-amber-200 flex items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-2">
+              <Info className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>
+                🔒 <b>Chế độ xem 1:1 từ Tab Bảo Hành:</b> Toàn bộ thông tin được ánh xạ 1:1 từ luồng Bảo Hành & Bảo Trì (chế độ Chỉ Xem - Read Only). Để chỉnh sửa dữ liệu ca này, vui lòng thao tác trên Tab <b>Bảo Hành & Bảo Trì</b>.
+              </span>
+            </div>
+            <button
+              onClick={() => { onClose(); navigate('/tracking/warranty'); }}
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs shrink-0 transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>Đến Tab Bảo Hành</span>
+            </button>
+          </div>
+
           {/* SECTION 2: EDITABLE SUBTASK FIELDS & MASTER PROJECT LINK */}
           <div className="space-y-3 p-4 bg-sky-50/30 dark:bg-sky-950/20 rounded-xl border border-sky-100 dark:border-sky-900">
             <h3 className="font-bold text-xs text-sky-900 dark:text-sky-200 uppercase tracking-wider flex items-center gap-1.5">
@@ -459,9 +476,9 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
                 <input
                   type="text"
                   value={requestId}
-                  onChange={e => setRequestId(e.target.value)}
+                  disabled={true}
                   placeholder="BH-635"
-                  className="w-full font-mono font-bold text-sky-800 dark:text-sky-300 bg-white dark:bg-slate-900 border border-sky-200 dark:border-sky-800 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-sky-500"
+                  className="w-full font-mono font-bold text-sky-800 dark:text-sky-300 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 outline-none cursor-not-allowed opacity-80"
                 />
               </div>
 
@@ -470,14 +487,14 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
                 <input
                   type="text"
                   value={supplier}
-                  onChange={e => setSupplier(e.target.value)}
+                  disabled={true}
                   placeholder="Link4, Smart, SDC..."
-                  className="w-full font-bold text-slate-900 dark:text-white bg-white dark:bg-slate-900 border border-sky-200 dark:border-sky-800 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-sky-500"
+                  className="w-full font-bold text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 outline-none cursor-not-allowed opacity-80"
                 />
               </div>
             </div>
 
-            {/* Master Project Autocomplete Search */}
+            {/* Master Project Link */}
             <div className="space-y-1.5 relative" ref={dropdownRef}>
               <div className="flex items-center justify-between">
                 <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
@@ -500,40 +517,10 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
                 <input
                   type="text"
                   value={searchPrjText}
-                  onFocus={() => setShowSuggestions(true)}
-                  onChange={e => {
-                    setSearchPrjText(e.target.value);
-                    setMaDuAn(e.target.value);
-                    setShowSuggestions(true);
-                  }}
-                  placeholder="Nhập Mã dự án (VD: 118420U01-U10) hoặc dán Tên dự án..."
-                  className="w-full bg-white dark:bg-slate-900 border border-sky-200 dark:border-sky-800 rounded-xl pl-9 pr-3 py-2 text-xs font-mono font-bold text-sky-900 dark:text-sky-200 outline-none focus:ring-2 focus:ring-sky-500"
+                  disabled={true}
+                  placeholder="Mã dự án..."
+                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs font-mono font-bold text-sky-900 dark:text-sky-200 outline-none cursor-not-allowed opacity-80"
                 />
-
-                {showSuggestions && searchPrjText.trim() !== '' && (
-                  <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-900 border border-sky-200 dark:border-sky-800 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
-                    {projectSuggestions.length === 0 ? (
-                      <div className="p-3 text-slate-400 text-center italic text-xs">
-                        Chưa tìm thấy dự án sẵn có. Mã này sẽ được lưu trực tiếp trên Subtask!
-                      </div>
-                    ) : (
-                      projectSuggestions.map((p: any) => (
-                        <div
-                          key={p.final_project}
-                          onClick={() => handleSelectSuggestion(p.final_project)}
-                          className="p-2.5 hover:bg-sky-50 dark:hover:bg-sky-950/60 cursor-pointer flex items-center justify-between gap-2 transition-colors"
-                        >
-                          <div className="font-bold text-sky-700 dark:text-sky-300 truncate text-xs">
-                            🏷️ {p.final_project}
-                          </div>
-                          <span className="text-[10px] text-slate-400 font-semibold shrink-0">
-                            {p.store_count || 0} stores
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
               </div>
             </div>
 
@@ -545,8 +532,8 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
                 </label>
                 <select
                   value={tienDo}
-                  onChange={e => setTienDo(e.target.value)}
-                  className="w-full bg-white dark:bg-slate-900 border border-sky-200 dark:border-sky-800 rounded-xl px-3 py-2 text-xs font-bold text-sky-800 dark:text-sky-300 cursor-pointer"
+                  disabled={true}
+                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-sky-800 dark:text-sky-300 cursor-not-allowed opacity-80"
                 >
                   {dynamicProgressOptions.map(opt => (
                     <option key={opt} value={opt}>{opt}</option>
@@ -560,8 +547,8 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
                 </label>
                 <select
                   value={warrantyCoverage}
-                  onChange={e => setWarrantyCoverage(e.target.value)}
-                  className="w-full bg-white dark:bg-slate-900 border border-sky-200 dark:border-sky-800 rounded-xl px-3 py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 cursor-pointer"
+                  disabled={true}
+                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 cursor-not-allowed opacity-80"
                 >
                   {dynamicCoverageOptions.map(cov => (
                     <option key={cov} value={cov}>{cov}</option>
@@ -575,8 +562,8 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
                 </label>
                 <select
                   value={warrantyCost}
-                  onChange={e => setWarrantyCost(e.target.value)}
-                  className="w-full bg-white dark:bg-slate-900 border border-sky-200 dark:border-sky-800 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-200 cursor-pointer"
+                  disabled={true}
+                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-200 cursor-not-allowed opacity-80"
                 >
                   <option value="Miễn phí">Miễn phí (Theo hợp đồng)</option>
                   <option value="Có tính phí">Có tính phí phát sinh</option>
@@ -614,8 +601,8 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
                   <input
                     type="date"
                     value={toHtmlDateStr(installationDate)}
-                    onChange={e => setInstallationDate(fromHtmlDateStr(e.target.value))}
-                    className="w-full bg-white dark:bg-slate-900 border border-sky-300 dark:border-sky-800 rounded-xl px-3 py-2 text-xs font-bold text-sky-700 dark:text-sky-300 cursor-pointer focus:ring-2 focus:ring-sky-500"
+                    disabled={true}
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-sky-700 dark:text-sky-300 cursor-not-allowed opacity-80"
                   />
                 </div>
 
@@ -625,8 +612,8 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
                   <input
                     type="date"
                     value={toHtmlDateStr(expectedDate)}
-                    onChange={e => setExpectedDate(fromHtmlDateStr(e.target.value))}
-                    className="w-full bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-800 rounded-xl px-3 py-2 text-xs font-bold text-amber-600 cursor-pointer focus:ring-2 focus:ring-amber-500"
+                    disabled={true}
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-amber-600 cursor-not-allowed opacity-80"
                   />
                 </div>
 
@@ -636,8 +623,8 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
                   <input
                     type="date"
                     value={toHtmlDateStr(completedDate)}
-                    onChange={e => setCompletedDate(fromHtmlDateStr(e.target.value))}
-                    className="w-full bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-800 rounded-xl px-3 py-2 text-xs font-bold text-emerald-600 cursor-pointer focus:ring-2 focus:ring-emerald-500"
+                    disabled={true}
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-emerald-600 cursor-not-allowed opacity-80"
                   />
                 </div>
               </div>
@@ -656,7 +643,7 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
                 className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-bold text-xs shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Send className="w-3.5 h-3.5" />
-                <span>Tự Động Mẫu Soạn Mail</span>
+                <span>Xem Mẫu Soạn Mail</span>
               </button>
             </div>
 
@@ -668,9 +655,9 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
                 <input
                   type="text"
                   value={titleEmail}
-                  onChange={(e) => setTitleEmail(e.target.value)}
-                  placeholder="[Bảo hành]-[BH-xxx]: mã dự án + tên dự án..."
-                  className="w-full bg-white dark:bg-slate-900 border border-sky-300 dark:border-sky-800 rounded-xl px-3 py-2 text-xs font-mono font-bold text-sky-900 dark:text-sky-200 outline-none focus:ring-2 focus:ring-sky-500"
+                  disabled={true}
+                  placeholder="Chưa ghi nhận tiêu đề email raise"
+                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-bold text-sky-900 dark:text-sky-200 outline-none cursor-not-allowed opacity-80"
                 />
               </div>
 
@@ -681,8 +668,8 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
                 <input
                   type="date"
                   value={toHtmlDateStr(raiseMailTime)}
-                  onChange={(e) => setRaiseMailTime(fromHtmlDateStr(e.target.value))}
-                  className="w-full bg-white dark:bg-slate-900 border border-sky-300 dark:border-sky-800 rounded-xl px-3 py-2 text-xs font-bold text-sky-900 dark:text-sky-200 outline-none focus:ring-2 focus:ring-sky-500 cursor-pointer"
+                  disabled={true}
+                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-sky-900 dark:text-sky-200 outline-none cursor-not-allowed opacity-80"
                 />
               </div>
             </div>
@@ -716,18 +703,17 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl cursor-pointer"
+              className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl cursor-pointer"
             >
               Đóng
             </button>
-            
+
             <button
-              onClick={handleSaveSubtask}
-              disabled={isSaving}
-              className="px-5 py-2 text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all"
+              onClick={() => { onClose(); navigate('/tracking/warranty'); }}
+              className="px-4 py-2 text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer transition-all"
             >
-              <Save className={`w-4 h-4 ${isSaving ? 'animate-spin' : ''}`} />
-              <span>{isSaving ? 'Đang lưu & Sync Sheet...' : '💾 Lưu & Sync Trực Tiếp Về Google Sheet'}</span>
+              <ExternalLink className="w-4 h-4" />
+              <span>Chuyển Sang Tab Bảo Hành Để Chỉnh Sửa</span>
             </button>
           </div>
         </div>
