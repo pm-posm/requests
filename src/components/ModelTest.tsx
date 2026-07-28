@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useProjects, type Project } from '@/hooks/useProjects';
-import { Loader2, Search, Table, BarChart3 } from 'lucide-react';
+import { Loader2, Search, Table, BarChart3, RefreshCw } from 'lucide-react';
 import type { ProjectGroup, ActivityRow } from '@/types';
 import { ProjectTable } from './ProjectList/ProjectTable';
 import { ProjectCommandCenterHeader } from './Dashboard/ProjectCommandCenterHeader';
+import toast from 'react-hot-toast';
 
 export default function ModelTest() {
     const queryClient = useQueryClient();
@@ -15,6 +16,7 @@ export default function ModelTest() {
     const [activeModuleTab, setActiveModuleTab] = React.useState<'DATA_LIST' | 'ANALYST'>('DATA_LIST');
     const [searchTerm, setSearchTerm] = React.useState('');
     const [activeQuickFilter, setActiveQuickFilter] = React.useState<'ALL' | 'ACTIVE' | 'COMPLETED' | 'HIGH_STORE_COUNT'>('ALL');
+    const [isTriggeringSync, setIsTriggeringSync] = React.useState(false);
 
     // Fetch unified project activities and their attachments
     const { data: activities, isLoading: activitiesLoading } = useQuery<ActivityRow[]>({
@@ -237,8 +239,8 @@ export default function ModelTest() {
             {/* TAB 2: CLEAN OPERATIONAL DATA LIST WORKSPACE */}
             {activeModuleTab === 'DATA_LIST' && (
                 <div className="space-y-4 animate-in fade-in duration-200">
-                    {/* Header & Search */}
-                    <div className="flex items-center justify-between gap-4">
+                    {/* Header & Search + Trigger Đồng bộ Mail */}
+                    <div className="flex flex-wrap items-center justify-between gap-4">
                         <div className="relative flex-1 max-w-md">
                             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                             <input 
@@ -249,6 +251,35 @@ export default function ModelTest() {
                                 className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs outline-none focus:ring-1 focus:ring-indigo-500"
                             />
                         </div>
+
+                        {/* Trigger Đồng bộ Mail 4 Giai Đoạn */}
+                        <button
+                            onClick={async () => {
+                                try {
+                                    setIsTriggeringSync(true);
+                                    // Trigger Supabase sync job
+                                    await supabase.from('sync_jobs').insert({ status: 'pending', created_at: new Date().toISOString() });
+                                    toast.success('🚀 Đã gửi lệnh đồng bộ Mail 4 giai đoạn! Dữ liệu đang được quét ngầm...');
+                                    
+                                    // Refetch queries
+                                    setTimeout(() => {
+                                        queryClient.invalidateQueries({ queryKey: ['project_activities_with_attachments_all'] });
+                                        queryClient.invalidateQueries({ queryKey: ['projects'] });
+                                        queryClient.invalidateQueries({ queryKey: ['project_overviews_rpc'] });
+                                        setIsTriggeringSync(false);
+                                    }, 2000);
+                                } catch (e: any) {
+                                    toast.error('Lỗi gửi lệnh đồng bộ: ' + e.message);
+                                    setIsTriggeringSync(false);
+                                }
+                            }}
+                            disabled={isTriggeringSync}
+                            className="flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-50"
+                            title="Kích hoạt quét Mail tự động 4 giai đoạn (Brief, Khảo Sát, Lắp Đặt, NTXX)"
+                        >
+                            <RefreshCw className={`w-3.5 h-3.5 ${isTriggeringSync ? 'animate-spin' : ''}`} />
+                            <span>{isTriggeringSync ? 'Đang gửi lệnh...' : 'Đồng bộ Mail Dự Án'}</span>
+                        </button>
                     </div>
 
                     {/* Table */}
