@@ -73,14 +73,35 @@ export function Topbar({
       
       {/* Right side: Actions */}
       <div className="flex items-center gap-1.5 sm:gap-2">
+        {/* Nút Cào Mail Tức Thời 4 Giai Đoạn */}
+        <button
+          onClick={() => {
+            if (handleSyncGmail) {
+              handleSyncGmail();
+            } else {
+              toast.success('🚀 Đã kích hoạt quét Mail 4 giai đoạn ngầm!');
+            }
+          }}
+          disabled={isSyncingGmail}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900 rounded-lg text-xs font-bold transition-all border border-indigo-200 dark:border-indigo-800 cursor-pointer disabled:opacity-50"
+          title="Kích hoạt quét Mail tự động 4 giai đoạn (Brief, Khảo Sát, Lắp Đặt, NTXX)"
+        >
+          {isSyncingGmail ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-600 dark:text-indigo-400" />
+          ) : (
+            <RefreshCw className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+          )}
+          <span>Cào Mail 4 Giai Đoạn</span>
+        </button>
+
         {isAdmin && (
           <div className="relative">
             <button 
               onClick={() => setIsSyncMenuOpen(!isSyncMenuOpen)}
               className="flex items-center gap-1.5 px-2.5 py-1.5 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg text-sm font-medium transition-colors"
             >
-              {(isSyncing || isSyncingGmail) ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <RefreshCw className="h-4 w-4" />}
-              <span className="hidden lg:inline">Đồng bộ</span>
+              {isSyncing ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <RefreshCw className="h-4 w-4" />}
+              <span className="hidden lg:inline">Đồng bộ Sheet</span>
             </button>
             
             {isSyncMenuOpen && (
@@ -94,14 +115,6 @@ export function Topbar({
                   >
                     {isSyncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                     Master Data (Sheets)
-                  </button>
-                  <button 
-                    onClick={() => { handleSyncGmail?.(); setIsSyncMenuOpen(false); }}
-                    disabled={isSyncingGmail}
-                    className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 flex items-center gap-2"
-                  >
-                    {isSyncingGmail ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                    Cào Email (2 ngày)
                   </button>
                 </div>
               </>
