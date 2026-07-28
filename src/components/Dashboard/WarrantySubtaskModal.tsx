@@ -81,6 +81,7 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
   const [maDuAn, setMaDuAn] = useState('');
   const [supplier, setSupplier] = useState('');
   const [titleEmail, setTitleEmail] = useState('');
+  const [raiseMailTime, setRaiseMailTime] = useState('');
   const [tienDo, setTienDo] = useState('Not started');
   const [installationDate, setInstallationDate] = useState('');
   const [expectedDate, setExpectedDate] = useState('');
@@ -145,6 +146,7 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
       setSearchPrjText(prj);
       setSupplier(record.supplier || '');
       setTitleEmail(record.title_email_request || (record as any).mailTitle || '');
+      setRaiseMailTime((record as any).raise_mail_time || (record as any).raiseMailTime || (record as any).date_of_rq || (record as any).sentDate || '');
       
       // FIX PROGRESS MISMATCH: Check tien_do, progress, status in order
       const currentProgress = record.tien_do || (record as any).progress || (record as any).status || 'Not started';
@@ -312,6 +314,7 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
         ma_du_an: maDuAn,
         supplier: supplier,
         title_email_request: titleEmail,
+        raise_mail_time: raiseMailTime,
         tien_do: tienDo,
         installation_date: installationDate,
         ngay_quick_fix: expectedDate,
@@ -327,7 +330,7 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
       // Audit Log
       await supabase.from('subtask_audit_logs').insert({
         subtask_id: requestId || String(record.id),
-        action_text: `Cập nhật thông tin Subtask: Tiến độ -> "${tienDo}", Hạn xử lý -> "${expectedDate || 'N/A'}", Ngày hoàn thành -> "${completedDate || 'N/A'}"`
+        action_text: `Cập nhật Subtask: Title Mail -> "${titleEmail || 'N/A'}", Ngày Raise -> "${raiseMailTime || 'N/A'}", Tiến độ -> "${tienDo}"`
       });
 
       // Reverse sync to Google Sheet via Web App (Multi-channel GET + POST for 100% reliability)
@@ -337,6 +340,8 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
         requestId: requestId,
         projectCode: maDuAn,
         supplier: supplier,
+        titleMail: titleEmail,
+        raiseMailTime: raiseMailTime,
         progress: tienDo,
         expectedDate: expectedDate,
         completedDate: completedDate,
@@ -637,27 +642,43 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-xs text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
                 <Mail className="w-3.5 h-3.5 text-sky-600" />
-                Email Raise Mail Supplier (Title Mail)
+                Email Raise Mail Supplier (Title Mail & Ngày Raise)
               </h3>
               <button
                 onClick={handleOpenEmailComposer}
                 className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-bold text-xs shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Send className="w-3.5 h-3.5" />
-                <span>Soạn Mail Raise</span>
+                <span>Tự Động Mẫu Soạn Mail</span>
               </button>
             </div>
 
-            {titleEmail ? (
-              <div className="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-sky-200 dark:border-sky-800 flex items-center justify-between gap-2">
-                <p className="font-mono text-slate-800 dark:text-slate-200 font-semibold truncate flex-1">{titleEmail}</p>
-                <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 dark:bg-emerald-950 px-2 py-0.5 rounded shrink-0">
-                  Đã ghi nhận Title Mail
-                </span>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+              <div className="md:col-span-2 space-y-1">
+                <label className="text-slate-600 dark:text-slate-400 font-bold text-[11px] flex items-center gap-1">
+                  ✉️ Tiêu đề Email Raise (Title Mail):
+                </label>
+                <input
+                  type="text"
+                  value={titleEmail}
+                  onChange={(e) => setTitleEmail(e.target.value)}
+                  placeholder="[Bảo hành]-[BH-xxx]: mã dự án + tên dự án..."
+                  className="w-full bg-white dark:bg-slate-900 border border-sky-300 dark:border-sky-800 rounded-xl px-3 py-2 text-xs font-mono font-bold text-sky-900 dark:text-sky-200 outline-none focus:ring-2 focus:ring-sky-500"
+                />
               </div>
-            ) : (
-              <p className="text-slate-400 italic text-[11px]">Chưa nhập tiêu đề email raise cho Supplier trên Subtask.</p>
-            )}
+
+              <div className="space-y-1">
+                <label className="text-slate-600 dark:text-slate-400 font-bold text-[11px] flex items-center gap-1">
+                  📅 Ngày Raise Mail:
+                </label>
+                <input
+                  type="date"
+                  value={toHtmlDateStr(raiseMailTime)}
+                  onChange={(e) => setRaiseMailTime(fromHtmlDateStr(e.target.value))}
+                  className="w-full bg-white dark:bg-slate-900 border border-sky-300 dark:border-sky-800 rounded-xl px-3 py-2 text-xs font-bold text-sky-900 dark:text-sky-200 outline-none focus:ring-2 focus:ring-sky-500 cursor-pointer"
+                />
+              </div>
+            </div>
           </div>
 
           {/* SECTION 4: AUDIT LOGS */}
