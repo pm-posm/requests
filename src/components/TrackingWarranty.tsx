@@ -126,7 +126,12 @@ export default function TrackingWarranty() {
     return localStorage.getItem('warranty_sheet_url') || DEFAULT_WARRANTY_SHEET_CSV;
   });
   const [webAppUrl, setWebAppUrl] = useState<string>(() => {
-    return localStorage.getItem('warranty_web_app_url') || DEFAULT_WEB_APP_URL;
+    const saved = localStorage.getItem('warranty_web_app_url');
+    if (saved && saved.includes('AKfycbxLRsNBMc4MguQlCOdgmlO6NRsfPG9AltjFCnS8I7GRMwZPNeiVCaqLiDc_vwpbogcK')) {
+      return saved;
+    }
+    localStorage.removeItem('warranty_web_app_url');
+    return DEFAULT_WEB_APP_URL;
   });
 
   const [isUrlModalOpen, setIsUrlModalOpen] = useState(false);
@@ -428,7 +433,11 @@ export default function TrackingWarranty() {
       setIsRefreshing(true);
       setError(null);
 
-      Papa.parse(url, {
+      const targetCsvUrl = url.includes('?') 
+        ? `${url}&_cachebust=${Date.now()}` 
+        : `${url}?_cachebust=${Date.now()}`;
+
+      Papa.parse(targetCsvUrl, {
         download: true,
         header: true,
         skipEmptyLines: true,
