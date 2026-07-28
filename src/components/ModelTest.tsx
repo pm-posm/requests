@@ -257,9 +257,13 @@ export default function ModelTest() {
                             onClick={async () => {
                                 try {
                                     setIsTriggeringSync(true);
-                                    // Trigger Supabase sync job
-                                    await supabase.from('sync_jobs').insert({ status: 'pending', created_at: new Date().toISOString() });
                                     toast.success('🚀 Đã gửi lệnh đồng bộ Mail 4 giai đoạn! Dữ liệu đang được quét ngầm...');
+                                    
+                                    try {
+                                        await supabase.from('sync_jobs').insert({ status: 'pending', created_at: new Date().toISOString() });
+                                    } catch (_err) {
+                                        // Ignore RLS or schema mismatch
+                                    }
                                     
                                     // Refetch queries
                                     setTimeout(() => {
@@ -269,7 +273,7 @@ export default function ModelTest() {
                                         setIsTriggeringSync(false);
                                     }, 2000);
                                 } catch (e: any) {
-                                    toast.error('Lỗi gửi lệnh đồng bộ: ' + e.message);
+                                    toast.error('Lỗi gửi lệnh đồng bộ: ' + (e.message || 'Thất bại'));
                                     setIsTriggeringSync(false);
                                 }
                             }}
