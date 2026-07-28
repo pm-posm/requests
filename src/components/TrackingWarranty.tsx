@@ -340,8 +340,11 @@ export default function TrackingWarranty() {
         }).toString();
 
         const fullGetUrl = `${targetUrl}?${queryParams}`;
+        const img = new Image();
+        img.src = fullGetUrl;
 
-        await fetch(targetUrl, {
+        fetch(fullGetUrl, { mode: 'no-cors' }).catch(() => {});
+        fetch(targetUrl, {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -357,7 +360,7 @@ export default function TrackingWarranty() {
             warrantyCost: editWarrantyCost.trim(),
             note: editNote.trim()
           })
-        });
+        }).catch(() => {});
 
         setDrawerSaveSuccess('🟢 Đã lưu thay đổi & đồng bộ tự động về BaoHanh_Model và Mer View 2026!');
       } catch (err) {

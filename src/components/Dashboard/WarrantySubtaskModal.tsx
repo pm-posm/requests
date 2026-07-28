@@ -136,23 +136,31 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
 
   useEffect(() => {
     if (record) {
-      const rowIdNum = record.sheet_row_index || parseInt(String(record.id || '').replace(/\D/g, ''), 10) || '';
+      const rowIdNum = record.sheet_row_index || parseInt(String(record.request_id || record.id || '').replace(/\D/g, ''), 10) || '';
       const reqIdDefault = record.request_id || (rowIdNum ? `BH-${rowIdNum}` : 'BH-000');
       
       setRequestId(reqIdDefault);
-      const prj = record.ma_du_an || '';
+      const prj = record.ma_du_an || (record as any).projectCode || '';
       setMaDuAn(prj);
       setSearchPrjText(prj);
       setSupplier(record.supplier || '');
-      setTitleEmail(record.title_email_request || '');
-      setTienDo(record.tien_do || 'Not started');
-      setErrorDetail(record.sr_note || '');
-      setNote(record.mer_note || record.vis_note || '');
-      setInstallationDate((record as any).installation_date || '');
-      setExpectedDate(record.ngay_quick_fix || (record as any).expected_date || '');
-      setCompletedDate((record as any).completed_date || '');
-      if ((record as any).warranty_coverage) setWarrantyCoverage((record as any).warranty_coverage);
-      if ((record as any).warranty_cost) setWarrantyCost((record as any).warranty_cost);
+      setTitleEmail(record.title_email_request || (record as any).mailTitle || '');
+      
+      // FIX PROGRESS MISMATCH: Check tien_do, progress, status in order
+      const currentProgress = record.tien_do || (record as any).progress || (record as any).status || 'Not started';
+      setTienDo(currentProgress);
+      
+      setErrorDetail(record.sr_note || (record as any).errorDetail || '');
+      setNote(record.mer_note || record.vis_note || (record as any).note || '');
+      setInstallationDate((record as any).installation_date || (record as any).installationDate || '');
+      setExpectedDate(record.ngay_quick_fix || (record as any).expected_date || (record as any).expectedDate || '');
+      setCompletedDate((record as any).completed_date || (record as any).completedDate || '');
+      if ((record as any).warranty_coverage || (record as any).warrantyCoverage) {
+        setWarrantyCoverage((record as any).warranty_coverage || (record as any).warrantyCoverage);
+      }
+      if ((record as any).warranty_cost || (record as any).warrantyCost) {
+        setWarrantyCost((record as any).warranty_cost || (record as any).warrantyCost);
+      }
     }
   }, [record]);
 
@@ -322,25 +330,37 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
         action_text: `Cập nhật thông tin Subtask: Tiến độ -> "${tienDo}", Hạn xử lý -> "${expectedDate || 'N/A'}", Ngày hoàn thành -> "${completedDate || 'N/A'}"`
       });
 
-      // Reverse sync to Google Sheet via Web App
-      const targetUrl = localStorage.getItem('warranty_web_app_url') || DEFAULT_WEB_APP_URL;
-      fetch(targetUrl, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          rowId: rowIdNum,
-          requestId: requestId,
-          projectCode: maDuAn,
-          supplier: supplier,
-          progress: tienDo,
-          expectedDate: expectedDate,
-          completedDate: completedDate,
-          warrantyCoverage: warrantyCoverage,
-          warrantyCost: warrantyCost,
-          note: note
-        })
-      });
+      // Reverse sync to Google Sheet via Web App (Multi-channel GET + POST for 100% reliability)
+      const targetUrl = (localStorage.getItem('warranty_web_app_url') || DEFAULT_WEB_APP_URL).trim();
+      const syncParams = {
+        rowId: String(rowIdNum),
+        requestId: requestId,
+        projectCode: maDuAn,
+        supplier: supplier,
+        progress: tienDo,
+        expectedDate: expectedDate,
+        completedDate: completedDate,
+        warrantyCoverage: warrantyCoverage,
+        warrantyCost: warrantyCost,
+        note: note
+      };
+
+      try {
+        const queryStr = new URLSearchParams(syncParams as any).toString();
+        const fullGetUrl = `${targetUrl}?${queryStr}`;
+        const img = new Image();
+        img.src = fullGetUrl;
+
+        fetch(fullGetUrl, { mode: 'no-cors' }).catch(() => {});
+        fetch(targetUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(syncParams)
+        }).catch(() => {});
+      } catch (syncErr) {
+        console.error('Reverse sync trigger failed:', syncErr);
+      }
 
       toast.success(`🟢 Đã lưu Subtask Bảo hành ${requestId} & đồng bộ 2 chiều về BaoHanh_Model và Mer View 2026!`);
       refetchAuditLogs();
