@@ -17,6 +17,36 @@ const DEFAULT_WARRANTY_SHEET_CSV = 'https://docs.google.com/spreadsheets/d/119Lp
 // Deployed Web App URL for Apps Script Reverse Sync (Version 4 - Active)
 const DEFAULT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbx9o84Ow7r9XmvUJ1pv9hYCdZFMOXFljPDTP9Snbf4N0pyEhel-GSvSVuHJ8mt-p8pc/exec';
 
+// Helper to convert DD/MM/YYYY or string to YYYY-MM-DD for native <input type="date">
+const toHtmlDateStr = (str?: string): string => {
+  if (!str) return '';
+  const trimmed = str.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const parts = trimmed.split('/');
+  if (parts.length === 3) {
+    const [d, m, y] = parts;
+    if (d && m && y && y.length === 4) {
+      return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+  }
+  const dateObj = new Date(trimmed);
+  if (!isNaN(dateObj.getTime())) {
+    return dateObj.toISOString().split('T')[0];
+  }
+  return '';
+};
+
+// Helper to convert YYYY-MM-DD from <input type="date"> back to DD/MM/YYYY for saving
+const fromHtmlDateStr = (htmlDate?: string): string => {
+  if (!htmlDate) return '';
+  const trimmed = htmlDate.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const [y, m, d] = trimmed.split('-');
+    return `${d}/${m}/${y}`;
+  }
+  return trimmed;
+};
+
 // Fallback real historical warranty items matching exact schema
 const INITIAL_REAL_WARRANTY_ITEMS: WarrantyItem[] = [
   {
@@ -853,7 +883,7 @@ export default function TrackingWarranty() {
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Tìm BH-xxx, tên Store, POSM, Brand, Supplier, KTV, Title mail, Lỗi..."
+                placeholder="Tìm theo Mã dự án (VD: 118420...), Request ID (BH-577), Tên Store, POSM, Brand, Supplier..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 text-xs bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all"
@@ -950,6 +980,7 @@ export default function TrackingWarranty() {
             <thead className="bg-slate-100/70 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 font-semibold border-b border-border uppercase tracking-wider text-[11px]">
               <tr>
                 <th className="py-3 px-4">Request ID / Cửa Hàng</th>
+                <th className="py-3 px-4 text-indigo-700 dark:text-indigo-400 font-black">Mã Dự Án</th>
                 <th className="py-3 px-4">POSM & Brand</th>
                 <th className="py-3 px-4">VIS-Tech (Unilever)</th>
                 <th className="py-3 px-4">Supplier (Thầu SX)</th>
@@ -962,7 +993,7 @@ export default function TrackingWarranty() {
             <tbody className="divide-y divide-border">
               {filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-12 text-muted-foreground">
+                  <td colSpan={9} className="text-center py-12 text-muted-foreground">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <HelpCircle className="w-8 h-8 text-slate-300" />
                       <p className="font-medium text-sm">Không tìm thấy bản ghi bảo hành phù hợp</p>
@@ -990,6 +1021,17 @@ export default function TrackingWarranty() {
                           <span className="text-[11px] text-muted-foreground">{item.storeCode || 'Store'}</span>
                         </div>
                       </div>
+                    </td>
+
+                    {/* Mã Dự Án (Project Code) Highlighted Badge Column */}
+                    <td className="py-3.5 px-4">
+                      {item.projectCode ? (
+                        <span className="inline-flex items-center gap-1 font-mono text-[11px] font-black px-2.5 py-1 rounded-lg bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shadow-2xs max-w-[180px] truncate" title={item.projectCode}>
+                          🏷️ {item.projectCode}
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-slate-400 italic">Chưa liên kết</span>
+                      )}
                     </td>
 
                     {/* POSM & Brand */}
@@ -1234,11 +1276,10 @@ export default function TrackingWarranty() {
                       Ngày lắp đặt POSM:
                     </label>
                     <input
-                      type="text"
-                      value={editInstallationDate}
-                      onChange={(e) => setEditInstallationDate(e.target.value)}
-                      placeholder="dd/mm/yyyy"
-                      className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500/20 text-xs font-semibold text-sky-700 dark:text-sky-300"
+                      type="date"
+                      value={toHtmlDateStr(editInstallationDate)}
+                      onChange={(e) => setEditInstallationDate(fromHtmlDateStr(e.target.value))}
+                      className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500/20 text-xs font-semibold text-sky-700 dark:text-sky-300 cursor-pointer"
                     />
                   </div>
 
@@ -1249,11 +1290,10 @@ export default function TrackingWarranty() {
                       Ngày hẹn xử lý dự kiến:
                     </label>
                     <input
-                      type="text"
-                      value={editExpectedDate}
-                      onChange={(e) => setEditExpectedDate(e.target.value)}
-                      placeholder="dd/mm/yyyy"
-                      className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500/20 text-xs font-semibold text-amber-600 dark:text-amber-400"
+                      type="date"
+                      value={toHtmlDateStr(editExpectedDate)}
+                      onChange={(e) => setEditExpectedDate(fromHtmlDateStr(e.target.value))}
+                      className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500/20 text-xs font-semibold text-amber-600 dark:text-amber-400 cursor-pointer"
                     />
                   </div>
 
@@ -1264,11 +1304,10 @@ export default function TrackingWarranty() {
                       Ngày hoàn thành thực tế:
                     </label>
                     <input
-                      type="text"
-                      value={editCompletedDate}
-                      onChange={(e) => setEditCompletedDate(e.target.value)}
-                      placeholder="dd/mm/yyyy"
-                      className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500/20 text-xs font-semibold text-emerald-600 dark:text-emerald-400"
+                      type="date"
+                      value={toHtmlDateStr(editCompletedDate)}
+                      onChange={(e) => setEditCompletedDate(fromHtmlDateStr(e.target.value))}
+                      className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500/20 text-xs font-semibold text-emerald-600 dark:text-emerald-400 cursor-pointer"
                     />
                   </div>
                 </div>

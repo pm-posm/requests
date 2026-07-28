@@ -29,6 +29,36 @@ const WARRANTY_COVERAGE_OPTIONS = [
   'Ngoài phạm vi bảo hành'
 ];
 
+// Helper to convert DD/MM/YYYY or string to YYYY-MM-DD for native <input type="date">
+const toHtmlDateStr = (str?: string): string => {
+  if (!str) return '';
+  const trimmed = str.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const parts = trimmed.split('/');
+  if (parts.length === 3) {
+    const [d, m, y] = parts;
+    if (d && m && y && y.length === 4) {
+      return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+  }
+  const dateObj = new Date(trimmed);
+  if (!isNaN(dateObj.getTime())) {
+    return dateObj.toISOString().split('T')[0];
+  }
+  return '';
+};
+
+// Helper to convert YYYY-MM-DD from <input type="date"> back to DD/MM/YYYY for saving
+const fromHtmlDateStr = (htmlDate?: string): string => {
+  if (!htmlDate) return '';
+  const trimmed = htmlDate.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const [y, m, d] = trimmed.split('-');
+    return `${d}/${m}/${y}`;
+  }
+  return trimmed;
+};
+
 interface WarrantySubtaskModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -118,6 +148,11 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
       setTienDo(record.tien_do || 'Not started');
       setErrorDetail(record.sr_note || '');
       setNote(record.mer_note || record.vis_note || '');
+      setInstallationDate((record as any).installation_date || '');
+      setExpectedDate(record.ngay_quick_fix || (record as any).expected_date || '');
+      setCompletedDate((record as any).completed_date || '');
+      if ((record as any).warranty_coverage) setWarrantyCoverage((record as any).warranty_coverage);
+      if ((record as any).warranty_cost) setWarrantyCost((record as any).warranty_cost);
     }
   }, [record]);
 
@@ -169,6 +204,17 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
     setShowSuggestions(false);
   };
 
+  // Trigger Open Email Client (No Auto-Save)
+  const handleTriggerGmailWeb = () => {
+    const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(mailTo)}&cc=${encodeURIComponent(mailCc)}&su=${encodeURIComponent(mailSubject)}&body=${encodeURIComponent(mailBody)}`;
+    window.open(url, '_blank');
+  };
+
+  const handleTriggerMailto = () => {
+    const mailtoUrl = `mailto:${encodeURIComponent(mailTo)}?cc=${encodeURIComponent(mailCc)}&subject=${encodeURIComponent(mailSubject)}&body=${encodeURIComponent(mailBody)}`;
+    window.location.href = mailtoUrl;
+  };
+
   // Open Email Draft Form inside Subtask
   const handleOpenEmailComposer = () => {
     setMailValidationErr(null);
@@ -197,17 +243,6 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
     setIsMailDrawerOpen(true);
   };
 
-  // Trigger Open Email Client (No Auto-Save)
-  const handleTriggerGmailWeb = () => {
-    const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(mailTo)}&cc=${encodeURIComponent(mailCc)}&su=${encodeURIComponent(mailSubject)}&body=${encodeURIComponent(mailBody)}`;
-    window.open(url, '_blank');
-  };
-
-  const handleTriggerMailto = () => {
-    const mailtoUrl = `mailto:${encodeURIComponent(mailTo)}?cc=${encodeURIComponent(mailCc)}&subject=${encodeURIComponent(mailSubject)}&body=${encodeURIComponent(mailBody)}`;
-    window.location.href = mailtoUrl;
-  };
-
   // Explicit Confirm Mail Sent & Trigger Sync
   const handleConfirmMailSent = async () => {
     const timestamp = new Date().toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -220,16 +255,7 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
     try {
       setIsSyncingSheet(true);
       const rowIdNum = record.sheet_row_index || record.id;
-      const queryParams = new URLSearchParams({
-        rowId: String(rowIdNum),
-        requestId: requestId,
-        titleMail: finalSubject,
-        raiseMailTime: timestamp,
-        projectCode: maDuAn,
-        supplier: supplier,
-        progress: 'Vis - Đã gửi RQ tới Agency'
-      }).toString();
-
+      
       await fetch(targetUrl, {
         method: 'POST',
         mode: 'no-cors',
@@ -245,10 +271,18 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
         })
       });
 
-      setMailSuccessMsg(`🟢 Đã ghi nhận Title Mail & tự động bắn dữ liệu sang BaoHanh_Model & Mer View 2026!`);
-      toast.success('Đã xác nhận gửi mail & đồng bộ Sheet!');
+      // Insert Audit Log
+      await supabase.from('subtask_audit_logs').insert({
+        subtask_id: requestId || String(record.id),
+        action_text: `Đã xác nhận gửi Mail Raise cho Supplier ${supplier} với Tiêu đề: "${finalSubject}"`
+      });
+
+      setMailSuccessMsg(`🟢 Đã xác nhận gửi mail & đồng bộ trực tiếp lên Sheet BaoHanh_Model và Mer View 2026!`);
+      toast.success('🟢 Đã đồng bộ thông tin mail về Google Sheet thành công!');
+      refetchAuditLogs();
     } catch (err: any) {
-      toast.error('Lỗi khi sync Sheet: ' + err.message);
+      console.error(err);
+      toast.error('Lỗi khi đồng bộ Google Sheet: ' + (err.message || 'Thao tác thất bại'));
     } finally {
       setIsSyncingSheet(false);
     }
@@ -261,47 +295,36 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
       toast.error('🔒 Quyền bị từ chối: Vui lòng đăng nhập tài khoản Admin để lưu thay đổi!');
       return;
     }
-    setIsSaving(true);
     try {
-      const updates: Partial<RawRequestRecord> = {
-        request_id: requestId.trim() || undefined,
-        ma_du_an: maDuAn.trim() || undefined,
-        supplier: supplier.trim() || undefined,
-        title_email_request: titleEmail.trim() || undefined,
-        phuong_an: 'Supplier Bảo Hành',
-        status: tienDo.toLowerCase() === 'cancelled' ? 'Cancelled' : 'Supplier Bảo Hành',
+      setIsSaving(true);
+      const rowIdNum = record.sheet_row_index || parseInt(String(record.id || '').replace(/\D/g, ''), 10);
+
+      const updates: any = {
+        request_id: requestId,
+        ma_du_an: maDuAn,
+        supplier: supplier,
+        title_email_request: titleEmail,
         tien_do: tienDo,
-        mer_note: note.trim() || undefined
+        installation_date: installationDate,
+        ngay_quick_fix: expectedDate,
+        expected_date: expectedDate,
+        completed_date: completedDate,
+        warranty_coverage: warrantyCoverage,
+        warranty_cost: warrantyCost,
+        mer_note: note
       };
 
-      await onSave(record.id!, updates);
+      await onSave(String(record.id), updates);
 
       // Audit Log
-      const subtaskId = requestId || record.id || '';
       await supabase.from('subtask_audit_logs').insert({
-        subtask_id: subtaskId,
-        action_text: `Cập nhật Subtask Bảo hành: Tiến độ -> ${tienDo}, Supplier -> ${supplier || 'N/A'}, Mã PJ -> ${maDuAn || 'N/A'}`
+        subtask_id: requestId || String(record.id),
+        action_text: `Cập nhật thông tin Subtask: Tiến độ -> "${tienDo}", Hạn xử lý -> "${expectedDate || 'N/A'}", Ngày hoàn thành -> "${completedDate || 'N/A'}"`
       });
 
-      // 2-way Web App Sync to Google Sheets
+      // Reverse sync to Google Sheet via Web App
       const targetUrl = localStorage.getItem('warranty_web_app_url') || DEFAULT_WEB_APP_URL;
-      const rowIdNum = record.sheet_row_index || record.id;
-
-      const queryParams = new URLSearchParams({
-        rowId: String(rowIdNum),
-        requestId: requestId,
-        projectCode: maDuAn,
-        supplier: supplier,
-        progress: tienDo,
-        titleMail: titleEmail,
-        expectedDate: expectedDate,
-        completedDate: completedDate,
-        warrantyCoverage: warrantyCoverage,
-        warrantyCost: warrantyCost,
-        note: note
-      }).toString();
-
-      await fetch(targetUrl, {
+      fetch(targetUrl, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -311,7 +334,6 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
           projectCode: maDuAn,
           supplier: supplier,
           progress: tienDo,
-          titleMail: titleEmail,
           expectedDate: expectedDate,
           completedDate: completedDate,
           warrantyCoverage: warrantyCoverage,
@@ -342,8 +364,13 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
               <ShieldCheck className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
-                🛡️ Subtask Bảo Hành / Đổi Trả ({requestId})
+              <h2 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
+                <span>🛡️ Subtask Bảo Hành ({requestId})</span>
+                {maDuAn && (
+                  <span className="font-mono text-xs font-black px-2.5 py-0.5 bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-lg border border-indigo-300 dark:border-indigo-800 shadow-xs">
+                    🏷️ {maDuAn}
+                  </span>
+                )}
               </h2>
               <p className="text-xs text-slate-500">
                 {record.store_name} ({record.ess_store_code}) • VIS-Tech: {record.mer || 'N/A'}
@@ -551,37 +578,34 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
 
                 {/* 3. Ngày lắp đặt POSM */}
                 <div className="space-y-1">
-                  <label className="text-slate-600 dark:text-slate-400 font-medium">🛠️ Ngày lắp đặt POSM:</label>
+                  <label className="text-slate-600 dark:text-slate-400 font-bold flex items-center gap-1">🛠️ Ngày lắp đặt POSM:</label>
                   <input
-                    type="text"
-                    value={installationDate}
-                    onChange={e => setInstallationDate(e.target.value)}
-                    placeholder="dd/mm/yyyy"
-                    className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-semibold text-sky-700 dark:text-sky-300"
+                    type="date"
+                    value={toHtmlDateStr(installationDate)}
+                    onChange={e => setInstallationDate(fromHtmlDateStr(e.target.value))}
+                    className="w-full bg-white dark:bg-slate-900 border border-sky-300 dark:border-sky-800 rounded-xl px-3 py-2 text-xs font-bold text-sky-700 dark:text-sky-300 cursor-pointer focus:ring-2 focus:ring-sky-500"
                   />
                 </div>
 
                 {/* 4. Ngày hẹn xử lý dự kiến */}
                 <div className="space-y-1">
-                  <label className="text-slate-600 dark:text-slate-400 font-medium">⏰ Ngày hẹn xử lý dự kiến:</label>
+                  <label className="text-slate-600 dark:text-slate-400 font-bold flex items-center gap-1">⏰ Ngày hẹn xử lý dự kiến:</label>
                   <input
-                    type="text"
-                    value={expectedDate}
-                    onChange={e => setExpectedDate(e.target.value)}
-                    placeholder="dd/mm/yyyy"
-                    className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-semibold text-amber-600"
+                    type="date"
+                    value={toHtmlDateStr(expectedDate)}
+                    onChange={e => setExpectedDate(fromHtmlDateStr(e.target.value))}
+                    className="w-full bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-800 rounded-xl px-3 py-2 text-xs font-bold text-amber-600 cursor-pointer focus:ring-2 focus:ring-amber-500"
                   />
                 </div>
 
                 {/* 5. Ngày hoàn thành thực tế */}
                 <div className="space-y-1 md:col-span-2">
-                  <label className="text-slate-600 dark:text-slate-400 font-medium">✅ Ngày hoàn thành thực tế:</label>
+                  <label className="text-slate-600 dark:text-slate-400 font-bold flex items-center gap-1">✅ Ngày hoàn thành thực tế:</label>
                   <input
-                    type="text"
-                    value={completedDate}
-                    onChange={e => setCompletedDate(e.target.value)}
-                    placeholder="dd/mm/yyyy"
-                    className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-semibold text-emerald-600"
+                    type="date"
+                    value={toHtmlDateStr(completedDate)}
+                    onChange={e => setCompletedDate(fromHtmlDateStr(e.target.value))}
+                    className="w-full bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-800 rounded-xl px-3 py-2 text-xs font-bold text-emerald-600 cursor-pointer focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
               </div>
