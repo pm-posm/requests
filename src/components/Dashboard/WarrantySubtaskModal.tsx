@@ -11,8 +11,8 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useDashboardStore } from '@/stores/useDashboardStore';
 
-// Deployed Web App URL for Apps Script Reverse Sync
-const DEFAULT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbx9o84Ow7r9XmvUJ1pv9hYCdZFMOXFljPDTP9Snbf4N0pyEhel-GSvSVuHJ8mt-p8pc/exec';
+// Deployed Web App URL for Apps Script Reverse Sync (Version 5 - Active)
+const DEFAULT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxLRsNBMc4MguQlCOdgmlO6NRsfPG9AltjFCnS8I7GRMwZPNeiVCaqLiDc_vwpbogcK/exec';
 
 // Official Progress Options strictly matching Column Q on BaoHanh_Model & Column Y on Mer View 2026
 const WARRANTY_PROGRESS_OPTIONS = [

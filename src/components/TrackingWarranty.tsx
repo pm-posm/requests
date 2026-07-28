@@ -15,8 +15,8 @@ import { useDashboardStore } from '@/stores/useDashboardStore';
 // Official Public Google Sheet CSV URL for BaoHanh_Model
 const DEFAULT_WARRANTY_SHEET_CSV = 'https://docs.google.com/spreadsheets/d/119LpiU1XheXgOxKWxw17E_u4vgRTBPhc-4FADDS8B1Q/export?format=csv&gid=2053849390';
 
-// Deployed Web App URL for Apps Script Reverse Sync (Version 4 - Active)
-const DEFAULT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbx9o84Ow7r9XmvUJ1pv9hYCdZFMOXFljPDTP9Snbf4N0pyEhel-GSvSVuHJ8mt-p8pc/exec';
+// Deployed Web App URL for Apps Script Reverse Sync (Version 5 - Active)
+const DEFAULT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxLRsNBMc4MguQlCOdgmlO6NRsfPG9AltjFCnS8I7GRMwZPNeiVCaqLiDc_vwpbogcK/exec';
 
 // Helper to convert DD/MM/YYYY or string to YYYY-MM-DD for native <input type="date">
 const toHtmlDateStr = (str?: string): string => {
