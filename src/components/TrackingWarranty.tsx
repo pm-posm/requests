@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Papa from 'papaparse';
+import { supabase } from '@/lib/supabase';
 import { 
   Search, RefreshCw, ShieldCheck, AlertTriangle, 
   Wrench, Calendar, Building2, FileText, 
@@ -338,6 +339,28 @@ export default function TrackingWarranty() {
     setSelectedItem(updatedItem);
     setWarrantyItems(prev => prev.map(i => i.id === updatedItem.id ? updatedItem : i));
 
+    // Update Supabase raw_requests table directly
+    try {
+      const rowIdNum = parseInt(String(selectedItem.rowId || selectedItem.requestId || '').replace(/\D/g, ''), 10);
+      if (rowIdNum > 0 || selectedItem.requestId) {
+        await supabase.from('raw_requests').update({
+          ma_du_an: editProjectCode.trim() || null,
+          supplier: editSupplier.trim() || null,
+          tien_do: editProgress.trim(),
+          title_email_request: editTitleMail.trim() || null,
+          date_of_rq: editRaiseMailTime.trim() || null,
+          ngay_quick_fix: editExpectedDate.trim() || null,
+          expected_date: editExpectedDate.trim() || null,
+          completed_date: editCompletedDate.trim() || null,
+          warranty_coverage: editWarrantyCoverage.trim() || null,
+          warranty_cost: editWarrantyCost.trim() || null,
+          mer_note: editNote.trim() || null
+        }).or(`request_id.eq.${selectedItem.requestId},sheet_row_index.eq.${rowIdNum}`);
+      }
+    } catch (spErr) {
+      console.warn('Supabase update notice:', spErr);
+    }
+
     // Multi-channel reverse sync to Google Sheet via Web App
     const targetUrl = (webAppUrl || DEFAULT_WEB_APP_URL).trim();
     if (targetUrl) {
@@ -382,13 +405,16 @@ export default function TrackingWarranty() {
           })
         }).catch(() => {});
 
+        toast.success(`🟢 Đã lưu dữ liệu ca ${selectedItem.requestId} & đồng bộ 2 chiều về Google Sheet!`);
         setDrawerSaveSuccess('🟢 Đã lưu thay đổi & đồng bộ tự động về BaoHanh_Model và Mer View 2026!');
       } catch (err) {
+        toast.success('🟢 Đã lưu thay đổi trên Dashboard!');
         setDrawerSaveSuccess('🟢 Đã lưu thay đổi trên Dashboard!');
       } finally {
         setIsDrawerSaving(false);
       }
     } else {
+      toast.success('🟢 Đã lưu trên Dashboard!');
       setDrawerSaveSuccess('🟢 Đã lưu trên Dashboard!');
       setIsDrawerSaving(false);
     }
