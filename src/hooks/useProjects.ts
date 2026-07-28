@@ -36,7 +36,8 @@ export function useProjects() {
 
   useEffect(() => {
     let debounceTimer: NodeJS.Timeout | null = null;
-    const channel = supabase.channel('posm-projects-realtime-global')
+    const channelId = `posm-projects-realtime-${Math.random().toString(36).substring(2, 9)}`;
+    const channel = supabase.channel(channelId)
       .on(
         'postgres_changes',
         {
