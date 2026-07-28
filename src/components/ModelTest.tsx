@@ -17,6 +17,8 @@ export default function ModelTest() {
     const [searchTerm, setSearchTerm] = React.useState('');
     const [activeQuickFilter, setActiveQuickFilter] = React.useState<'ALL' | 'ACTIVE' | 'COMPLETED' | 'HIGH_STORE_COUNT'>('ALL');
     const [isTriggeringSync, setIsTriggeringSync] = React.useState(false);
+    const [isTokenModalOpen, setIsTokenModalOpen] = React.useState(false);
+    const [patTokenInput, setPatTokenInput] = React.useState(localStorage.getItem('github_pat_token') || '');
 
     // Fetch unified project activities and their attachments
     const { data: activities, isLoading: activitiesLoading } = useQuery<ActivityRow[]>({
@@ -252,120 +254,167 @@ export default function ModelTest() {
                             />
                         </div>
 
-                        {/* Trigger Đồng bộ Mail 4 Giai Đoạn */}
-                        <button
-                            onClick={async () => {
+                    {/* Trigger Đồng bộ Mail 4 Giai Đoạn */}
+                    <button
+                        id="trigger-sync-mail-btn"
+                        onClick={async () => {
+                            try {
+                                setIsTriggeringSync(true);
+                                toast.loading('🚀 Đang gửi lệnh kích hoạt đồng bộ Mail 4 giai đoạn...', { id: 'sync_mail_toast' });
+                                
+                                let syncSuccess = false;
+
+                                // 1. Kích hoạt Supabase Edge Function (cron-sync-gmail)
                                 try {
-                                    setIsTriggeringSync(true);
-                                    toast.loading('🚀 Đang gửi lệnh kích hoạt đồng bộ Mail 4 giai đoạn...', { id: 'sync_mail_toast' });
-                                    
-                                    let syncSuccess = false;
-
-                                    // 1. Kích hoạt Supabase Edge Function (cron-sync-gmail)
-                                    try {
-                                        const { data: edgeData, error: edgeErr } = await supabase.functions.invoke('cron-sync-gmail');
-                                        if (edgeErr) {
-                                            console.warn('Edge Function sync-gmail warning:', edgeErr);
-                                        } else {
-                                            syncSuccess = true;
-                                        }
-                                    } catch (efErr: any) {
-                                        console.warn('Lỗi gọi Edge Function:', efErr);
+                                    const { data: edgeData, error: edgeErr } = await supabase.functions.invoke('cron-sync-gmail');
+                                    if (!edgeErr) {
+                                        syncSuccess = true;
                                     }
-
-                                    // 2. Kích hoạt GitHub Action Workflow Dispatch (thanglh9-maker/PM-POSM manual-sync.yml)
-                                    const ghRepo = import.meta.env.VITE_GITHUB_REPO || 'thanglh9-maker/PM-POSM';
-                                    const ghToken = import.meta.env.VITE_GITHUB_TOKEN;
-
-                                    if (ghToken) {
-                                        try {
-                                            // Gọi endpoint workflow_dispatch tới manual-sync.yml
-                                            const ghRes = await fetch(`https://api.github.com/repos/${ghRepo}/actions/workflows/manual-sync.yml/dispatches`, {
-                                                method: 'POST',
-                                                headers: {
-                                                    'Authorization': `Bearer ${ghToken}`,
-                                                    'Accept': 'application/vnd.github.v3+json',
-                                                    'Content-Type': 'application/json'
-                                                },
-                                                body: JSON.stringify({
-                                                    ref: 'main'
-                                                })
-                                            });
-
-                                            if (ghRes.ok || ghRes.status === 204) {
-                                                toast.success('🚀 Đã gửi lệnh trigger GitHub Action (PM-POSM manual-sync.yml) thành công!', { id: 'sync_mail_toast' });
-                                                syncSuccess = true;
-                                            } else {
-                                                // Thử fallback sang repository_dispatch
-                                                const fallbackRes = await fetch(`https://api.github.com/repos/${ghRepo}/dispatches`, {
-                                                    method: 'POST',
-                                                    headers: {
-                                                        'Authorization': `Bearer ${ghToken}`,
-                                                        'Accept': 'application/vnd.github.v3+json',
-                                                        'Content-Type': 'application/json'
-                                                    },
-                                                    body: JSON.stringify({ event_type: 'sync-emails' })
-                                                });
-                                                if (fallbackRes.ok || fallbackRes.status === 204) {
-                                                    toast.success('🚀 Đã gửi lệnh trigger GitHub Action thành công!', { id: 'sync_mail_toast' });
-                                                    syncSuccess = true;
-                                                } else {
-                                                    const errText = await ghRes.text();
-                                                    console.error('GitHub Action dispatch error:', errText);
-                                                    toast.error(`⚠️ Lỗi GitHub Dispatch (${ghRes.status}): Kiểm tra Token có quyền workflow`, { id: 'sync_mail_toast' });
-                                                }
-                                            }
-                                        } catch (ghErr: any) {
-                                            console.error('Lỗi kết nối GitHub API:', ghErr);
-                                        }
-                                    } else if (!syncSuccess) {
-                                        toast.success('🚀 Đã gửi lệnh quét ngầm! (Để bấm nút trên Web chạy thẳng GitHub Action PM-POSM, cần cấu hình VITE_GITHUB_TOKEN)', { id: 'sync_mail_toast' });
-                                    } else {
-                                        toast.success('🚀 Đã gửi lệnh kích hoạt quét Mail 4 giai đoạn thành công!', { id: 'sync_mail_toast' });
-                                    }
-
-                                    // 3. Ghi log sync job
-                                    try {
-                                        await supabase.from('sync_jobs').insert({ status: 'triggered', created_at: new Date().toISOString() });
-                                    } catch (_err) {
-                                        // Ignore RLS or schema mismatch
-                                    }
-
-                                    // Refetch data
-                                    setTimeout(() => {
-                                        queryClient.invalidateQueries({ queryKey: ['project_activities_with_attachments_all'] });
-                                        queryClient.invalidateQueries({ queryKey: ['projects'] });
-                                        queryClient.invalidateQueries({ queryKey: ['project_overviews_rpc'] });
-                                        setIsTriggeringSync(false);
-                                    }, 2500);
-                                } catch (e: any) {
-                                    toast.error('Lỗi gửi lệnh đồng bộ: ' + (e.message || 'Thất bại'), { id: 'sync_mail_toast' });
-                                    setIsTriggeringSync(false);
+                                } catch (efErr: any) {
+                                    console.warn('Lỗi gọi Edge Function:', efErr);
                                 }
-                            }}
-                            disabled={isTriggeringSync}
-                            className="flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-50"
-                            title="Kích hoạt quét Mail tự động 4 giai đoạn (Brief, Khảo Sát, Lắp Đặt, NTXX)"
-                        >
-                            <RefreshCw className={`w-3.5 h-3.5 ${isTriggeringSync ? 'animate-spin' : ''}`} />
-                            <span>{isTriggeringSync ? 'Đang gửi lệnh...' : '⚡ Đồng bộ Mail Dự Án'}</span>
-                        </button>
+
+                                // 2. Lấy GitHub Token từ localStorage hoặc .env.local
+                                const ghRepo = import.meta.env.VITE_GITHUB_REPO || 'thanglh9-maker/PM-POSM';
+                                const ghToken = localStorage.getItem('github_pat_token') || import.meta.env.VITE_GITHUB_TOKEN;
+
+                                if (!ghToken) {
+                                    toast.dismiss('sync_mail_toast');
+                                    setIsTriggeringSync(false);
+                                    setIsTokenModalOpen(true);
+                                    return;
+                                }
+
+                                try {
+                                    // Gọi endpoint workflow_dispatch tới manual-sync.yml
+                                    const ghRes = await fetch(`https://api.github.com/repos/${ghRepo}/actions/workflows/manual-sync.yml/dispatches`, {
+                                        method: 'POST',
+                                        headers: {
+                                            'Authorization': `Bearer ${ghToken}`,
+                                            'Accept': 'application/vnd.github.v3+json',
+                                            'Content-Type': 'application/json'
+                                        },
+                                        body: JSON.stringify({
+                                            ref: 'main'
+                                        })
+                                    });
+
+                                    if (ghRes.ok || ghRes.status === 204) {
+                                        toast.success('🚀 Đã gửi lệnh trigger GitHub Action (PM-POSM manual-sync.yml) thành công!', { id: 'sync_mail_toast' });
+                                        syncSuccess = true;
+                                    } else {
+                                        const errText = await ghRes.text();
+                                        console.error('GitHub Action dispatch error:', errText);
+                                        if (ghRes.status === 401 || ghRes.status === 404) {
+                                            toast.error(`⚠️ Token GitHub không có quyền hoặc hết hạn. Vui lòng nhập lại Token mới!`, { id: 'sync_mail_toast' });
+                                            setIsTokenModalOpen(true);
+                                        } else {
+                                            toast.error(`⚠️ Lỗi GitHub Dispatch (${ghRes.status}): ${errText}`, { id: 'sync_mail_toast' });
+                                        }
+                                    }
+                                } catch (ghErr: any) {
+                                    console.error('Lỗi kết nối GitHub API:', ghErr);
+                                }
+
+                                // 3. Ghi log sync job
+                                try {
+                                    await supabase.from('sync_jobs').insert({ status: 'triggered', created_at: new Date().toISOString() });
+                                } catch (_err) {
+                                    // Ignore RLS or schema mismatch
+                                }
+
+                                // Refetch data
+                                setTimeout(() => {
+                                    queryClient.invalidateQueries({ queryKey: ['project_activities_with_attachments_all'] });
+                                    queryClient.invalidateQueries({ queryKey: ['projects'] });
+                                    queryClient.invalidateQueries({ queryKey: ['project_overviews_rpc'] });
+                                    setIsTriggeringSync(false);
+                                }, 2500);
+                            } catch (e: any) {
+                                toast.error('Lỗi gửi lệnh đồng bộ: ' + (e.message || 'Thất bại'), { id: 'sync_mail_toast' });
+                                setIsTriggeringSync(false);
+                            }
+                        }}
+                        disabled={isTriggeringSync}
+                        className="flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-50"
+                        title="Kích hoạt quét Mail tự động 4 giai đoạn (Brief, Khảo Sát, Lắp Đặt, NTXX)"
+                    >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isTriggeringSync ? 'animate-spin' : ''}`} />
+                        <span>{isTriggeringSync ? 'Đang gửi lệnh...' : '⚡ Đồng bộ Mail Dự Án'}</span>
+                    </button>
+                </div>
+
+                {/* Table */}
+                <ProjectTable 
+                    groups={filteredGroups}
+                    findMatchedProject={findMatchedProject}
+                    onRowClick={handleRowClick}
+                    requestsMap={requestsMap}
+                    onRefresh={() => {
+                        queryClient.invalidateQueries({ queryKey: ['project_activities_with_attachments_all'] });
+                        queryClient.invalidateQueries({ queryKey: ['projects'] });
+                        queryClient.invalidateQueries({ queryKey: ['raw_requests'] });
+                    }}
+                />
+            </div>
+        )}
+
+        {/* GITHUB PAT TOKEN MODAL */}
+        {isTokenModalOpen && (
+            <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4">
+                <div className="bg-white dark:bg-slate-900 max-w-md w-full rounded-2xl p-5 border border-indigo-200 dark:border-indigo-900 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+                    <div className="flex items-center justify-between">
+                        <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
+                            🔑 Nhập GitHub Personal Access Token (PAT)
+                        </h3>
+                        <button onClick={() => setIsTokenModalOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
                     </div>
 
-                    {/* Table */}
-                    <ProjectTable 
-                        groups={filteredGroups}
-                        findMatchedProject={findMatchedProject}
-                        onRowClick={handleRowClick}
-                        requestsMap={requestsMap}
-                        onRefresh={() => {
-                            queryClient.invalidateQueries({ queryKey: ['project_activities_with_attachments_all'] });
-                            queryClient.invalidateQueries({ queryKey: ['projects'] });
-                            queryClient.invalidateQueries({ queryKey: ['raw_requests'] });
-                        }}
-                    />
+                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                        Để bấm nút kích hoạt trực tiếp Workflow trên repo <b>thanglh9-maker/PM-POSM</b>, vui lòng dán Token PAT GitHub của anh vào đây (Token chỉ lưu riêng trên trình duyệt của anh).
+                    </p>
+
+                    <div className="space-y-1.5">
+                        <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block">
+                            Dán GitHub Token (VD: <span className="font-mono text-indigo-600">ghp_xxxx...</span>):
+                        </label>
+                        <input
+                            type="password"
+                            value={patTokenInput}
+                            onChange={(e) => setPatTokenInput(e.target.value)}
+                            placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxx"
+                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
+                        />
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t dark:border-slate-800">
+                        <button
+                            onClick={() => setIsTokenModalOpen(false)}
+                            className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg cursor-pointer"
+                        >
+                            Hủy
+                        </button>
+                        <button
+                            onClick={() => {
+                                if (!patTokenInput.trim()) {
+                                    toast.error('Vui lòng dán token GitHub!');
+                                    return;
+                                }
+                                localStorage.setItem('github_pat_token', patTokenInput.trim());
+                                setIsTokenModalOpen(false);
+                                toast.success('✅ Đã lưu Token GitHub! Đang kích hoạt đồng bộ...');
+                                setTimeout(() => {
+                                    document.getElementById('trigger-sync-mail-btn')?.click();
+                                }, 300);
+                            }}
+                            className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs shadow-sm cursor-pointer"
+                        >
+                            💾 Lưu Token & Kích Hoạt Ngay
+                        </button>
+                    </div>
                 </div>
-            )}
-        </div>
-    );
+            </div>
+        )}
+    </div>
+);
 }
