@@ -155,6 +155,8 @@ export default function TrackingWarranty() {
   const [editWarrantyCoverage, setEditWarrantyCoverage] = useState('');
   const [editWarrantyCost, setEditWarrantyCost] = useState('');
   const [editNote, setEditNote] = useState('');
+  const [editTitleMail, setEditTitleMail] = useState('');
+  const [editRaiseMailTime, setEditRaiseMailTime] = useState('');
   const [drawerSaveSuccess, setDrawerSaveSuccess] = useState<string | null>(null);
   const [isDrawerSaving, setIsDrawerSaving] = useState(false);
 
@@ -181,13 +183,29 @@ export default function TrackingWarranty() {
     if (selectedItem) {
       setEditProjectCode(selectedItem.projectCode || '');
       setEditSupplier(selectedItem.supplier || '');
-      setEditProgress(selectedItem.progress || 'Not started');
+
+      // Normalize progress string to match <option> values
+      const rawProg = selectedItem.progress || '';
+      let matchedProg = 'Not started';
+      if (rawProg) {
+        const norm = String(rawProg).toLowerCase().trim();
+        if (norm.includes('hoàn thành')) matchedProg = 'Hoàn thành';
+        else if (norm.includes('gửi rq') || norm.includes('đã gửi')) matchedProg = 'Vis - Đã gửi RQ tới Agency';
+        else if (norm.includes('tiếp nhận') || norm.includes('đang xử lý')) matchedProg = 'Tiếp nhận / Đang xử lý';
+        else if (norm.includes('cancel')) matchedProg = 'Cancelled';
+        else if (norm.includes('not started') || norm.includes('mới tạo')) matchedProg = 'Not started';
+        else matchedProg = rawProg;
+      }
+      setEditProgress(matchedProg);
+
       setEditInstallationDate(selectedItem.installationDate || '');
       setEditExpectedDate(selectedItem.expectedDate || '');
       setEditCompletedDate(selectedItem.completedDate || '');
       setEditWarrantyCoverage(selectedItem.warrantyCoverage || 'Trong phạm vi bảo hành');
       setEditWarrantyCost(selectedItem.warrantyCost || 'Miễn phí');
       setEditNote(selectedItem.note || '');
+      setEditTitleMail(selectedItem.mailTitle || (selectedItem as any).titleEmail || '');
+      setEditRaiseMailTime(selectedItem.sentDate || (selectedItem as any).raiseMailTime || '');
       setDrawerSaveSuccess(null);
     }
   }, [selectedItem]);
@@ -299,10 +317,6 @@ export default function TrackingWarranty() {
   // Save Direct Edits from Drawer & Sync to Google Sheet
   const handleSaveDrawerEdits = async () => {
     if (!selectedItem) return;
-    if (!isAdmin) {
-      toast.error('🔒 Quyền bị từ chối: Vui lòng đăng nhập tài khoản Admin để chỉnh sửa!');
-      return;
-    }
     setIsDrawerSaving(true);
     setDrawerSaveSuccess(null);
 
@@ -315,7 +329,9 @@ export default function TrackingWarranty() {
       completedDate: editCompletedDate.trim(),
       warrantyCoverage: editWarrantyCoverage.trim(),
       warrantyCost: editWarrantyCost.trim(),
-      note: editNote.trim()
+      note: editNote.trim(),
+      mailTitle: editTitleMail.trim(),
+      sentDate: editRaiseMailTime.trim()
     };
 
     // Update local state
@@ -332,6 +348,8 @@ export default function TrackingWarranty() {
           projectCode: editProjectCode.trim(),
           supplier: editSupplier.trim(),
           progress: editProgress.trim(),
+          titleMail: editTitleMail.trim(),
+          raiseMailTime: editRaiseMailTime.trim(),
           expectedDate: editExpectedDate.trim(),
           completedDate: editCompletedDate.trim(),
           warrantyCoverage: editWarrantyCoverage.trim(),
@@ -354,6 +372,8 @@ export default function TrackingWarranty() {
             projectCode: editProjectCode.trim(),
             supplier: editSupplier.trim(),
             progress: editProgress.trim(),
+            titleMail: editTitleMail.trim(),
+            raiseMailTime: editRaiseMailTime.trim(),
             expectedDate: editExpectedDate.trim(),
             completedDate: editCompletedDate.trim(),
             warrantyCoverage: editWarrantyCoverage.trim(),
@@ -1239,6 +1259,29 @@ export default function TrackingWarranty() {
                     <option value="Hoàn thành">🟢 Hoàn thành (Đã hoàn tất bảo hành)</option>
                     <option value="Cancelled">🔴 Cancelled (Đã hủy yêu cầu)</option>
                   </select>
+                </div>
+
+                {/* Edit Title Mail & Raise Mail Date */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+                  <div className="md:col-span-2 space-y-1">
+                    <label className="font-semibold text-slate-700 dark:text-slate-300">✉️ Tiêu Đề Email Raise (Title Mail):</label>
+                    <input
+                      type="text"
+                      value={editTitleMail}
+                      onChange={(e) => setEditTitleMail(e.target.value)}
+                      placeholder="[Bảo hành]-[BH-xxx]: mã dự án + tên dự án..."
+                      className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500/20 font-mono text-xs font-bold text-sky-800 dark:text-sky-300"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="font-semibold text-slate-700 dark:text-slate-300">📅 Ngày Raise Mail:</label>
+                    <input
+                      type="date"
+                      value={toHtmlDateStr(editRaiseMailTime)}
+                      onChange={(e) => setEditRaiseMailTime(fromHtmlDateStr(e.target.value))}
+                      className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500/20 text-xs font-bold text-sky-800 dark:text-sky-300 cursor-pointer"
+                    />
+                  </div>
                 </div>
               </div>
 
