@@ -18,7 +18,13 @@ const {
   VITE_SUPABASE_ANON_KEY
 } = process.env;
 
-const supabase = createClient(VITE_SUPABASE_URL || '', VITE_SUPABASE_ANON_KEY || '');
+const defaultSupabaseUrl = "https://nbslfbpzhsgvuscfuvxn.supabase.co";
+const defaultSupabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ic2xmYnB6aHNndnVzY2Z1dnhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1OTMwMTAsImV4cCI6MjA5NzE2OTAxMH0.5KMFj90fB94P8Yv49ZIuk1N9dngdiYYGloVCqxd3rpw";
+
+const targetUrl = (VITE_SUPABASE_URL && VITE_SUPABASE_URL.startsWith('http')) ? VITE_SUPABASE_URL : defaultSupabaseUrl;
+const targetKey = VITE_SUPABASE_ANON_KEY || defaultSupabaseAnonKey;
+
+const supabase = createClient(targetUrl, targetKey);
 
 async function processEmailWithAI(sender: string, subject: string, textContent: string, retryCount = 0): Promise<any> {
   const systemPrompt = `You are an AI assistant specialized in extracting POSM project progress information from emails.
