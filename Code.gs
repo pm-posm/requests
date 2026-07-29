@@ -1,5 +1,5 @@
 /**
- * HE THONG TU DONG HOA VA DONG BO DU LIEU BAO HANH (VERSION 2026 - CHỐNG LỆCH DÒNG 100%)
+ * HE THONG TU DONG HOA VA DONG BO DU LIEU BAO HANH (VERSION 2026 - FULL COL W INSTALLATION DATE)
  * Source Sheet ID: 1sbp9fgrkywkns0q-o1iiAIPo2dJp22uQ8w39L7U4jIU (Tab: Mer View 2026)
  * Target Sheet ID: 119LpiU1XheXgOxKWxw17E_u4vgRTBPhc-4FADDS8B1Q (Tab: BaoHanh_Model)
  */
@@ -164,7 +164,7 @@ function onEditTargetSheet(e) {
 
   if (sourceRow < 2) return;
 
-  const rowData = sheet.getRange(row, 1, 1, 22).getValues()[0];
+  const rowData = sheet.getRange(row, 1, 1, 23).getValues()[0];
   const maDuAnVal = String(rowData[10] || '').trim();     // Col K (Col 11 - Mã dự án)
   const supplierVal = String(rowData[11] || '').trim();   // Col L (Col 12 - Supplier)
   const titleMailVal = String(rowData[12] || '').trim();  // Col M (Col 13 - Title mail)
@@ -238,11 +238,12 @@ function processSyncRequest(params) {
     if (params.completedDate !== undefined) targetSheet.getRange(targetRow, 19).setValue(String(params.completedDate).trim());
     if (params.note !== undefined) targetSheet.getRange(targetRow, 21).setValue(String(params.note).trim());
     if (params.raiseMailTime !== undefined && String(params.raiseMailTime).trim() !== '') targetSheet.getRange(targetRow, 22).setValue(String(params.raiseMailTime).trim());
+    if (params.installationDate !== undefined) targetSheet.getRange(targetRow, 23).setValue(String(params.installationDate).trim()); // Cột W (23 - Ngày lắp đặt)
 
     // Đồng bộ ngược về tab Mer View 2026
     onEditTargetSheet({ range: targetSheet.getRange(targetRow, 1) });
 
-    return { status: 'success', message: 'Đã cập nhật dữ liệu thành công lên BaoHanh_Model và Mer View 2026' };
+    return { status: 'success', message: 'Đã cập nhật dữ liệu thành công lên BaoHanh_Model (gồm Cột W Ngày Lắp Đặt) và Mer View 2026' };
   } else {
     return { status: 'error', message: 'Không tìm thấy dòng tương ứng với ' + reqIdStr + ' trên BaoHanh_Model' };
   }

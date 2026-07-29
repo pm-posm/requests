@@ -218,8 +218,8 @@ export default function TrackingWarranty() {
       setEditInstallationDate(selectedItem.installationDate || '');
       setEditExpectedDate(selectedItem.expectedDate || '');
       setEditCompletedDate(selectedItem.completedDate || '');
-      setEditWarrantyCoverage(selectedItem.warrantyCoverage || 'Trong phạm vi bảo hành');
-      setEditWarrantyCost(selectedItem.warrantyCost || 'Miễn phí');
+      setEditWarrantyCoverage(selectedItem.warrantyCoverage || '');
+      setEditWarrantyCost(selectedItem.warrantyCost || '');
       setEditNote(selectedItem.note || '');
       setEditTitleMail(selectedItem.mailTitle || (selectedItem as any).titleEmail || '');
       setEditRaiseMailTime(selectedItem.sentDate || (selectedItem as any).raiseMailTime || '');
@@ -389,6 +389,7 @@ export default function TrackingWarranty() {
           progress: editProgress.trim(),
           titleMail: editTitleMail.trim(),
           raiseMailTime: editRaiseMailTime.trim(),
+          installationDate: editInstallationDate.trim(),
           expectedDate: editExpectedDate.trim(),
           completedDate: editCompletedDate.trim(),
           warrantyCoverage: editWarrantyCoverage.trim(),
@@ -413,6 +414,7 @@ export default function TrackingWarranty() {
             progress: editProgress.trim(),
             titleMail: editTitleMail.trim(),
             raiseMailTime: editRaiseMailTime.trim(),
+            installationDate: editInstallationDate.trim(),
             expectedDate: editExpectedDate.trim(),
             completedDate: editCompletedDate.trim(),
             warrantyCoverage: editWarrantyCoverage.trim(),
@@ -474,6 +476,7 @@ export default function TrackingWarranty() {
               const progress = row['Tiến độ'] || row['Trạng thái'] || 'Not started';
               const expectedDate = row['Ngày xử lý dự kiến'] || '';
               const completedDate = row['Ngày hoàn thành thực tế'] || '';
+              const installationDate = row['Ngày lắp đặt'] || row['Ngày lắp đặt POSM'] || '';
               const proofImage = row['Hình ảnh nghiệm thu'] || '';
               const note = row['Note'] || row['Ghi chú'] || '';
 
@@ -489,6 +492,7 @@ export default function TrackingWarranty() {
                 category: category.trim(),
                 brand: brand.trim(),
                 sentDate: sentDate.trim(),
+                installationDate: installationDate.trim(),
                 projectCode: projectCode.trim(),
                 supplier: supplier.trim(),
                 mailTitle: mailTitle.trim(),
