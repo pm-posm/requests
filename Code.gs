@@ -1,5 +1,5 @@
 /**
- * HE THONG TU DONG HOA VA DONG BO DU LIEU BAO HANH (FULL COMPATIBLE VERSION - HỖ TRỢ CỘT W NGÀY LẮP ĐẶT)
+ * HE THONG TU DONG HOA VA DONG BO DU LIEU BAO HANH (FULL COMPATIBLE VERSION - HỖ TRỢ CỘT O, P, W & FLUSH)
  * Source Sheet ID: 1sbp9fgrkywkns0q-o1iiAIPo2dJp22uQ8w39L7U4jIU (Tab: Mer View 2026)
  * Target Sheet ID: 119LpiU1XheXgOxKWxw17E_u4vgRTBPhc-4FADDS8B1Q (Tab: BaoHanh_Model)
  */
@@ -180,6 +180,7 @@ function pushToWarrantySheet(sourceSheet, row) {
   sourceSheet.getRange(row, WARRANTY_CONFIG.COL_SOURCE_REQUEST_ID).setValue(requestId);
   sourceSheet.getRange(row, WARRANTY_CONFIG.COL_SOURCE_STATUS).setValue(statusSource);
   sourceSheet.getRange(row, WARRANTY_CONFIG.COL_SOURCE_TIEN_DO).setValue(tienDoSource);
+  SpreadsheetApp.flush();
 }
 
 /**
@@ -237,6 +238,7 @@ function handleCancelOrChange(sourceSheet, row, rangePhuongAn, oldValue) {
       targetSheet.deleteRow(foundTargetRow);
     }
     sourceSheet.getRange(row, WARRANTY_CONFIG.COL_SOURCE_REQUEST_ID).setValue('');
+    SpreadsheetApp.flush();
   }
 }
 
@@ -301,6 +303,7 @@ function onEditTargetSheet(e) {
     sourceSheet.getRange(rowId, WARRANTY_CONFIG.COL_SOURCE_STATUS).setValue(WARRANTY_CONFIG.VALUE_STATUS_BAO_HANH);
     sourceSheet.getRange(rowId, WARRANTY_CONFIG.COL_SOURCE_TIEN_DO).setValue(WARRANTY_CONFIG.VALUE_TIEN_DO_NOT_STARTED);
   }
+  SpreadsheetApp.flush();
 }
 
 /**
@@ -356,13 +359,25 @@ function processSyncRequest(params) {
     }
 
     // 4. Cập nhật Trạng thái bảo hành (Cột O - 15)
-    if (params.warrantyCoverage !== undefined) {
-      targetSheet.getRange(targetRow, 15).setValue(String(params.warrantyCoverage).trim());
+    const covVal = params.warrantyCoverage !== undefined ? params.warrantyCoverage : (params.coverage !== undefined ? params.coverage : params.trangThaiBH);
+    if (covVal !== undefined) {
+      const strCov = String(covVal).trim();
+      if (!strCov) {
+        targetSheet.getRange(targetRow, 15).clearContent();
+      } else {
+        targetSheet.getRange(targetRow, 15).setValue(strCov);
+      }
     }
 
     // 5. Cập nhật Chi phí bảo hành (Cột P - 16)
-    if (params.warrantyCost !== undefined) {
-      targetSheet.getRange(targetRow, 16).setValue(String(params.warrantyCost).trim());
+    const costVal = params.warrantyCost !== undefined ? params.warrantyCost : (params.cost !== undefined ? params.cost : params.chiPhiBH);
+    if (costVal !== undefined) {
+      const strCost = String(costVal).trim();
+      if (!strCost) {
+        targetSheet.getRange(targetRow, 16).clearContent();
+      } else {
+        targetSheet.getRange(targetRow, 16).setValue(strCost);
+      }
     }
 
     // 6. Cập nhật Tiến độ (Cột Q - 17)
@@ -372,12 +387,22 @@ function processSyncRequest(params) {
 
     // 7. Cập nhật Ngày hẹn xử lý dự kiến (Cột R - 18)
     if (params.expectedDate !== undefined) {
-      targetSheet.getRange(targetRow, 18).setValue(String(params.expectedDate).trim());
+      const strExp = String(params.expectedDate).trim();
+      if (!strExp) {
+        targetSheet.getRange(targetRow, 18).clearContent();
+      } else {
+        targetSheet.getRange(targetRow, 18).setValue(strExp);
+      }
     }
 
     // 8. Cập nhật Ngày hoàn thành thực tế (Cột S - 19)
     if (params.completedDate !== undefined) {
-      targetSheet.getRange(targetRow, 19).setValue(String(params.completedDate).trim());
+      const strComp = String(params.completedDate).trim();
+      if (!strComp) {
+        targetSheet.getRange(targetRow, 19).clearContent();
+      } else {
+        targetSheet.getRange(targetRow, 19).setValue(strComp);
+      }
     }
 
     // 9. Cập nhật Note (Cột U - 21)
@@ -392,13 +417,20 @@ function processSyncRequest(params) {
 
     // 11. Cập nhật Ngày lắp đặt (Cột W - 23)
     if (params.installationDate !== undefined) {
-      targetSheet.getRange(targetRow, 23).setValue(String(params.installationDate).trim());
+      const strInst = String(params.installationDate).trim();
+      if (!strInst) {
+        targetSheet.getRange(targetRow, 23).clearContent();
+      } else {
+        targetSheet.getRange(targetRow, 23).setValue(strInst);
+      }
     }
+
+    SpreadsheetApp.flush();
 
     // Đồng bộ ngược về tab Mer View 2026
     onEditTargetSheet({ range: targetSheet.getRange(targetRow, 1) });
 
-    return { status: 'success', message: 'Đã cập nhật dữ liệu thành công lên BaoHanh_Model và Mer View 2026' };
+    return { status: 'success', message: 'Đã cập nhật dữ liệu thành công lên BaoHanh_Model (gồm Cột O, P, W) và Mer View 2026' };
   } else {
     return { status: 'error', message: 'Không tìm thấy dòng ' + rowIdRaw + ' trên BaoHanh_Model' };
   }
