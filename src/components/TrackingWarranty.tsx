@@ -634,6 +634,10 @@ export default function TrackingWarranty() {
     let midFailCount = 0;   // 30 - 90 days
     let longFailCount = 0;  // > 90 days
 
+    const earlyFailItems: Array<{ item: WarrantyItem; days: number }> = [];
+    const midFailItems: Array<{ item: WarrantyItem; days: number }> = [];
+    const longFailItems: Array<{ item: WarrantyItem; days: number }> = [];
+
     let totalDaysToSchedule = 0;
     let countScheduleDate = 0;
 
@@ -702,9 +706,16 @@ export default function TrackingWarranty() {
         const diffDays = Math.round((sentMs - installMs) / (1000 * 60 * 60 * 24));
         totalDaysToFail += diffDays;
         countFailDate += 1;
-        if (diffDays < 30) earlyFailCount += 1;
-        else if (diffDays <= 90) midFailCount += 1;
-        else longFailCount += 1;
+        if (diffDays < 30) {
+          earlyFailCount += 1;
+          earlyFailItems.push({ item, days: diffDays });
+        } else if (diffDays <= 90) {
+          midFailCount += 1;
+          midFailItems.push({ item, days: diffDays });
+        } else {
+          longFailCount += 1;
+          longFailItems.push({ item, days: diffDays });
+        }
       }
 
       // Duration: Issue ➔ Expected schedule date
@@ -767,7 +778,10 @@ export default function TrackingWarranty() {
         avgDaysToComplete,
         earlyFailCount,
         midFailCount,
-        longFailCount
+        longFailCount,
+        earlyFailItems,
+        midFailItems,
+        longFailItems
       },
       supplierSlaList: Object.entries(supplierSlaMap).map(([supplier, stats]) => ({
         supplier,
@@ -1100,51 +1114,126 @@ export default function TrackingWarranty() {
                   </h4>
                 </div>
               </div>
-              <div className="space-y-3.5 text-xs">
+              <div className="space-y-4 text-xs">
+                {/* 3 Main SLA Averages */}
                 <div className="grid grid-cols-3 gap-2 text-center">
                   <div className="p-3 bg-sky-50 dark:bg-sky-950/60 rounded-xl border border-sky-100 dark:border-sky-900">
-                    <span className="text-[10px] font-bold text-sky-600 uppercase block">Lắp đặt ➔ Lỗi</span>
+                    <span className="text-[10px] font-bold text-sky-600 uppercase block">1. Lắp đặt ➔ Phát sinh lỗi</span>
                     <span className="text-lg font-black text-sky-700 dark:text-sky-300 font-mono">
                       ~{analystBreakdowns.slaMetrics.avgDaysToFail} ngày
                     </span>
+                    <span className="text-[10px] text-muted-foreground block mt-0.5">Thời gian dùng trước khi hỏng</span>
                   </div>
                   <div className="p-3 bg-indigo-50 dark:bg-indigo-950/60 rounded-xl border border-indigo-100 dark:border-indigo-900">
-                    <span className="text-[10px] font-bold text-indigo-600 uppercase block">Tiếp nhận ➔ Hẹn</span>
+                    <span className="text-[10px] font-bold text-indigo-600 uppercase block">2. Gửi ➔ Hẹn xử lý</span>
                     <span className="text-lg font-black text-indigo-700 dark:text-indigo-300 font-mono">
                       ~{analystBreakdowns.slaMetrics.avgDaysToSchedule} ngày
                     </span>
+                    <span className="text-[10px] text-muted-foreground block mt-0.5">Tốc độ tiếp nhận & chốt ngày</span>
                   </div>
                   <div className="p-3 bg-emerald-50 dark:bg-emerald-950/60 rounded-xl border border-emerald-100 dark:border-emerald-900">
-                    <span className="text-[10px] font-bold text-emerald-600 uppercase block">Hoàn thành thực tế</span>
+                    <span className="text-[10px] font-bold text-emerald-600 uppercase block">3. Gửi ➔ Hoàn thành</span>
                     <span className="text-lg font-black text-emerald-700 dark:text-emerald-300 font-mono">
                       ~{analystBreakdowns.slaMetrics.avgDaysToComplete} ngày
                     </span>
+                    <span className="text-[10px] text-muted-foreground block mt-0.5">Thời gian xử lý & nghiệm thu</span>
                   </div>
                 </div>
 
-                <div className="space-y-2 pt-1">
-                  <span className="font-bold text-slate-700 dark:text-slate-300 block text-[11px] uppercase tracking-wider">
-                    Phân bổ Độ bền POSM (Thời gian phát sinh sự cố):
+                {/* Detailed Cases Breakdown by Duration */}
+                <div className="space-y-3 pt-2 border-t border-border">
+                  <span className="font-bold text-slate-800 dark:text-slate-200 block text-xs uppercase tracking-wider">
+                    📋 Chi tiết phân bổ các ca theo thời gian từ Lắp Đặt ➔ Lỗi:
                   </span>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl">
-                      <span className="text-[10px] font-bold text-rose-700 dark:text-rose-300 block">🚨 &lt; 30 ngày (Lỗi sớm)</span>
-                      <span className="text-base font-black text-rose-800 dark:text-rose-200 font-mono">
-                        {analystBreakdowns.slaMetrics.earlyFailCount} ca
-                      </span>
+
+                  {/* Bracket 1: < 30 days */}
+                  <div className="p-3 bg-rose-50/70 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between font-bold text-rose-800 dark:text-rose-200">
+                      <span>🚨 Hỏng sớm &lt; 30 ngày từ khi lắp đặt:</span>
+                      <span className="font-mono font-black">{analystBreakdowns.slaMetrics.earlyFailCount} ca</span>
                     </div>
-                    <div className="p-2.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl">
-                      <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 block">⚠️ 1 - 3 tháng</span>
-                      <span className="text-base font-black text-amber-800 dark:text-amber-200 font-mono">
-                        {analystBreakdowns.slaMetrics.midFailCount} ca
-                      </span>
+                    {analystBreakdowns.slaMetrics.earlyFailItems.length === 0 ? (
+                      <p className="text-[11px] text-rose-600/70 italic">Không có ca nào bị hỏng sớm dưới 30 ngày.</p>
+                    ) : (
+                      <div className="space-y-1.5 pt-1">
+                        {analystBreakdowns.slaMetrics.earlyFailItems.map(({ item, days }) => (
+                          <div 
+                            key={item.id}
+                            onClick={() => { setSelectedItem(item); }}
+                            className="p-2 bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-800 rounded-lg flex items-center justify-between text-xs hover:border-rose-400 cursor-pointer transition-colors"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-black text-rose-600">{item.requestId}</span>
+                              <span className="font-semibold text-slate-800 dark:text-slate-200">{item.storeName}</span>
+                              <span className="text-[10px] text-muted-foreground">({item.posmType})</span>
+                            </div>
+                            <span className="font-mono font-bold text-rose-700 dark:text-rose-300">
+                              Lắp xong {days} ngày ➔ Bị lỗi
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Bracket 2: 1 - 3 months */}
+                  <div className="p-3 bg-amber-50/70 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between font-bold text-amber-800 dark:text-amber-200">
+                      <span>⚠️ Phát sinh sự cố sau 1 - 3 tháng (30 - 90 ngày):</span>
+                      <span className="font-mono font-black">{analystBreakdowns.slaMetrics.midFailCount} ca</span>
                     </div>
-                    <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl">
-                      <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 block">🟢 &gt; 3 tháng (Hao mòn)</span>
-                      <span className="text-base font-black text-emerald-800 dark:text-emerald-200 font-mono">
-                        {analystBreakdowns.slaMetrics.longFailCount} ca
-                      </span>
+                    {analystBreakdowns.slaMetrics.midFailItems.length === 0 ? (
+                      <p className="text-[11px] text-amber-600/70 italic">Không có ca nào rơi vào khoảng 1 - 3 tháng.</p>
+                    ) : (
+                      <div className="space-y-1.5 pt-1">
+                        {analystBreakdowns.slaMetrics.midFailItems.map(({ item, days }) => (
+                          <div 
+                            key={item.id}
+                            onClick={() => { setSelectedItem(item); }}
+                            className="p-2 bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center justify-between text-xs hover:border-amber-400 cursor-pointer transition-colors"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-black text-amber-600">{item.requestId}</span>
+                              <span className="font-semibold text-slate-800 dark:text-slate-200">{item.storeName}</span>
+                              <span className="text-[10px] text-muted-foreground">({item.posmType})</span>
+                            </div>
+                            <span className="font-mono font-bold text-amber-700 dark:text-amber-300">
+                              Lắp xong {days} ngày ➔ Bị lỗi
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Bracket 3: > 3 months */}
+                  <div className="p-3 bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between font-bold text-emerald-800 dark:text-emerald-200">
+                      <span>🟢 Độ bền tốt &gt; 3 tháng (&gt; 90 ngày mới phát sinh lỗi):</span>
+                      <span className="font-mono font-black">{analystBreakdowns.slaMetrics.longFailCount} ca</span>
                     </div>
+                    {analystBreakdowns.slaMetrics.longFailItems.length === 0 ? (
+                      <p className="text-[11px] text-emerald-600/70 italic">Chưa có dữ liệu ca hỏng sau 3 tháng.</p>
+                    ) : (
+                      <div className="space-y-1.5 pt-1 max-h-48 overflow-y-auto custom-scrollbar">
+                        {analystBreakdowns.slaMetrics.longFailItems.map(({ item, days }) => (
+                          <div 
+                            key={item.id}
+                            onClick={() => { setSelectedItem(item); }}
+                            className="p-2 bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 rounded-lg flex items-center justify-between text-xs hover:border-emerald-400 cursor-pointer transition-colors"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-black text-emerald-600">{item.requestId}</span>
+                              <span className="font-semibold text-slate-800 dark:text-slate-200">{item.storeName}</span>
+                              <span className="text-[10px] text-muted-foreground">({item.posmType})</span>
+                            </div>
+                            <span className="font-mono font-bold text-emerald-700 dark:text-emerald-300">
+                              Lắp xong {days} ngày ({Math.round(days / 30)} tháng) ➔ Bị lỗi
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1153,40 +1242,6 @@ export default function TrackingWarranty() {
 
           {/* SECTION 2: BÁO CÁO PHÂN LOẠI DẠNG LỖI POSM & TỶ LỆ ĐẠT SLA NHÀ THẦU */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Defect Category Classification Card */}
-            <div className="p-5 bg-card rounded-2xl border border-border shadow-sm space-y-4">
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <div className="flex items-center gap-2">
-                  <Wrench className="w-5 h-5 text-indigo-600" />
-                  <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100">
-                    🛠️ Báo Cáo Phân Loại Dạng Lỗi POSM (Root Cause)
-                  </h4>
-                </div>
-                <span className="text-xs font-mono text-indigo-600 font-semibold bg-indigo-50 dark:bg-indigo-950 px-2 py-0.5 rounded-md">
-                  Click để lọc
-                </span>
-              </div>
-              <div className="space-y-2.5">
-                {analystBreakdowns.errorCategoryList.map((c) => (
-                  <div 
-                    key={c.category}
-                    onClick={() => handleFilterFromChart('category', c.category)}
-                    className="p-2 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-xl transition-all cursor-pointer group space-y-1"
-                  >
-                    <div className="flex justify-between text-xs font-medium">
-                      <span className="text-slate-800 dark:text-slate-200 font-bold group-hover:text-indigo-600 transition-colors">
-                        {c.category}
-                      </span>
-                      <span className="text-slate-500 font-mono font-bold">{c.count} ca ({c.percentage}%)</span>
-                    </div>
-                    <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                      <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${c.percentage}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
             {/* Supplier SLA Performance Card */}
             <div className="p-5 bg-card rounded-2xl border border-border shadow-sm space-y-4">
               <div className="flex items-center justify-between border-b border-border pb-3">
@@ -1220,44 +1275,6 @@ export default function TrackingWarranty() {
                     </div>
                   </div>
                 ))}
-              </div>
-            </div>
-          </div>
-
-          {/* SECTION 3: SUPPLIER & BRAND DISTRIBUTION */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Report 1: Supplier Distribution */}
-            <div className="p-5 bg-card rounded-2xl border border-border shadow-sm space-y-4">
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <div className="flex items-center gap-2">
-                  <Building2 className="w-5 h-5 text-sky-600" />
-                  <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100">
-                    Báo Cáo Phân Bổ Theo Nhà Thầu (Supplier)
-                  </h4>
-                </div>
-                <span className="text-xs font-mono text-sky-600 font-semibold bg-sky-50 dark:bg-sky-950 px-2 py-0.5 rounded-md">
-                  Click để lọc
-                </span>
-              </div>
-              <div className="space-y-2.5">
-                {analystBreakdowns.supplierBreakdown.map(([supplier, count]) => {
-                  const pct = Math.round((count / (warrantyItems.length || 1)) * 100);
-                  return (
-                    <div 
-                      key={supplier} 
-                      onClick={() => handleFilterFromChart('supplier', supplier)}
-                      className="space-y-1 p-1 hover:bg-sky-50 dark:hover:bg-sky-950/40 rounded-lg transition-all cursor-pointer group"
-                    >
-                      <div className="flex justify-between text-xs font-medium">
-                        <span className="text-slate-800 dark:text-slate-200 font-bold group-hover:text-sky-600 transition-colors">{supplier}</span>
-                        <span className="text-slate-500 font-mono">{count} ca ({pct}%)</span>
-                      </div>
-                      <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                        <div className="h-full bg-sky-500 rounded-full" style={{ width: `${pct}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
             </div>
 
@@ -1440,17 +1457,6 @@ export default function TrackingWarranty() {
                     {b}
                   </option>
                 ))}
-              </select>
-
-              {/* Coverage Filter */}
-              <select
-                value={selectedCoverage}
-                onChange={(e) => setSelectedCoverage(e.target.value)}
-                className="bg-background border border-border text-foreground text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-sky-500/20 max-w-[140px] truncate cursor-pointer"
-              >
-                <option value="all">Tất cả Phạm vi</option>
-                <option value="free">Trong phạm vi BH</option>
-                <option value="paid">Ngoài phạm vi BH</option>
               </select>
             </div>
           </div>
