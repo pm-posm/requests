@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Papa from 'papaparse';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { 
   Search, RefreshCw, ShieldCheck, AlertTriangle, 
@@ -199,6 +200,45 @@ export default function TrackingWarranty() {
     items: Array<{ item: WarrantyItem; days: number }>;
   } | null>(null);
   const [slaModalFilter, setSlaModalFilter] = useState('');
+
+  // Query raw_requests from Supabase to map Column T (Column 20) Deadline & Request Date 1:1 for all warranty items
+  const { data: rawRequestDeadlines } = useQuery({
+    queryKey: ['raw_requests_deadlines_map'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('raw_requests')
+        .select('sheet_row_index, request_id, ess_store_code, deadline, date_of_rq, ngay_quick_fix');
+      if (error) return [];
+      return data || [];
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+
+  const mappedDeadline = useMemo(() => {
+    if (!selectedItem) return '';
+
+    // 1. Explicit requestDeadline on item
+    if (selectedItem.requestDeadline && selectedItem.requestDeadline.trim()) {
+      return selectedItem.requestDeadline.trim();
+    }
+
+    // 2. Look up in Supabase raw_requests table by rowId, requestId, or storeCode
+    if (rawRequestDeadlines && rawRequestDeadlines.length > 0) {
+      const rowIdNum = parseInt(String(selectedItem.rowId || selectedItem.requestId || '').replace(/\D/g, ''), 10);
+      const matched = rawRequestDeadlines.find(r => 
+        (rowIdNum > 0 && r.sheet_row_index === rowIdNum) ||
+        (r.request_id && selectedItem.requestId && r.request_id.toLowerCase().trim() === selectedItem.requestId.toLowerCase().trim()) ||
+        (r.ess_store_code && selectedItem.storeCode && r.ess_store_code.toLowerCase().trim() === selectedItem.storeCode.toLowerCase().trim())
+      );
+      if (matched) {
+        const found = matched.deadline || matched.ngay_quick_fix || matched.date_of_rq;
+        if (found && found.trim()) return found.trim();
+      }
+    }
+
+    // 3. Fallback to expectedDate or sentDate
+    return selectedItem.expectedDate || selectedItem.sentDate || '';
+  }, [selectedItem, rawRequestDeadlines]);
 
   // Copy helper
   const handleCopy = (text: string, label: string) => {
@@ -1882,7 +1922,7 @@ export default function TrackingWarranty() {
                       Deadline request:
                     </label>
                     <span className="font-bold text-indigo-700 dark:text-indigo-300 block text-xs">
-                      {selectedItem.requestDeadline || selectedItem.expectedDate || 'Chưa có deadline'}
+                      {mappedDeadline || 'Chưa có deadline'}
                     </span>
                   </div>
 
