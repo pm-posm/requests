@@ -77,8 +77,8 @@ const INITIAL_REAL_WARRANTY_ITEMS: WarrantyItem[] = [
     projectCode: '118420U01-U10 Dove Hair MT Total Dream Campaign',
     supplier: 'Link4',
     errorDetail: 'Tuýp kem hư hỏng',
-    warrantyCoverage: 'Trong phạm vi bảo hành',
-    warrantyCost: 'Miễn phí',
+    warrantyCoverage: '',
+    warrantyCost: '',
     progress: 'Not started',
     note: ''
   },
@@ -100,8 +100,8 @@ const INITIAL_REAL_WARRANTY_ITEMS: WarrantyItem[] = [
     supplier: 'Link4',
     mailTitle: '[Bảo hành]-[BH-635]: 118420U01-U10 Dove Hair MT Total Dream Campaign GE Customize_ Coop Phạm Văn Đồng',
     errorDetail: 'GE tắt đèn, màn hình vẫn hoạt động',
-    warrantyCoverage: 'Trong phạm vi bảo hành',
-    warrantyCost: 'Miễn phí',
+    warrantyCoverage: '',
+    warrantyCost: '',
     progress: 'Hoàn thành',
     note: 'Done 20/7'
   },
@@ -122,8 +122,8 @@ const INITIAL_REAL_WARRANTY_ITEMS: WarrantyItem[] = [
     projectCode: '',
     supplier: '',
     errorDetail: 'Lắp đặt chưa vệ sinh POSM, nhiều chỗ trầy xước',
-    warrantyCoverage: 'Trong phạm vi bảo hành',
-    warrantyCost: 'Miễn phí',
+    warrantyCoverage: '',
+    warrantyCost: '',
     progress: 'Not started',
     note: 'Đã khắc phục vấn đề vệ sinh, 2 tấm mica bị xước dự tính thay ngày 25/6'
   }
@@ -1446,6 +1446,7 @@ export default function TrackingWarranty() {
                       onChange={(e) => setEditWarrantyCoverage(e.target.value)}
                       className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs font-semibold text-emerald-600 cursor-pointer"
                     >
+                      <option value="">-- Chưa chọn (Để trống) --</option>
                       <option value="Trong phạm vi bảo hành">Trong phạm vi bảo hành</option>
                       <option value="Ngoài phạm vi bảo hành">Ngoài phạm vi bảo hành</option>
                     </select>
@@ -1457,6 +1458,7 @@ export default function TrackingWarranty() {
                       onChange={(e) => setEditWarrantyCost(e.target.value)}
                       className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs font-semibold text-foreground cursor-pointer"
                     >
+                      <option value="">-- Chưa chọn (Để trống) --</option>
                       <option value="Miễn phí">Miễn phí (Theo hợp đồng)</option>
                       <option value="Có tính phí">Có tính phí phát sinh</option>
                     </select>

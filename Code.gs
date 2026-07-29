@@ -1,5 +1,5 @@
 /**
- * HE THONG TU DONG HOA VA DONG BO DU LIEU BAO HANH (VERSION 2026 - FULL COL W INSTALLATION DATE)
+ * HE THONG TU DONG HOA VA DONG BO DU LIEU BAO HANH (FULL COMPATIBLE VERSION - HỖ TRỢ CỘT W NGÀY LẮP ĐẶT)
  * Source Sheet ID: 1sbp9fgrkywkns0q-o1iiAIPo2dJp22uQ8w39L7U4jIU (Tab: Mer View 2026)
  * Target Sheet ID: 119LpiU1XheXgOxKWxw17E_u4vgRTBPhc-4FADDS8B1Q (Tab: BaoHanh_Model)
  */
@@ -31,24 +31,26 @@ const WARRANTY_CONFIG = {
   
   VALUE_PHUONG_AN_BAO_HANH: 'Supplier bảo hành',
   VALUE_STATUS_BAO_HANH: 'Supplier Bảo Hành',
-  VALUE_TIEN_DO_NOT_STARTED: 'Not Started',
+  VALUE_TIEN_DO_NOT_STARTED: 'Not started',
   VALUE_TIEN_DO_DA_GUI_MAIL: 'Vis - Đã gửi RQ tới Agency',
   VALUE_HOAN_THANH: 'Hoàn Thành',
   VALUE_CANCELLED: 'Cancelled'
 };
 
 /**
- * 1. TRIGGER KHI CHỈNH SỬA TỰ ĐỘNG TRÊN MER VIEW 2026 (ONEDIT)
+ * 1. TRIGGER KHI CHỈNH SỬA TỰ ĐỘNG (ONEDIT)
  */
 function onEdit(e) {
   if (!e) return;
   const range = e.range;
   const sheet = range.getSheet();
+  
   const sheetName = sheet.getName();
   const col = range.getColumn();
   const row = range.getRow();
   if (row < 2) return;
 
+  // A. Xử lý trên Tab Mer View 2026 (Sheet Source)
   if (sheetName === WARRANTY_CONFIG.SOURCE_SHEET_NAME) {
     if (col === WARRANTY_CONFIG.COL_SOURCE_PHUONG_AN) {
       const newValue = String(e.value || '').trim();
@@ -62,66 +64,184 @@ function onEdit(e) {
         handleCancelOrChange(sheet, row, range, e.oldValue);
       }
     }
-  }
-}
-
-/**
- * 2. TRIGGER DỒN THÔNG TIN TỪ MER VIEW 2026 SANG BAOHANH_MODEL
- */
-function pushToWarrantySheet(sourceSheet, sourceRow) {
-  const targetSs = SpreadsheetApp.openById(WARRANTY_CONFIG.TARGET_SPREADSHEET_ID);
-  let targetSheet = targetSs.getSheetByName(WARRANTY_CONFIG.TARGET_SHEET_NAME);
-  
-  if (!targetSheet) return;
-
-  const requestId = 'BH-' + sourceRow;
-  sourceSheet.getRange(sourceRow, WARRANTY_CONFIG.COL_SOURCE_REQUEST_ID).setValue(requestId);
-
-  const dateRq = formatDate(sourceSheet.getRange(sourceRow, WARRANTY_CONFIG.COL_SOURCE_DATE_RQ).getValue());
-  const visTech = sourceSheet.getRange(sourceRow, WARRANTY_CONFIG.COL_SOURCE_MER).getValue();
-  const srName = sourceSheet.getRange(sourceRow, WARRANTY_CONFIG.COL_SOURCE_SR).getValue();
-  const storeName = sourceSheet.getRange(sourceRow, WARRANTY_CONFIG.COL_SOURCE_STORE_NAME).getValue();
-  const storeCode = sourceSheet.getRange(sourceRow, WARRANTY_CONFIG.COL_SOURCE_STORE_CODE).getValue();
-  const posmType = sourceSheet.getRange(sourceRow, WARRANTY_CONFIG.COL_SOURCE_POSM).getValue();
-  const cat = sourceSheet.getRange(sourceRow, WARRANTY_CONFIG.COL_SOURCE_CAT).getValue();
-  const brand = sourceSheet.getRange(sourceRow, WARRANTY_CONFIG.COL_SOURCE_BRAND).getValue();
-  const srNote = sourceSheet.getRange(sourceRow, WARRANTY_CONFIG.COL_SOURCE_SR_NOTE).getValue();
-
-  let targetRow = -1;
-  const lastTargetRow = targetSheet.getLastRow();
-  if (lastTargetRow > 1) {
-    const dataRange = targetSheet.getRange(2, 1, lastTargetRow - 1, 2).getValues();
-    for (let i = 0; i < dataRange.length; i++) {
-      if (String(dataRange[i][1] || '').trim() === requestId || String(dataRange[i][0] || '').trim() == sourceRow) {
-        targetRow = i + 2;
-        break;
+    
+    if (col === WARRANTY_CONFIG.COL_SOURCE_STATUS ||
+        col === WARRANTY_CONFIG.COL_SOURCE_TIEN_DO ||
+        col === WARRANTY_CONFIG.COL_SOURCE_TITLE_MAIL || 
+        col === WARRANTY_CONFIG.COL_SOURCE_MA_DU_AN || 
+        col === WARRANTY_CONFIG.COL_SOURCE_SUPPLIER ||
+        col === WARRANTY_CONFIG.COL_SOURCE_REQUEST_ID) {
+        
+      const currentPhuongAn = String(sheet.getRange(row, WARRANTY_CONFIG.COL_SOURCE_PHUONG_AN).getValue() || '').trim();
+      
+      if (isWarrantyOption(currentPhuongAn)) {
+        const requestId = sheet.getRange(row, WARRANTY_CONFIG.COL_SOURCE_REQUEST_ID).getValue() || ('BH-' + row);
+        
+        if (e.oldValue !== undefined && String(e.oldValue).trim() !== '') {
+          range.setValue(e.oldValue);
+        } else {
+          range.setValue('');
+          range.clearContent();
+        }
+        
+        SpreadsheetApp.flush();
+        
+        try {
+          const ui = SpreadsheetApp.getUi();
+          ui.alert(
+            '⚠️ CẢNH BÁO QUY TRÌNH BẢO HÀNH!',
+            'Dòng này thuộc luồng Bảo hành (Mã: ' + requestId + ').\n\n' +
+            'Status, Tiến độ dự án, Mã dự án và Supplier được quản lý tự động từ Sheet Bảo hành / Dashboard.\n' +
+            'Vui lòng chỉnh sửa trực tiếp trên Dashboard hoặc tab "BaoHanh_Model"!',
+            ui.ButtonSet.OK
+          );
+        } catch(err) {
+          Logger.log(err);
+        }
       }
     }
   }
 
-  if (targetRow === -1) {
-    targetRow = Math.max(lastTargetRow + 1, 2);
+  // B. Xử lý trên Tab BaoHanh_Model (Sheet Bảo hành)
+  else if (sheetName === WARRANTY_CONFIG.TARGET_SHEET_NAME) {
+    onEditTargetSheet(e);
   }
-
-  targetSheet.getRange(targetRow, 1).setValue(sourceRow);
-  targetSheet.getRange(targetRow, 2).setValue(requestId);
-  targetSheet.getRange(targetRow, 3).setValue(storeName);
-  targetSheet.getRange(targetRow, 4).setValue(storeCode);
-  targetSheet.getRange(targetRow, 5).setValue(srName);
-  targetSheet.getRange(targetRow, 6).setValue(visTech);
-  targetSheet.getRange(targetRow, 7).setValue(posmType);
-  targetSheet.getRange(targetRow, 8).setValue(cat);
-  targetSheet.getRange(targetRow, 9).setValue(brand);
-  targetSheet.getRange(targetRow, 10).setValue(dateRq);
-  targetSheet.getRange(targetRow, 14).setValue(srNote);
-  targetSheet.getRange(targetRow, 17).setValue(WARRANTY_CONFIG.VALUE_TIEN_DO_NOT_STARTED);
-
-  sourceSheet.getRange(sourceRow, WARRANTY_CONFIG.COL_SOURCE_STATUS).setValue(WARRANTY_CONFIG.VALUE_STATUS_BAO_HANH);
-  sourceSheet.getRange(sourceRow, WARRANTY_CONFIG.COL_SOURCE_TIEN_DO).setValue(WARRANTY_CONFIG.VALUE_TIEN_DO_NOT_STARTED);
 }
 
 /**
- * 3. DỒN NGHỊCH TỪ BAOHANH_MODEL SANG MER VIEW 2026
+ * HÀM ĐẨY DATA SANG SHEET BẢO HÀNH (BaoHanh_Model)
+ */
+function pushToWarrantySheet(sourceSheet, row) {
+  const targetSs = SpreadsheetApp.openById(WARRANTY_CONFIG.TARGET_SPREADSHEET_ID);
+  let targetSheet = targetSs.getSheetByName(WARRANTY_CONFIG.TARGET_SHEET_NAME);
+  if (!targetSheet) {
+    targetSheet = targetSs.getSheets()[0];
+  }
+  
+  const rowId = row;
+  const requestId = 'BH-' + rowId;
+  
+  const sourceRowData = sourceSheet.getRange(row, 1, 1, 35).getValues()[0];
+  const targetData = targetSheet.getDataRange().getValues();
+  let existingTargetRow = -1;
+  for (let i = 1; i < targetData.length; i++) {
+    if (String(targetData[i][0]) === String(rowId) || String(targetData[i][1]) === requestId) {
+      existingTargetRow = i + 1;
+      break;
+    }
+  }
+  
+  const tienDoGoc = String(sourceRowData[WARRANTY_CONFIG.COL_SOURCE_TIEN_DO - 1] || '').trim();
+  let tienDoTarget = WARRANTY_CONFIG.VALUE_TIEN_DO_NOT_STARTED;
+  let statusSource = WARRANTY_CONFIG.VALUE_STATUS_BAO_HANH;
+  let tienDoSource = WARRANTY_CONFIG.VALUE_TIEN_DO_NOT_STARTED;
+
+  if (tienDoGoc.toLowerCase() === WARRANTY_CONFIG.VALUE_HOAN_THANH.toLowerCase() || 
+      tienDoGoc.toLowerCase() === 'hoàn thành') {
+    tienDoTarget = 'Hoàn thành';
+    statusSource = WARRANTY_CONFIG.VALUE_STATUS_BAO_HANH;
+    tienDoSource = WARRANTY_CONFIG.VALUE_HOAN_THANH;
+  } else if (sourceRowData[WARRANTY_CONFIG.COL_SOURCE_TITLE_MAIL - 1]) {
+    tienDoSource = WARRANTY_CONFIG.VALUE_TIEN_DO_DA_GUI_MAIL;
+  }
+  
+  const newTargetRow = [
+    rowId,                                                              // Row_ID (Col A - 1)
+    requestId,                                                          // Request ID (Col B - 2)
+    sourceRowData[WARRANTY_CONFIG.COL_SOURCE_STORE_NAME - 1] || '',      // Store name (Col C - 3)
+    sourceRowData[WARRANTY_CONFIG.COL_SOURCE_STORE_CODE - 1] || '',      // Store code (Col D - 4)
+    sourceRowData[WARRANTY_CONFIG.COL_SOURCE_SR - 1] || '',              // SR (Col E - 5)
+    sourceRowData[WARRANTY_CONFIG.COL_SOURCE_MER - 1] || '',             // VIS-Tech (Col F - 6)
+    sourceRowData[WARRANTY_CONFIG.COL_SOURCE_POSM - 1] || '',            // POSM (Col G - 7)
+    sourceRowData[WARRANTY_CONFIG.COL_SOURCE_CAT - 1] || '',             // CAT (Col H - 8)
+    sourceRowData[WARRANTY_CONFIG.COL_SOURCE_BRAND - 1] || '',           // BRAND (Col I - 9)
+    formatDate(sourceRowData[WARRANTY_CONFIG.COL_SOURCE_DATE_RQ - 1]),   // Ngày gửi (Col J - 10)
+    sourceRowData[WARRANTY_CONFIG.COL_SOURCE_MA_DU_AN - 1] || '',       // Mã dự án (Col K - 11)
+    sourceRowData[WARRANTY_CONFIG.COL_SOURCE_SUPPLIER - 1] || '',        // Supplier (Col L - 12)
+    sourceRowData[WARRANTY_CONFIG.COL_SOURCE_TITLE_MAIL - 1] || '',      // Title mail (Col M - 13)
+    sourceRowData[WARRANTY_CONFIG.COL_SOURCE_SR_NOTE - 1] || '',         // Chi tiết lỗi (Col N - 14)
+    '',                                                                 // Trạng thái bảo hành (Col O - 15) -> Để rỗng theo mặc định
+    '',                                                                 // Chi phí bảo hành (Col P - 16) -> Để rỗng theo mặc định
+    tienDoTarget,                                                       // Tiến độ (Col Q - 17)
+    '',                                                                 // Ngày xử lý dự kiến (Col R - 18)
+    '',                                                                 // Ngày hoàn thành thực tế (Col S - 19)
+    '',                                                                 // Hình ảnh nghiệm thu (Col T - 20)
+    sourceRowData[WARRANTY_CONFIG.COL_SOURCE_NOTE - 1] || '',            // Note (Col U - 21)
+    '',                                                                 // Ngày raise mail (Col V - 22)
+    ''                                                                  // Ngày lắp đặt (Col W - 23)
+  ];
+  
+  if (existingTargetRow === -1) {
+    targetSheet.appendRow(newTargetRow);
+  } else {
+    targetSheet.getRange(existingTargetRow, 1, 1, newTargetRow.length).setValues([newTargetRow]);
+  }
+  
+  sourceSheet.getRange(row, WARRANTY_CONFIG.COL_SOURCE_REQUEST_ID).setValue(requestId);
+  sourceSheet.getRange(row, WARRANTY_CONFIG.COL_SOURCE_STATUS).setValue(statusSource);
+  sourceSheet.getRange(row, WARRANTY_CONFIG.COL_SOURCE_TIEN_DO).setValue(tienDoSource);
+}
+
+/**
+ * XỬ LÝ CHẶT CHẼ KHI CHỌN NHẦM / ĐỔI PHƯƠNG ÁN
+ */
+function handleCancelOrChange(sourceSheet, row, rangePhuongAn, oldValue) {
+  const targetSs = SpreadsheetApp.openById(WARRANTY_CONFIG.TARGET_SPREADSHEET_ID);
+  let targetSheet = targetSs.getSheetByName(WARRANTY_CONFIG.TARGET_SHEET_NAME);
+  if (!targetSheet) targetSheet = targetSs.getSheets()[0];
+  
+  const rowId = row;
+  const requestId = 'BH-' + rowId;
+  
+  const targetData = targetSheet.getDataRange().getValues();
+  let foundTargetRow = -1;
+  let hasProcessedData = false;
+  
+  for (let i = 1; i < targetData.length; i++) {
+    if (String(targetData[i][0]) === String(rowId) || String(targetData[i][1]) === requestId) {
+      foundTargetRow = i + 1;
+      
+      const supplierVal = String(targetData[i][11] || '').trim();     // Supplier (Col L)
+      const titleMailVal = String(targetData[i][12] || '').trim();    // Title Mail (Col M)
+      const statusBH = String(targetData[i][14] || '').trim();        // Trạng thái BH (Col O)
+      const costBH = String(targetData[i][15] || '').trim();          // Chi phí BH (Col P)
+      const tienDoBH = String(targetData[i][16] || '').trim();        // Tiến độ (Col Q)
+      const dateExpected = String(targetData[i][17] || '').trim();    // Ngày hẹn (Col R)
+      
+      if (supplierVal !== '' || titleMailVal !== '' || statusBH !== '' || costBH !== '' || dateExpected !== '' ||
+          (tienDoBH.toLowerCase() !== 'not started' && tienDoBH !== '')) {
+        hasProcessedData = true;
+      }
+      break;
+    }
+  }
+  
+  if (hasProcessedData) {
+    rangePhuongAn.setValue(WARRANTY_CONFIG.VALUE_PHUONG_AN_BAO_HANH);
+    SpreadsheetApp.flush();
+    
+    try {
+      const ui = SpreadsheetApp.getUi();
+      ui.alert(
+        '⚠️ KHÔNG THỂ ĐỔI PHƯƠNG ÁN!',
+        'Yêu cầu này (' + requestId + ') đã được Team Bảo hành tiếp nhận & xử lý (đã có Supplier, Mail, hoặc Chi phí...).\n\n' +
+        'Bạn KHÔNG THỂ thay đổi Phương án trực tiếp ở đây để tránh làm sai lệch dữ liệu.\n' +
+        'Nếu muốn hủy, vui lòng mở tab "BaoHanh_Model" hoặc Dashboard và chuyển Tiến độ sang Cancel!',
+        ui.ButtonSet.OK
+      );
+    } catch(err) {
+      Logger.log(err);
+    }
+  } else {
+    if (foundTargetRow !== -1) {
+      targetSheet.deleteRow(foundTargetRow);
+    }
+    sourceSheet.getRange(row, WARRANTY_CONFIG.COL_SOURCE_REQUEST_ID).setValue('');
+  }
+}
+
+/**
+ * 2. TRIGGER KHI THAO TÁC TRÊN SHEET BẢO HÀNH HOẶC TỪ DASHBOARD (SYNC NGHỊCH VỀ MER VIEW 2026)
  */
 function onEditTargetSheet(e) {
   let sheet, row;
@@ -135,59 +255,51 @@ function onEditTargetSheet(e) {
   if (row < 2) return;
   
   const rawRowId = sheet.getRange(row, 1).getValue();
-  const reqIdVal = String(sheet.getRange(row, 2).getValue() || '').trim();
-  if (!rawRowId && !reqIdVal) return;
+  if (!rawRowId) return;
+  
+  const rowId = parseInt(String(rawRowId).replace(/\D/g, ''), 10);
+  if (isNaN(rowId) || rowId < 2) return;
 
   const sourceSs = SpreadsheetApp.openById(WARRANTY_CONFIG.SOURCE_SPREADSHEET_ID);
   const sourceSheet = sourceSs.getSheetByName(WARRANTY_CONFIG.SOURCE_SHEET_NAME);
   if (!sourceSheet) return;
 
-  // Dò tìm dòng chính xác trên Mer View 2026
-  let sourceRow = -1;
-  const lastSourceRow = sourceSheet.getLastRow();
-  if (reqIdVal && lastSourceRow > 1) {
-    const reqColValues = sourceSheet.getRange(2, WARRANTY_CONFIG.COL_SOURCE_REQUEST_ID, lastSourceRow - 1, 1).getValues();
-    for (let i = 0; i < reqColValues.length; i++) {
-      if (String(reqColValues[i][0] || '').trim().toLowerCase() === reqIdVal.toLowerCase()) {
-        sourceRow = i + 2;
-        break;
-      }
-    }
-  }
-
-  if (sourceRow === -1 && rawRowId) {
-    const parsedRow = parseInt(String(rawRowId).replace(/\D/g, ''), 10);
-    if (!isNaN(parsedRow) && parsedRow >= 2 && parsedRow <= lastSourceRow) {
-      sourceRow = parsedRow;
-    }
-  }
-
-  if (sourceRow < 2) return;
-
   const rowData = sheet.getRange(row, 1, 1, 23).getValues()[0];
   const maDuAnVal = String(rowData[10] || '').trim();     // Col K (Col 11 - Mã dự án)
   const supplierVal = String(rowData[11] || '').trim();   // Col L (Col 12 - Supplier)
   const titleMailVal = String(rowData[12] || '').trim();  // Col M (Col 13 - Title mail)
+  const trangThaiBH = String(rowData[14] || '').trim();   // Col O (Col 15 - Trạng thái bảo hành)
+  const chiPhiBH = String(rowData[15] || '').trim();     // Col P (Col 16 - Chi phí bảo hành)
   const tienDoVal = String(rowData[16] || '').trim();     // Col Q (Col 17 - Tiến độ)
+  const dateExpected = String(rowData[17] || '').trim();  // Col R (Col 18 - Ngày hẹn)
 
-  // Sync Mã dự án, Supplier, Title mail về Sheet Source (Cột AB, AC, AA)
-  sourceSheet.getRange(sourceRow, WARRANTY_CONFIG.COL_SOURCE_MA_DU_AN).setValue(maDuAnVal);
-  sourceSheet.getRange(sourceRow, WARRANTY_CONFIG.COL_SOURCE_SUPPLIER).setValue(supplierVal);
-  sourceSheet.getRange(sourceRow, WARRANTY_CONFIG.COL_SOURCE_TITLE_MAIL).setValue(titleMailVal);
+  // 1. Sync Mã dự án, Supplier, Title mail về Sheet Source (Cột AB, AC, AA)
+  sourceSheet.getRange(rowId, WARRANTY_CONFIG.COL_SOURCE_MA_DU_AN).setValue(maDuAnVal);
+  sourceSheet.getRange(rowId, WARRANTY_CONFIG.COL_SOURCE_SUPPLIER).setValue(supplierVal);
+  sourceSheet.getRange(rowId, WARRANTY_CONFIG.COL_SOURCE_TITLE_MAIL).setValue(titleMailVal);
 
   const pLower = tienDoVal.toLowerCase();
+
+  // A. Nếu Tiến độ = "Hoàn thành"
   if (pLower === 'hoàn thành') {
-    sourceSheet.getRange(sourceRow, WARRANTY_CONFIG.COL_SOURCE_STATUS).setValue(WARRANTY_CONFIG.VALUE_STATUS_BAO_HANH);
-    sourceSheet.getRange(sourceRow, WARRANTY_CONFIG.COL_SOURCE_TIEN_DO).setValue(WARRANTY_CONFIG.VALUE_HOAN_THANH);
-  } else if (pLower === 'cancel' || pLower === 'cancelled') {
-    sourceSheet.getRange(sourceRow, WARRANTY_CONFIG.COL_SOURCE_STATUS).setValue('Cancelled');
-    sourceSheet.getRange(sourceRow, WARRANTY_CONFIG.COL_SOURCE_TIEN_DO).setValue(WARRANTY_CONFIG.VALUE_CANCELLED);
-  } else if ((pLower !== 'not started' && pLower !== '') || titleMailVal !== '' || maDuAnVal !== '' || supplierVal !== '') {
-    sourceSheet.getRange(sourceRow, WARRANTY_CONFIG.COL_SOURCE_STATUS).setValue(WARRANTY_CONFIG.VALUE_STATUS_BAO_HANH);
-    sourceSheet.getRange(sourceRow, WARRANTY_CONFIG.COL_SOURCE_TIEN_DO).setValue(WARRANTY_CONFIG.VALUE_TIEN_DO_DA_GUI_MAIL);
-  } else {
-    sourceSheet.getRange(sourceRow, WARRANTY_CONFIG.COL_SOURCE_STATUS).setValue(WARRANTY_CONFIG.VALUE_STATUS_BAO_HANH);
-    sourceSheet.getRange(sourceRow, WARRANTY_CONFIG.COL_SOURCE_TIEN_DO).setValue(WARRANTY_CONFIG.VALUE_TIEN_DO_NOT_STARTED);
+    sourceSheet.getRange(rowId, WARRANTY_CONFIG.COL_SOURCE_STATUS).setValue(WARRANTY_CONFIG.VALUE_STATUS_BAO_HANH);
+    sourceSheet.getRange(rowId, WARRANTY_CONFIG.COL_SOURCE_TIEN_DO).setValue(WARRANTY_CONFIG.VALUE_HOAN_THANH);
+  } 
+  // B. Nếu Tiến độ = "Cancel"
+  else if (pLower === 'cancel' || pLower === 'cancelled') {
+    sourceSheet.getRange(rowId, WARRANTY_CONFIG.COL_SOURCE_STATUS).setValue('Cancelled');
+    sourceSheet.getRange(rowId, WARRANTY_CONFIG.COL_SOURCE_TIEN_DO).setValue(WARRANTY_CONFIG.VALUE_CANCELLED);
+  }
+  // C. Với BẤT KỲ trạng thái trung gian nào
+  else if ((pLower !== 'not started' && pLower !== '') || 
+           titleMailVal !== '' || trangThaiBH !== '' || chiPhiBH !== '' || dateExpected !== '' || maDuAnVal !== '' || supplierVal !== '') {
+    sourceSheet.getRange(rowId, WARRANTY_CONFIG.COL_SOURCE_STATUS).setValue(WARRANTY_CONFIG.VALUE_STATUS_BAO_HANH);
+    sourceSheet.getRange(rowId, WARRANTY_CONFIG.COL_SOURCE_TIEN_DO).setValue(WARRANTY_CONFIG.VALUE_TIEN_DO_DA_GUI_MAIL);
+  }
+  // D. Nếu vẫn Not started
+  else {
+    sourceSheet.getRange(rowId, WARRANTY_CONFIG.COL_SOURCE_STATUS).setValue(WARRANTY_CONFIG.VALUE_STATUS_BAO_HANH);
+    sourceSheet.getRange(rowId, WARRANTY_CONFIG.COL_SOURCE_TIEN_DO).setValue(WARRANTY_CONFIG.VALUE_TIEN_DO_NOT_STARTED);
   }
 }
 
@@ -197,9 +309,9 @@ function onEditTargetSheet(e) {
 function processSyncRequest(params) {
   const rowIdRaw = String(params.rowId || params.requestId || params.id || '').trim();
   const rowIdNum = parseInt(rowIdRaw.replace(/\D/g, ''), 10);
-  const reqIdStr = rowIdRaw.indexOf('BH-') === 0 ? rowIdRaw : (rowIdNum > 0 ? ('BH-' + rowIdNum) : rowIdRaw);
+  const reqIdStr = rowIdRaw.indexOf('BH-') === 0 ? rowIdRaw : ('BH-' + rowIdNum);
 
-  if (!rowIdRaw && !reqIdStr) {
+  if (!rowIdRaw && !rowIdNum) {
     return { status: 'error', message: 'Thiếu thông tin rowId hoặc requestId' };
   }
 
@@ -216,8 +328,8 @@ function processSyncRequest(params) {
       const colANum = parseInt(colA.replace(/\D/g, ''), 10);
 
       if (
-        (reqIdStr && colB.toLowerCase() === reqIdStr.toLowerCase()) ||
         (rowIdNum > 0 && colANum === rowIdNum) ||
+        colB.toLowerCase() === reqIdStr.toLowerCase() ||
         colA.toLowerCase() === reqIdStr.toLowerCase() ||
         colB.toLowerCase() === rowIdRaw.toLowerCase()
       ) {
@@ -228,27 +340,73 @@ function processSyncRequest(params) {
   }
 
   if (targetRow > 1) {
-    if (params.projectCode !== undefined) targetSheet.getRange(targetRow, 11).setValue(String(params.projectCode).trim());
-    if (params.supplier !== undefined) targetSheet.getRange(targetRow, 12).setValue(String(params.supplier).trim());
-    if (params.titleMail !== undefined && String(params.titleMail).trim() !== '') targetSheet.getRange(targetRow, 13).setValue(String(params.titleMail).trim());
-    if (params.warrantyCoverage !== undefined) targetSheet.getRange(targetRow, 15).setValue(String(params.warrantyCoverage).trim());
-    if (params.warrantyCost !== undefined) targetSheet.getRange(targetRow, 16).setValue(String(params.warrantyCost).trim());
-    if (params.progress !== undefined && String(params.progress).trim() !== '') targetSheet.getRange(targetRow, 17).setValue(String(params.progress).trim());
-    if (params.expectedDate !== undefined) targetSheet.getRange(targetRow, 18).setValue(String(params.expectedDate).trim());
-    if (params.completedDate !== undefined) targetSheet.getRange(targetRow, 19).setValue(String(params.completedDate).trim());
-    if (params.note !== undefined) targetSheet.getRange(targetRow, 21).setValue(String(params.note).trim());
-    if (params.raiseMailTime !== undefined && String(params.raiseMailTime).trim() !== '') targetSheet.getRange(targetRow, 22).setValue(String(params.raiseMailTime).trim());
-    if (params.installationDate !== undefined) targetSheet.getRange(targetRow, 23).setValue(String(params.installationDate).trim()); // Cột W (23 - Ngày lắp đặt)
+    // 1. Cập nhật Mã dự án (Cột K - 11)
+    if (params.projectCode !== undefined) {
+      targetSheet.getRange(targetRow, 11).setValue(String(params.projectCode).trim());
+    }
+
+    // 2. Cập nhật Supplier (Cột L - 12)
+    if (params.supplier !== undefined) {
+      targetSheet.getRange(targetRow, 12).setValue(String(params.supplier).trim());
+    }
+
+    // 3. Cập nhật Title Mail (Cột M - 13)
+    if (params.titleMail !== undefined && String(params.titleMail).trim() !== '') {
+      targetSheet.getRange(targetRow, 13).setValue(String(params.titleMail).trim());
+    }
+
+    // 4. Cập nhật Trạng thái bảo hành (Cột O - 15)
+    if (params.warrantyCoverage !== undefined) {
+      targetSheet.getRange(targetRow, 15).setValue(String(params.warrantyCoverage).trim());
+    }
+
+    // 5. Cập nhật Chi phí bảo hành (Cột P - 16)
+    if (params.warrantyCost !== undefined) {
+      targetSheet.getRange(targetRow, 16).setValue(String(params.warrantyCost).trim());
+    }
+
+    // 6. Cập nhật Tiến độ (Cột Q - 17)
+    if (params.progress !== undefined && String(params.progress).trim() !== '') {
+      targetSheet.getRange(targetRow, 17).setValue(String(params.progress).trim());
+    }
+
+    // 7. Cập nhật Ngày hẹn xử lý dự kiến (Cột R - 18)
+    if (params.expectedDate !== undefined) {
+      targetSheet.getRange(targetRow, 18).setValue(String(params.expectedDate).trim());
+    }
+
+    // 8. Cập nhật Ngày hoàn thành thực tế (Cột S - 19)
+    if (params.completedDate !== undefined) {
+      targetSheet.getRange(targetRow, 19).setValue(String(params.completedDate).trim());
+    }
+
+    // 9. Cập nhật Note (Cột U - 21)
+    if (params.note !== undefined) {
+      targetSheet.getRange(targetRow, 21).setValue(String(params.note).trim());
+    }
+
+    // 10. Cập nhật Ngày raise mail (Cột V - 22)
+    if (params.raiseMailTime !== undefined && String(params.raiseMailTime).trim() !== '') {
+      targetSheet.getRange(targetRow, 22).setValue(String(params.raiseMailTime).trim());
+    }
+
+    // 11. Cập nhật Ngày lắp đặt (Cột W - 23)
+    if (params.installationDate !== undefined) {
+      targetSheet.getRange(targetRow, 23).setValue(String(params.installationDate).trim());
+    }
 
     // Đồng bộ ngược về tab Mer View 2026
     onEditTargetSheet({ range: targetSheet.getRange(targetRow, 1) });
 
-    return { status: 'success', message: 'Đã cập nhật dữ liệu thành công lên BaoHanh_Model (gồm Cột W Ngày Lắp Đặt) và Mer View 2026' };
+    return { status: 'success', message: 'Đã cập nhật dữ liệu thành công lên BaoHanh_Model và Mer View 2026' };
   } else {
-    return { status: 'error', message: 'Không tìm thấy dòng tương ứng với ' + reqIdStr + ' trên BaoHanh_Model' };
+    return { status: 'error', message: 'Không tìm thấy dòng ' + rowIdRaw + ' trên BaoHanh_Model' };
   }
 }
 
+/**
+ * HTTP WEB APP ENDPOINT (DÙNG CẢ GET LẪN POST CHỐNG BỊ CHẶN BỞI BẤT KỲ TRÌNH DUYỆT NÀO)
+ */
 function doGet(e) {
   try {
     const res = processSyncRequest(e.parameter || {});
@@ -272,6 +430,39 @@ function doPost(e) {
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+/**
+ * 4. HÀM CHẠY MIGRATION DATA LỊCH SỬ
+ */
+function migrateHistoricalData() {
+  const sourceSs = SpreadsheetApp.openById(WARRANTY_CONFIG.SOURCE_SPREADSHEET_ID);
+  const sourceSheet = sourceSs.getSheetByName(WARRANTY_CONFIG.SOURCE_SHEET_NAME);
+  
+  const targetSs = SpreadsheetApp.openById(WARRANTY_CONFIG.TARGET_SPREADSHEET_ID);
+  let targetSheet = targetSs.getSheetByName(WARRANTY_CONFIG.TARGET_SHEET_NAME);
+  
+  if (!targetSheet) {
+    Logger.log('Không tìm thấy tab BaoHanh_Model!');
+    return;
+  }
+
+  const lastTargetRow = targetSheet.getLastRow();
+  if (lastTargetRow > 1) {
+    targetSheet.getRange(2, 1, lastTargetRow - 1, 23).clearContent();
+  }
+  
+  const lastRow = sourceSheet.getLastRow();
+  let count = 0;
+  
+  for (let r = 2; r <= lastRow; r++) {
+    const phuongAn = String(sourceSheet.getRange(r, WARRANTY_CONFIG.COL_SOURCE_PHUONG_AN).getValue() || '').trim();
+    if (isWarrantyOption(phuongAn)) {
+      pushToWarrantySheet(sourceSheet, r);
+      count++;
+    }
+  }
+  Logger.log('Đã chuyển đổi thành công ' + count + ' dòng dữ liệu lịch sử vào tab BaoHanh_Model!');
 }
 
 function isWarrantyOption(val) {
