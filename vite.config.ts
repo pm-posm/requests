@@ -5,7 +5,7 @@ import path from 'path'
 import fs from 'fs'
 import { liveSearchPlugin } from './src/server/liveSearchPlugin'
 
-// Plugin tự động nhân bản index.html sang 404.html cho GitHub Pages SPA Client Routing
+// Plugin tự động nhân bản index.html sang 404.html
 const copy404Plugin = () => ({
   name: 'copy-404',
   closeBundle() {
@@ -14,14 +14,13 @@ const copy404Plugin = () => ({
     const fourOhFourPath = path.resolve(distPath, '404.html')
     if (fs.existsSync(indexPath)) {
       fs.copyFileSync(indexPath, fourOhFourPath)
-      console.log('✓ Successfully created dist/404.html for GitHub Pages SPA Routing!')
     }
   }
 })
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: './',
+  base: '/',
   plugins: [react(), tailwindcss(), liveSearchPlugin(), copy404Plugin()],
   resolve: {
     alias: {
