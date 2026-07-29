@@ -187,6 +187,11 @@ export default function TrackingWarranty() {
   const [editInstallationDate, setEditInstallationDate] = useState('');
   const [isSyncingToSheet, setIsSyncingToSheet] = useState(false);
 
+  // Collapse / Expand toggle states for Analyst SLA Duration Breakdown Cards
+  const [expandedEarly, setExpandedEarly] = useState(false);
+  const [expandedMid, setExpandedMid] = useState(false);
+  const [expandedLong, setExpandedLong] = useState(false);
+
   // Copy helper
   const handleCopy = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -1200,22 +1205,35 @@ export default function TrackingWarranty() {
                       <p className="text-[11px] text-rose-600/70 italic">Không có ca nào bị hỏng sớm dưới 30 ngày.</p>
                     ) : (
                       <div className="space-y-1.5 pt-1">
-                        {analystBreakdowns.slaMetrics.earlyFailItems.map(({ item, days }) => (
+                        {(expandedEarly 
+                          ? analystBreakdowns.slaMetrics.earlyFailItems 
+                          : analystBreakdowns.slaMetrics.earlyFailItems.slice(0, 3)
+                        ).map(({ item, days }) => (
                           <div 
                             key={item.id}
                             onClick={() => { setSelectedItem(item); }}
-                            className="p-2 bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-800 rounded-lg flex items-center justify-between text-xs hover:border-rose-400 cursor-pointer transition-colors"
+                            className="p-2 bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-800 rounded-lg flex items-center justify-between text-xs hover:border-rose-400 cursor-pointer transition-colors shadow-2xs"
                           >
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-black text-rose-600">{item.requestId}</span>
-                              <span className="font-semibold text-slate-800 dark:text-slate-200">{item.storeName}</span>
-                              <span className="text-[10px] text-muted-foreground">({item.posmType})</span>
+                            <div className="flex items-center gap-2 truncate">
+                              <span className="font-mono font-black text-rose-600 shrink-0">{item.requestId}</span>
+                              <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">{item.storeName}</span>
+                              <span className="text-[10px] text-muted-foreground shrink-0">({item.posmType})</span>
                             </div>
-                            <span className="font-mono font-bold text-rose-700 dark:text-rose-300">
+                            <span className="font-mono font-bold text-rose-700 dark:text-rose-300 shrink-0">
                               Lắp xong {days} ngày ➔ Bị lỗi
                             </span>
                           </div>
                         ))}
+                        {analystBreakdowns.slaMetrics.earlyFailItems.length > 3 && (
+                          <button
+                            onClick={() => setExpandedEarly(!expandedEarly)}
+                            className="w-full py-1.5 text-center text-xs font-bold text-rose-700 dark:text-rose-300 hover:bg-rose-100/60 dark:hover:bg-rose-900/60 rounded-lg border border-dashed border-rose-300 dark:border-rose-700 transition-colors cursor-pointer"
+                          >
+                            {expandedEarly 
+                              ? '▲ Thu gọn danh sách ca hỏng sớm' 
+                              : `▼ Xem thêm ${analystBreakdowns.slaMetrics.earlyFailItems.length - 3} ca hỏng sớm`}
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1230,22 +1248,35 @@ export default function TrackingWarranty() {
                       <p className="text-[11px] text-amber-600/70 italic">Không có ca nào rơi vào khoảng 1 - 3 tháng.</p>
                     ) : (
                       <div className="space-y-1.5 pt-1">
-                        {analystBreakdowns.slaMetrics.midFailItems.map(({ item, days }) => (
+                        {(expandedMid 
+                          ? analystBreakdowns.slaMetrics.midFailItems 
+                          : analystBreakdowns.slaMetrics.midFailItems.slice(0, 3)
+                        ).map(({ item, days }) => (
                           <div 
                             key={item.id}
                             onClick={() => { setSelectedItem(item); }}
-                            className="p-2 bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center justify-between text-xs hover:border-amber-400 cursor-pointer transition-colors"
+                            className="p-2 bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center justify-between text-xs hover:border-amber-400 cursor-pointer transition-colors shadow-2xs"
                           >
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-black text-amber-600">{item.requestId}</span>
-                              <span className="font-semibold text-slate-800 dark:text-slate-200">{item.storeName}</span>
-                              <span className="text-[10px] text-muted-foreground">({item.posmType})</span>
+                            <div className="flex items-center gap-2 truncate">
+                              <span className="font-mono font-black text-amber-600 shrink-0">{item.requestId}</span>
+                              <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">{item.storeName}</span>
+                              <span className="text-[10px] text-muted-foreground shrink-0">({item.posmType})</span>
                             </div>
-                            <span className="font-mono font-bold text-amber-700 dark:text-amber-300">
+                            <span className="font-mono font-bold text-amber-700 dark:text-amber-300 shrink-0">
                               Lắp xong {days} ngày ➔ Bị lỗi
                             </span>
                           </div>
                         ))}
+                        {analystBreakdowns.slaMetrics.midFailItems.length > 3 && (
+                          <button
+                            onClick={() => setExpandedMid(!expandedMid)}
+                            className="w-full py-1.5 text-center text-xs font-bold text-amber-700 dark:text-amber-300 hover:bg-amber-100/60 dark:hover:bg-amber-900/60 rounded-lg border border-dashed border-amber-300 dark:border-amber-700 transition-colors cursor-pointer"
+                          >
+                            {expandedMid 
+                              ? '▲ Thu gọn danh sách ca (1 - 3 tháng)' 
+                              : `▼ Xem thêm ${analystBreakdowns.slaMetrics.midFailItems.length - 3} ca (1 - 3 tháng)`}
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1259,23 +1290,36 @@ export default function TrackingWarranty() {
                     {analystBreakdowns.slaMetrics.longFailItems.length === 0 ? (
                       <p className="text-[11px] text-emerald-600/70 italic">Chưa có dữ liệu ca hỏng sau 3 tháng.</p>
                     ) : (
-                      <div className="space-y-1.5 pt-1 max-h-48 overflow-y-auto custom-scrollbar">
-                        {analystBreakdowns.slaMetrics.longFailItems.map(({ item, days }) => (
+                      <div className="space-y-1.5 pt-1">
+                        {(expandedLong 
+                          ? analystBreakdowns.slaMetrics.longFailItems 
+                          : analystBreakdowns.slaMetrics.longFailItems.slice(0, 3)
+                        ).map(({ item, days }) => (
                           <div 
                             key={item.id}
                             onClick={() => { setSelectedItem(item); }}
-                            className="p-2 bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 rounded-lg flex items-center justify-between text-xs hover:border-emerald-400 cursor-pointer transition-colors"
+                            className="p-2 bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 rounded-lg flex items-center justify-between text-xs hover:border-emerald-400 cursor-pointer transition-colors shadow-2xs"
                           >
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-black text-emerald-600">{item.requestId}</span>
-                              <span className="font-semibold text-slate-800 dark:text-slate-200">{item.storeName}</span>
-                              <span className="text-[10px] text-muted-foreground">({item.posmType})</span>
+                            <div className="flex items-center gap-2 truncate">
+                              <span className="font-mono font-black text-emerald-600 shrink-0">{item.requestId}</span>
+                              <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">{item.storeName}</span>
+                              <span className="text-[10px] text-muted-foreground shrink-0">({item.posmType})</span>
                             </div>
-                            <span className="font-mono font-bold text-emerald-700 dark:text-emerald-300">
+                            <span className="font-mono font-bold text-emerald-700 dark:text-emerald-300 shrink-0">
                               Lắp xong {days} ngày ({Math.round(days / 30)} tháng) ➔ Bị lỗi
                             </span>
                           </div>
                         ))}
+                        {analystBreakdowns.slaMetrics.longFailItems.length > 3 && (
+                          <button
+                            onClick={() => setExpandedLong(!expandedLong)}
+                            className="w-full py-1.5 text-center text-xs font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100/60 dark:hover:bg-emerald-900/60 rounded-lg border border-dashed border-emerald-300 dark:border-emerald-700 transition-colors cursor-pointer"
+                          >
+                            {expandedLong 
+                              ? '▲ Thu gọn danh sách ca (> 3 tháng)' 
+                              : `▼ Xem thêm ${analystBreakdowns.slaMetrics.longFailItems.length - 3} ca (> 3 tháng)`}
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>

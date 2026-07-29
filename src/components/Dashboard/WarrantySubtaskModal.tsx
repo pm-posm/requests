@@ -541,7 +541,7 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
                 <div className="space-y-1 bg-slate-50 dark:bg-slate-800 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
                   <label className="text-slate-500 font-semibold text-[11px] block">⏳ Deadline request:</label>
                   <span className="font-bold text-indigo-700 dark:text-indigo-300 block text-xs">
-                    {record.deadline || record.ngay_quick_fix || 'Chưa có deadline'}
+                    {record.deadline || record.ngay_can_hoan_thanh || record.date_of_rq || record.ngay_quick_fix || 'Chưa có deadline'}
                   </span>
                 </div>
 
