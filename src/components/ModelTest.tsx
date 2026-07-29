@@ -260,78 +260,63 @@ export default function ModelTest() {
                         onClick={async () => {
                             try {
                                 setIsTriggeringSync(true);
-                                toast.loading('🚀 Đang gửi lệnh kích hoạt đồng bộ Mail 4 giai đoạn...', { id: 'sync_mail_toast' });
-                                
-                                let syncSuccess = false;
+                                toast.loading('🚀 Đang kích hoạt đồng bộ Mail 4 giai đoạn...', { id: 'sync_mail_toast' });
 
-                                // 1. Kích hoạt Supabase Edge Function (cron-sync-gmail)
+                                let syncSuccess = false;
+                                let edgeMessage = '';
+
+                                // 1. Kích hoạt Supabase Edge Function (cron-sync-gmail - Trực tiếp 100%, Không cần GitHub Token)
                                 try {
                                     const { data: edgeData, error: edgeErr } = await supabase.functions.invoke('cron-sync-gmail');
-                                    if (!edgeErr) {
+                                    if (!edgeErr && edgeData) {
                                         syncSuccess = true;
+                                        if (edgeData.message) {
+                                            edgeMessage = ` (${edgeData.message})`;
+                                        }
                                     }
                                 } catch (efErr: any) {
-                                    console.warn('Lỗi gọi Edge Function:', efErr);
+                                    console.warn('Lỗi gọi Edge Function cron-sync-gmail:', efErr);
                                 }
 
-                                // 2. Lấy GitHub Token từ localStorage hoặc .env.local
+                                // 2. Gọi GitHub Action (Optional fallback nếu người dùng có Token hợp lệ)
                                 const ghRepo = import.meta.env.VITE_GITHUB_REPO || 'thanglh9-maker/PM-POSM';
                                 const ghToken = localStorage.getItem('github_pat_token') || import.meta.env.VITE_GITHUB_TOKEN;
 
-                                if (!ghToken) {
-                                    toast.dismiss('sync_mail_toast');
-                                    setIsTriggeringSync(false);
-                                    setIsTokenModalOpen(true);
-                                    return;
-                                }
-
-                                try {
-                                    // Gọi endpoint workflow_dispatch tới manual-sync.yml
-                                    const ghRes = await fetch(`https://api.github.com/repos/${ghRepo}/actions/workflows/manual-sync.yml/dispatches`, {
-                                        method: 'POST',
-                                        headers: {
-                                            'Authorization': `Bearer ${ghToken}`,
-                                            'Accept': 'application/vnd.github.v3+json',
-                                            'Content-Type': 'application/json'
-                                        },
-                                        body: JSON.stringify({
-                                            ref: 'main'
-                                        })
-                                    });
-
-                                    if (ghRes.ok || ghRes.status === 204) {
-                                        toast.success('🚀 Đã gửi lệnh trigger GitHub Action (PM-POSM manual-sync.yml) thành công!', { id: 'sync_mail_toast' });
-                                        syncSuccess = true;
-                                    } else {
-                                        const errText = await ghRes.text();
-                                        console.error('GitHub Action dispatch error:', errText);
-                                        if (ghRes.status === 401 || ghRes.status === 404) {
-                                            toast.error(`⚠️ Token GitHub không có quyền hoặc hết hạn. Vui lòng nhập lại Token mới!`, { id: 'sync_mail_toast' });
-                                            setIsTokenModalOpen(true);
-                                        } else {
-                                            toast.error(`⚠️ Lỗi GitHub Dispatch (${ghRes.status}): ${errText}`, { id: 'sync_mail_toast' });
+                                if (ghToken) {
+                                    try {
+                                        const ghRes = await fetch(`https://api.github.com/repos/${ghRepo}/actions/workflows/manual-sync.yml/dispatches`, {
+                                            method: 'POST',
+                                            headers: {
+                                                'Authorization': `Bearer ${ghToken}`,
+                                                'Accept': 'application/vnd.github.v3+json',
+                                                'Content-Type': 'application/json'
+                                            },
+                                            body: JSON.stringify({ ref: 'main' })
+                                        });
+                                        if (ghRes.ok || ghRes.status === 204) {
+                                            syncSuccess = true;
+                                        } else if (ghRes.status === 401 || ghRes.status === 404) {
+                                            // Invalid token -> Clear bad token so it won't prompt error again
+                                            localStorage.removeItem('github_pat_token');
                                         }
+                                    } catch (ghErr) {
+                                        console.warn('GitHub Action Dispatch Warning:', ghErr);
                                     }
-                                } catch (ghErr: any) {
-                                    console.error('Lỗi kết nối GitHub API:', ghErr);
                                 }
 
-                                // 3. Ghi log sync job
-                                try {
-                                    await supabase.from('sync_jobs').insert({ status: 'triggered', created_at: new Date().toISOString() });
-                                } catch (_err) {
-                                    // Ignore RLS or schema mismatch
+                                if (syncSuccess) {
+                                    toast.success(`🚀 Đã đồng bộ Mail tự động thành công!${edgeMessage}`, { id: 'sync_mail_toast' });
+                                } else {
+                                    toast.error('⚠️ Đang kết nối Supabase Edge Function...', { id: 'sync_mail_toast' });
                                 }
 
                                 // Refetch data
-                                setTimeout(() => {
-                                    queryClient.invalidateQueries({ queryKey: ['project_activities_with_attachments_all'] });
-                                    queryClient.invalidateQueries({ queryKey: ['projects'] });
-                                    queryClient.invalidateQueries({ queryKey: ['project_overviews_rpc'] });
-                                    setIsTriggeringSync(false);
-                                }, 2500);
+                                queryClient.invalidateQueries({ queryKey: ['project_activities_with_attachments_all'] });
+                                queryClient.invalidateQueries({ queryKey: ['projects'] });
+                                queryClient.invalidateQueries({ queryKey: ['project_overviews_rpc'] });
                             } catch (e: any) {
                                 toast.error('Lỗi gửi lệnh đồng bộ: ' + (e.message || 'Thất bại'), { id: 'sync_mail_toast' });
+                            } finally {
                                 setIsTriggeringSync(false);
                             }
                         }}
@@ -365,52 +350,65 @@ export default function ModelTest() {
                 <div className="bg-white dark:bg-slate-900 max-w-md w-full rounded-2xl p-5 border border-indigo-200 dark:border-indigo-900 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
                     <div className="flex items-center justify-between">
                         <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
-                            🔑 Nhập GitHub Personal Access Token (PAT)
+                            🔑 Cấu Hình Đồng Bộ Mail Dự Án
                         </h3>
                         <button onClick={() => setIsTokenModalOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
                     </div>
 
                     <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                        Để bấm nút kích hoạt trực tiếp Workflow trên repo <b>thanglh9-maker/PM-POSM</b>, vui lòng dán Token PAT GitHub của anh vào đây (Token chỉ lưu riêng trên trình duyệt của anh).
+                        Hệ thống mặc định sử dụng <b>Supabase Cloud Edge Function (cron-sync-gmail)</b> để cào mail tự động <b>trực tiếp 100% không cần Token GitHub</b>.
                     </p>
 
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
                         <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block">
-                            Dán GitHub Token (VD: <span className="font-mono text-indigo-600">ghp_xxxx...</span>):
+                            Token GitHub PAT Optional (Nếu muốn trigger GitHub Action):
                         </label>
                         <input
                             type="password"
                             value={patTokenInput}
                             onChange={(e) => setPatTokenInput(e.target.value)}
                             placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxx"
-                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
+                            className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
                         />
                     </div>
 
-                    <div className="flex items-center justify-end gap-2 pt-2 border-t dark:border-slate-800">
-                        <button
-                            onClick={() => setIsTokenModalOpen(false)}
-                            className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg cursor-pointer"
-                        >
-                            Hủy
-                        </button>
+                    <div className="flex items-center justify-between gap-2 pt-2 border-t dark:border-slate-800">
                         <button
                             onClick={() => {
-                                if (!patTokenInput.trim()) {
-                                    toast.error('Vui lòng dán token GitHub!');
-                                    return;
-                                }
-                                localStorage.setItem('github_pat_token', patTokenInput.trim());
+                                localStorage.removeItem('github_pat_token');
+                                setPatTokenInput('');
                                 setIsTokenModalOpen(false);
-                                toast.success('✅ Đã lưu Token GitHub! Đang kích hoạt đồng bộ...');
-                                setTimeout(() => {
-                                    document.getElementById('trigger-sync-mail-btn')?.click();
-                                }, 300);
+                                toast.success('🟢 Đã chuyển sang chế độ Đồng bộ Trực tiếp (Supabase Edge Function)!');
                             }}
-                            className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs shadow-sm cursor-pointer"
+                            className="px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950 rounded-lg cursor-pointer"
                         >
-                            💾 Lưu Token & Kích Hoạt Ngay
+                            Bỏ dùng GitHub Token
                         </button>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setIsTokenModalOpen(false)}
+                                className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg cursor-pointer"
+                            >
+                                Đóng
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (patTokenInput.trim()) {
+                                        localStorage.setItem('github_pat_token', patTokenInput.trim());
+                                    } else {
+                                        localStorage.removeItem('github_pat_token');
+                                    }
+                                    setIsTokenModalOpen(false);
+                                    toast.success('✅ Đã lưu cài đặt! Đang đồng bộ...');
+                                    setTimeout(() => {
+                                        document.getElementById('trigger-sync-mail-btn')?.click();
+                                    }, 300);
+                                }}
+                                className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs shadow-sm cursor-pointer"
+                            >
+                                💾 Lưu & Đồng Bộ Ngay
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
