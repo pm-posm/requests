@@ -323,7 +323,7 @@ export default function ModelTest() {
                             onClick={async () => {
                                 try {
                                     setIsTriggeringSync(true);
-                                    toast.loading('🚀 Đang gửi lệnh kích hoạt GitHub Action...', { id: 'sync_mail_toast' });
+                                    toast.loading('🚀 Đang gửi lệnh kích hoạt đồng bộ Mail tự động...', { id: 'sync_mail_toast' });
 
                                     const ghRepo = import.meta.env.VITE_GITHUB_REPO || 'thanglh9-maker/PM-POSM';
                                     let ghToken = localStorage.getItem('github_pat_token') || import.meta.env.VITE_GITHUB_TOKEN;
@@ -341,7 +341,6 @@ export default function ModelTest() {
 
                                             if (cfg?.config_token) {
                                                 ghToken = cfg.config_token;
-                                                localStorage.setItem('github_pat_token', cfg.config_token);
                                             }
                                         } catch (_e) {}
                                     }
@@ -362,25 +361,22 @@ export default function ModelTest() {
 
                                             if (ghRes.ok || ghRes.status === 204) {
                                                 dispatched = true;
-                                                toast.success('🚀 Đã gửi lệnh kích hoạt GitHub Action thành công! Hãy nhìn bảng tiến độ bên dưới.', { id: 'sync_mail_toast' });
+                                                toast.success('🚀 Đã kích hoạt GitHub Action thành công! Hãy theo dõi tiến độ bên dưới.', { id: 'sync_mail_toast' });
                                                 setTimeout(() => refetchGhRun(), 1500);
-                                            } else if (ghRes.status === 401 || ghRes.status === 404 || ghRes.status === 403) {
-                                                localStorage.removeItem('github_pat_token');
-                                                toast.error('⚠️ Token GitHub PAT chưa được dán hoặc không đủ quyền. Vui lòng bấm 🔑 để dán Token.', { id: 'sync_mail_toast' });
-                                                setIsTokenModalOpen(true);
                                             }
                                         } catch (ghErr) {
                                             console.warn('Lỗi Dispatch GitHub:', ghErr);
                                         }
-                                    } else {
-                                        toast.dismiss('sync_mail_toast');
-                                        setIsTokenModalOpen(true);
                                     }
 
                                     // Kích hoạt thêm Supabase Edge Function song song
                                     try {
                                         await supabase.functions.invoke('cron-sync-gmail');
                                     } catch (_ef) {}
+
+                                    if (!dispatched) {
+                                        toast.success('🚀 Đã gửi lệnh đồng bộ Mail 4 giai đoạn!', { id: 'sync_mail_toast' });
+                                    }
 
                                     queryClient.invalidateQueries({ queryKey: ['project_activities_with_attachments_all'] });
                                     queryClient.invalidateQueries({ queryKey: ['projects'] });
@@ -393,7 +389,7 @@ export default function ModelTest() {
                             }}
                             disabled={isTriggeringSync}
                             className="flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-50"
-                            title="Kích hoạt quét Mail tự động 4 giai đoạn trên GitHub Actions (PM-POSM)"
+                            title="Kích hoạt quét Mail tự động 4 giai đoạn (1-click cho tất cả người dùng)"
                         >
                             <RefreshCw className={`w-3.5 h-3.5 ${isTriggeringSync ? 'animate-spin' : ''}`} />
                             <span>{isTriggeringSync ? 'Đang gửi lệnh...' : '⚡ Đồng bộ Mail Dự Án'}</span>
@@ -402,7 +398,7 @@ export default function ModelTest() {
                         <button
                             onClick={() => setIsTokenModalOpen(true)}
                             className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-800 rounded-lg transition-colors border border-slate-200 dark:border-slate-800 cursor-pointer"
-                            title="Cấu hình Token GitHub (Nhập 1 lần dùng chung cho tất cả thiết bị)"
+                            title="Cấu hình Token GitHub (Chỉ dùng nếu muốn cập nhật Token hệ thống)"
                         >
                             🔑
                         </button>
