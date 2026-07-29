@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useProjects, type Project } from '@/hooks/useProjects';
-import { Loader2, Search, Table, BarChart3, RefreshCw } from 'lucide-react';
+import { Loader2, Search, Table, BarChart3, RefreshCw, CheckCircle2, AlertTriangle, ExternalLink } from 'lucide-react';
 import type { ProjectGroup, ActivityRow } from '@/types';
 import { ProjectTable } from './ProjectList/ProjectTable';
 import { ProjectCommandCenterHeader } from './Dashboard/ProjectCommandCenterHeader';
@@ -19,6 +19,22 @@ export default function ModelTest() {
     const [isTriggeringSync, setIsTriggeringSync] = React.useState(false);
     const [isTokenModalOpen, setIsTokenModalOpen] = React.useState(false);
     const [patTokenInput, setPatTokenInput] = React.useState(localStorage.getItem('github_pat_token') || '');
+
+    // Fetch latest GitHub Action Workflow Run status from GitHub API
+    const { data: latestGhRun, refetch: refetchGhRun } = useQuery({
+        queryKey: ['github_action_latest_run'],
+        queryFn: async () => {
+            try {
+                const res = await fetch('https://api.github.com/repos/thanglh9-maker/PM-POSM/actions/runs?per_page=1');
+                if (!res.ok) return null;
+                const json = await res.json();
+                return json.workflow_runs?.[0] || null;
+            } catch (_e) {
+                return null;
+            }
+        },
+        refetchInterval: 5000 // Poll every 5s for live status updates!
+    });
 
     // Fetch unified project activities and their attachments
     const { data: activities, isLoading: activitiesLoading } = useQuery<ActivityRow[]>({
@@ -182,7 +198,6 @@ export default function ModelTest() {
         return projects.find(p => p.final_key === group.final_project || p.source_key === group.key_project || p.source_project_name === group.name_project) || null;
     };
 
-    // FIX POINT 2: Navigate directly to the dedicated full-page Project Detail component route (/project/:id)!
     const handleRowClick = (group: ProjectGroup) => {
         navigate(`/project/${encodeURIComponent(group.final_project)}`);
     };
@@ -241,6 +256,53 @@ export default function ModelTest() {
             {/* TAB 2: CLEAN OPERATIONAL DATA LIST WORKSPACE */}
             {activeModuleTab === 'DATA_LIST' && (
                 <div className="space-y-4 animate-in fade-in duration-200">
+                    {/* LIVE GITHUB ACTION STATUS BADGE & PROGRESS BANNER */}
+                    {latestGhRun && (
+                        <div className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition-all ${
+                            latestGhRun.status === 'in_progress' || latestGhRun.status === 'queued'
+                                ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 animate-pulse'
+                                : latestGhRun.conclusion === 'success'
+                                ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
+                                : 'bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800 text-rose-900 dark:text-rose-200'
+                        }`}>
+                            <div className="flex items-center gap-2.5">
+                                {latestGhRun.status === 'in_progress' || latestGhRun.status === 'queued' ? (
+                                    <RefreshCw className="w-4 h-4 text-amber-600 animate-spin shrink-0" />
+                                ) : latestGhRun.conclusion === 'success' ? (
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                ) : (
+                                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                                )}
+                                <div>
+                                    <div className="flex items-center gap-2 font-bold flex-wrap">
+                                        <span>⚙️ Trạng thái GitHub Action #{latestGhRun.run_number}:</span>
+                                        <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-mono font-black ${
+                                            latestGhRun.status === 'in_progress' ? 'bg-amber-200 text-amber-900' :
+                                            latestGhRun.conclusion === 'success' ? 'bg-emerald-200 text-emerald-900' : 'bg-rose-200 text-rose-900'
+                                        }`}>
+                                            {latestGhRun.status === 'in_progress' ? '⚡ ĐANG CHẠY (IN PROGRESS)' : latestGhRun.conclusion === 'success' ? '🟢 ĐÃ HOÀN THÀNH (SUCCESS)' : '🔴 THẤT BẠI / HỦY'}
+                                        </span>
+                                    </div>
+                                    <p className="text-[11px] opacity-80 mt-0.5">
+                                        {latestGhRun.status === 'in_progress' 
+                                            ? `Action đang quét Mail tự động 4 giai đoạn & đồng bộ dữ liệu (Khởi chạy lúc ${new Date(latestGhRun.created_at).toLocaleTimeString('vi-VN')})...`
+                                            : `Lần cào gần nhất: ${new Date(latestGhRun.updated_at).toLocaleString('vi-VN')}`
+                                        }
+                                    </p>
+                                </div>
+                            </div>
+                            <a
+                                href={latestGhRun.html_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="px-3 py-1.5 bg-white/80 dark:bg-slate-900/80 hover:bg-white border border-current/20 rounded-lg font-bold text-[11px] shrink-0 transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                            >
+                                <span>Xem tiến độ trên GitHub</span>
+                                <ExternalLink className="w-3 h-3" />
+                            </a>
+                        </div>
+                    )}
+
                     {/* Header & Search + Trigger Đồng bộ Mail */}
                     <div className="flex flex-wrap items-center justify-between gap-4">
                         <div className="relative flex-1 max-w-md">
@@ -261,15 +323,12 @@ export default function ModelTest() {
                             onClick={async () => {
                                 try {
                                     setIsTriggeringSync(true);
-                                    toast.loading('🚀 Đang kích hoạt đồng bộ Mail 4 giai đoạn...', { id: 'sync_mail_toast' });
+                                    toast.loading('🚀 Đang gửi lệnh kích hoạt GitHub Action...', { id: 'sync_mail_toast' });
 
-                                    let isSynced = false;
                                     const ghRepo = import.meta.env.VITE_GITHUB_REPO || 'thanglh9-maker/PM-POSM';
-
-                                    // Lấy Token từ LocalStorage hoặc Env
                                     let ghToken = localStorage.getItem('github_pat_token') || import.meta.env.VITE_GITHUB_TOKEN;
 
-                                    // Nếu thiết bị (như điện thoại) chưa có token, tự động đọc Token chia sẻ từ Supabase DB
+                                    // Lấy Token chung từ DB nếu thiết bị hiện tại (như mobile) chưa dán Token
                                     if (!ghToken) {
                                         try {
                                             const { data: cfg } = await supabase
@@ -284,12 +343,11 @@ export default function ModelTest() {
                                                 ghToken = cfg.config_token;
                                                 localStorage.setItem('github_pat_token', cfg.config_token);
                                             }
-                                        } catch (_e) {
-                                            // Fallback ignore
-                                        }
+                                        } catch (_e) {}
                                     }
 
-                                    // 1. Trigger GitHub Action (manual-sync.yml) trên repo thanglh9-maker/PM-POSM
+                                    let dispatched = false;
+
                                     if (ghToken && ghToken.trim()) {
                                         try {
                                             const ghRes = await fetch(`https://api.github.com/repos/${ghRepo}/actions/workflows/manual-sync.yml/dispatches`, {
@@ -301,43 +359,41 @@ export default function ModelTest() {
                                                 },
                                                 body: JSON.stringify({ ref: 'main' })
                                             });
+
                                             if (ghRes.ok || ghRes.status === 204) {
-                                                isSynced = true;
+                                                dispatched = true;
+                                                toast.success('🚀 Đã gửi lệnh kích hoạt GitHub Action thành công! Hãy nhìn bảng tiến độ bên dưới.', { id: 'sync_mail_toast' });
+                                                setTimeout(() => refetchGhRun(), 1500);
+                                            } else if (ghRes.status === 401 || ghRes.status === 404 || ghRes.status === 403) {
+                                                localStorage.removeItem('github_pat_token');
+                                                toast.error('⚠️ Token GitHub PAT chưa được dán hoặc không đủ quyền. Vui lòng bấm 🔑 để dán Token.', { id: 'sync_mail_toast' });
+                                                setIsTokenModalOpen(true);
                                             }
                                         } catch (ghErr) {
-                                            console.warn('GitHub Dispatch error:', ghErr);
+                                            console.warn('Lỗi Dispatch GitHub:', ghErr);
                                         }
-                                    }
-
-                                    // 2. Kích hoạt Supabase Edge Function làm kênh song song
-                                    try {
-                                        const { data: edgeData, error: edgeErr } = await supabase.functions.invoke('cron-sync-gmail');
-                                        if (!edgeErr && edgeData) {
-                                            isSynced = true;
-                                        }
-                                    } catch (efErr: any) {
-                                        console.warn('Supabase Edge Function sync error:', efErr);
-                                    }
-
-                                    if (isSynced) {
-                                        toast.success('🚀 Đã kích hoạt Workflow trên GitHub & đồng bộ Mail thành công!', { id: 'sync_mail_toast' });
                                     } else {
-                                        toast.success('🚀 Đã gửi lệnh đồng bộ Mail tự động!', { id: 'sync_mail_toast' });
+                                        toast.dismiss('sync_mail_toast');
+                                        setIsTokenModalOpen(true);
                                     }
 
-                                    // Refetch data
+                                    // Kích hoạt thêm Supabase Edge Function song song
+                                    try {
+                                        await supabase.functions.invoke('cron-sync-gmail');
+                                    } catch (_ef) {}
+
                                     queryClient.invalidateQueries({ queryKey: ['project_activities_with_attachments_all'] });
                                     queryClient.invalidateQueries({ queryKey: ['projects'] });
                                     queryClient.invalidateQueries({ queryKey: ['project_overviews_rpc'] });
                                 } catch (e: any) {
-                                    toast.error('Lỗi gửi lệnh đồng bộ: ' + (e.message || 'Thất bại'), { id: 'sync_mail_toast' });
+                                    toast.error('Lỗi đồng bộ: ' + (e.message || 'Thất bại'), { id: 'sync_mail_toast' });
                                 } finally {
                                     setIsTriggeringSync(false);
                                 }
                             }}
                             disabled={isTriggeringSync}
                             className="flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-50"
-                            title="Kích hoạt quét Mail tự động 4 giai đoạn (Brief, Khảo Sát, Lắp Đặt, NTXX)"
+                            title="Kích hoạt quét Mail tự động 4 giai đoạn trên GitHub Actions (PM-POSM)"
                         >
                             <RefreshCw className={`w-3.5 h-3.5 ${isTriggeringSync ? 'animate-spin' : ''}`} />
                             <span>{isTriggeringSync ? 'Đang gửi lệnh...' : '⚡ Đồng bộ Mail Dự Án'}</span>
@@ -345,8 +401,8 @@ export default function ModelTest() {
 
                         <button
                             onClick={() => setIsTokenModalOpen(true)}
-                            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-800 rounded-lg transition-colors border border-slate-200 dark:border-slate-800"
-                            title="Cấu hình Token GitHub (Chỉ dành cho Admin/Dev)"
+                            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-800 rounded-lg transition-colors border border-slate-200 dark:border-slate-800 cursor-pointer"
+                            title="Cấu hình Token GitHub (Nhập 1 lần dùng chung cho tất cả thiết bị)"
                         >
                             🔑
                         </button>
