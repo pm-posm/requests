@@ -137,10 +137,9 @@ export default function TrackingWarranty() {
   });
   const [webAppUrl, setWebAppUrl] = useState<string>(() => {
     const saved = localStorage.getItem('warranty_web_app_url');
-    if (saved && saved.includes('AKfycbxLRsNBMc4MguQlCOdgmlO6NRsfPG9AltjFCnS8I7GRMwZPNeiVCaqLiDc_vwpbogcK')) {
-      return saved;
+    if (saved && saved.trim()) {
+      return formatWebAppUrl(saved);
     }
-    localStorage.removeItem('warranty_web_app_url');
     return DEFAULT_WEB_APP_URL;
   });
 
