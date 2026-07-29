@@ -6,6 +6,7 @@ import { liveSearchPlugin } from './src/server/liveSearchPlugin'
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: './',
   plugins: [react(), tailwindcss(), liveSearchPlugin()],
   resolve: {
     alias: {
