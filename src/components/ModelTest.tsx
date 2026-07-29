@@ -37,6 +37,48 @@ export default function ModelTest() {
         refetchInterval: 3000 // Poll mỗi 3 giây để cập nhật tiến độ Real-time!
     });
 
+    // Helper to fetch shared GitHub Token across devices (Mobile, Tablets, Desktop)
+    const getSharedGithubToken = async (): Promise<string | null> => {
+        let token = localStorage.getItem('github_pat_token') || import.meta.env.VITE_GITHUB_TOKEN || null;
+        if (token && token.trim()) return token.trim();
+
+        // Query token saved by Admin in Supabase DB project_activities
+        try {
+            const { data: act } = await supabase
+                .from('project_activities')
+                .select('key_project')
+                .eq('final_project', '__SYSTEM_CONFIG_GITHUB_TOKEN__')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (act?.key_project) {
+                const fetchedToken = act.key_project.trim();
+                localStorage.setItem('github_pat_token', fetchedToken);
+                return fetchedToken;
+            }
+        } catch (_e) {}
+
+        // Fallback: Query token from sync_jobs
+        try {
+            const { data: cfg } = await supabase
+                .from('sync_jobs')
+                .select('config_token')
+                .not('config_token', 'is', null)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (cfg?.config_token) {
+                const fetchedToken = cfg.config_token.trim();
+                localStorage.setItem('github_pat_token', fetchedToken);
+                return fetchedToken;
+            }
+        } catch (_e) {}
+
+        return null;
+    };
+
     // Fetch unified project activities and their attachments
     const { data: activities, isLoading: activitiesLoading } = useQuery<ActivityRow[]>({
         queryKey: ['project_activities_with_attachments_all'],
@@ -258,51 +300,63 @@ export default function ModelTest() {
             {activeModuleTab === 'DATA_LIST' && (
                 <div className="space-y-4 animate-in fade-in duration-200">
                     {/* LIVE GITHUB ACTION STATUS BADGE & PROGRESS BANNER */}
-                    {latestGhRun && (
-                        <div className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition-all ${
-                            latestGhRun.status === 'in_progress' || latestGhRun.status === 'queued'
-                                ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 animate-pulse'
-                                : latestGhRun.conclusion === 'success'
-                                ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
-                                : 'bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800 text-rose-900 dark:text-rose-200'
-                        }`}>
-                            <div className="flex items-center gap-2.5">
-                                {latestGhRun.status === 'in_progress' || latestGhRun.status === 'queued' ? (
-                                    <RefreshCw className="w-4 h-4 text-amber-600 animate-spin shrink-0" />
-                                ) : latestGhRun.conclusion === 'success' ? (
-                                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                                ) : (
-                                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                                )}
-                                <div>
-                                    <div className="flex items-center gap-2 font-bold flex-wrap">
-                                        <span>⚙️ Trạng thái GitHub Action #{latestGhRun.run_number}:</span>
+                    <div className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition-all ${
+                        !latestGhRun
+                            ? 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                            : latestGhRun.status === 'in_progress' || latestGhRun.status === 'queued'
+                            ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 animate-pulse shadow-sm'
+                            : latestGhRun.conclusion === 'success'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
+                            : 'bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800 text-rose-900 dark:text-rose-200'
+                    }`}>
+                        <div className="flex items-center gap-3">
+                            {!latestGhRun ? (
+                                <Loader2 className="w-4.5 h-4.5 text-indigo-500 animate-spin shrink-0" />
+                            ) : latestGhRun.status === 'in_progress' || latestGhRun.status === 'queued' ? (
+                                <RefreshCw className="w-4.5 h-4.5 text-amber-600 animate-spin shrink-0" />
+                            ) : latestGhRun.conclusion === 'success' ? (
+                                <CheckCircle2 className="w-4.5 h-4.5 text-emerald-600 shrink-0" />
+                            ) : (
+                                <AlertTriangle className="w-4.5 h-4.5 text-rose-600 shrink-0" />
+                            )}
+                            <div>
+                                <div className="flex items-center gap-2 font-bold flex-wrap">
+                                    <span>⚙️ Giám Sát Tiến Độ GitHub Action {!latestGhRun ? '' : `#${latestGhRun.run_number}`}:</span>
+                                    {!latestGhRun ? (
+                                        <span className="px-2 py-0.5 rounded text-[10px] uppercase font-mono bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold">
+                                            ĐANG KẾT NỐI GITHUB...
+                                        </span>
+                                    ) : (
                                         <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-mono font-black ${
                                             latestGhRun.status === 'in_progress' ? 'bg-amber-200 text-amber-900' :
                                             latestGhRun.conclusion === 'success' ? 'bg-emerald-200 text-emerald-900' : 'bg-rose-200 text-rose-900'
                                         }`}>
                                             {latestGhRun.status === 'in_progress' ? '⚡ ĐANG CHẠY (IN PROGRESS)' : latestGhRun.conclusion === 'success' ? '🟢 ĐÃ HOÀN THÀNH (SUCCESS)' : '🔴 THẤT BẠI / HỦY'}
                                         </span>
-                                    </div>
-                                    <p className="text-[11px] opacity-80 mt-0.5">
-                                        {latestGhRun.status === 'in_progress' 
-                                            ? `Action đang quét Mail tự động 4 giai đoạn & đồng bộ dữ liệu (Khởi chạy lúc ${new Date(latestGhRun.created_at).toLocaleTimeString('vi-VN')})...`
-                                            : `Lần cào gần nhất: ${new Date(latestGhRun.updated_at).toLocaleString('vi-VN')}`
-                                        }
-                                    </p>
+                                    )}
                                 </div>
+                                <p className="text-[11px] opacity-80 mt-0.5">
+                                    {!latestGhRun
+                                        ? 'Đang kiểm tra dữ liệu kết lộ tới repository PM-POSM...'
+                                        : latestGhRun.status === 'in_progress' 
+                                        ? `Workflow đang cào Mail 4 giai đoạn & đẩy lên Drive (Bắt đầu lúc ${new Date(latestGhRun.created_at).toLocaleTimeString('vi-VN')})...`
+                                        : `Lần cào gần nhất: ${new Date(latestGhRun.updated_at).toLocaleString('vi-VN')}`
+                                    }
+                                </p>
                             </div>
+                        </div>
+                        {latestGhRun && (
                             <a
                                 href={latestGhRun.html_url}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="px-3 py-1.5 bg-white/80 dark:bg-slate-900/80 hover:bg-white border border-current/20 rounded-lg font-bold text-[11px] shrink-0 transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                                className="px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-slate-100 border border-slate-200 dark:border-slate-700 rounded-lg font-bold text-[11px] shrink-0 transition-colors flex items-center justify-center gap-1 cursor-pointer text-slate-800 dark:text-slate-200 shadow-2xs"
                             >
                                 <span>Xem tiến độ trên GitHub</span>
                                 <ExternalLink className="w-3 h-3" />
                             </a>
-                        </div>
-                    )}
+                        )}
+                    </div>
 
                     {/* Header & Search + Trigger Đồng bộ Mail */}
                     <div className="flex flex-wrap items-center justify-between gap-4">
@@ -327,24 +381,7 @@ export default function ModelTest() {
                                     toast.loading('🚀 Đang gửi lệnh kích hoạt đồng bộ Mail tự động...', { id: 'sync_mail_toast' });
 
                                     const ghRepo = import.meta.env.VITE_GITHUB_REPO || 'thanglh9-maker/PM-POSM';
-                                    let ghToken = localStorage.getItem('github_pat_token') || import.meta.env.VITE_GITHUB_TOKEN;
-
-                                    // Lấy Token chung từ DB nếu thiết bị hiện tại (như mobile) chưa dán Token
-                                    if (!ghToken) {
-                                        try {
-                                            const { data: cfg } = await supabase
-                                                .from('sync_jobs')
-                                                .select('config_token')
-                                                .not('config_token', 'is', null)
-                                                .order('created_at', { ascending: false })
-                                                .limit(1)
-                                                .maybeSingle();
-
-                                            if (cfg?.config_token) {
-                                                ghToken = cfg.config_token;
-                                            }
-                                        } catch (_e) {}
-                                    }
+                                    const ghToken = await getSharedGithubToken();
 
                                     let dispatched = false;
 
@@ -362,8 +399,8 @@ export default function ModelTest() {
 
                                             if (ghRes.ok || ghRes.status === 204) {
                                                 dispatched = true;
-                                                toast.success('🚀 Đã kích hoạt GitHub Action thành công! Hãy theo dõi tiến độ bên dưới.', { id: 'sync_mail_toast' });
-                                                setTimeout(() => refetchGhRun(), 1500);
+                                                toast.success('🚀 Đã gửi lệnh kích hoạt GitHub Action thành công! Hãy xem bảng tiến độ bên dưới.', { id: 'sync_mail_toast' });
+                                                setTimeout(() => refetchGhRun(), 1000);
                                             }
                                         } catch (ghErr) {
                                             console.warn('Lỗi Dispatch GitHub:', ghErr);
@@ -427,13 +464,13 @@ export default function ModelTest() {
                 <div className="bg-white dark:bg-slate-900 max-w-md w-full rounded-2xl p-5 border border-indigo-200 dark:border-indigo-900 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
                     <div className="flex items-center justify-between">
                         <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
-                            🔑 Nhập GitHub Personal Access Token (PAT)
+                            🔑 Cấu Hình Token GitHub Chia Sẻ Hệ Thống
                         </h3>
                         <button onClick={() => setIsTokenModalOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
                     </div>
 
                     <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                        Để bấm nút kích hoạt trực tiếp GitHub Action Workflow trên repo <b>thanglh9-maker/PM-POSM</b>, vui lòng dán GitHub Personal Access Token (PAT) của anh vào đây.
+                        Lưu Token PAT 1 lần duy nhất để **tất cả người dùng (điện thoại di động, máy tính khác)** bấm 1-click là tự động kích hoạt GitHub Action Workflow trên repo <b>thanglh9-maker/PM-POSM</b>.
                     </p>
 
                     <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl text-[11px] text-amber-800 dark:text-amber-300 space-y-1">
@@ -475,26 +512,26 @@ export default function ModelTest() {
                                 }
                                 localStorage.setItem('github_pat_token', trimmed);
                                 
-                                // Lưu token chung vào DB để tất cả thiết bị khác (Mobile, máy khác) tự dùng chung!
+                                // Lưu token chung vào DB project_activities để tất cả thiết bị khác (Mobile, máy khác) tự dùng chung!
                                 try {
-                                    await supabase.from('sync_jobs').insert({
-                                        status: 'configured',
-                                        config_token: trimmed,
+                                    await supabase.from('project_activities').insert({
+                                        final_project: '__SYSTEM_CONFIG_GITHUB_TOKEN__',
+                                        key_project: trimmed,
+                                        name_project: 'GitHub System Token',
+                                        title_mail: 'System Configuration',
                                         created_at: new Date().toISOString()
                                     });
-                                } catch (_e) {
-                                    // Ignore if RLS or column missing
-                                }
+                                } catch (_e) {}
 
                                 setIsTokenModalOpen(false);
-                                toast.success('✅ Đã lưu Token chia sẻ! Đang kích hoạt Workflow trên GitHub...');
+                                toast.success('✅ Đã lưu Token chia sẻ hệ thống! Đang kích hoạt Workflow trên GitHub...');
                                 setTimeout(() => {
                                     document.getElementById('trigger-sync-mail-btn')?.click();
                                 }, 300);
                             }}
                             className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs shadow-sm cursor-pointer"
                         >
-                            💾 Lưu Token & Kích Hoạt Ngay
+                            💾 Lưu Token Chia Sẻ & Kích Hoạt Ngay
                         </button>
                     </div>
                 </div>
