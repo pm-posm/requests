@@ -342,6 +342,7 @@ export default function TrackingWarranty() {
       projectCode: editProjectCode.trim(),
       supplier: editSupplier.trim(),
       progress: editProgress.trim(),
+      installationDate: editInstallationDate.trim(),
       expectedDate: editExpectedDate.trim(),
       completedDate: editCompletedDate.trim(),
       warrantyCoverage: editWarrantyCoverage.trim(),
