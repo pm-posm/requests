@@ -264,21 +264,32 @@ export default function ModelTest() {
                                     toast.loading('🚀 Đang kích hoạt đồng bộ Mail 4 giai đoạn...', { id: 'sync_mail_toast' });
 
                                     let isSynced = false;
+                                    const ghRepo = import.meta.env.VITE_GITHUB_REPO || 'thanglh9-maker/PM-POSM';
 
-                                    // 1. Kích hoạt Supabase Edge Function (Chạy trực tiếp 100% trên Cloud, không cần Token GitHub)
-                                    try {
-                                        const { data: edgeData, error: edgeErr } = await supabase.functions.invoke('cron-sync-gmail');
-                                        if (!edgeErr && edgeData) {
-                                            isSynced = true;
+                                    // Lấy Token từ LocalStorage hoặc Env
+                                    let ghToken = localStorage.getItem('github_pat_token') || import.meta.env.VITE_GITHUB_TOKEN;
+
+                                    // Nếu thiết bị (như điện thoại) chưa có token, tự động đọc Token chia sẻ từ Supabase DB
+                                    if (!ghToken) {
+                                        try {
+                                            const { data: cfg } = await supabase
+                                                .from('sync_jobs')
+                                                .select('config_token')
+                                                .not('config_token', 'is', null)
+                                                .order('created_at', { ascending: false })
+                                                .limit(1)
+                                                .maybeSingle();
+
+                                            if (cfg?.config_token) {
+                                                ghToken = cfg.config_token;
+                                                localStorage.setItem('github_pat_token', cfg.config_token);
+                                            }
+                                        } catch (_e) {
+                                            // Fallback ignore
                                         }
-                                    } catch (efErr: any) {
-                                        console.warn('Supabase Edge Function sync error:', efErr);
                                     }
 
-                                    // 2. Kênh phụ: Nếu trình duyệt có lưu GitHub Token thì trigger thêm GitHub Action
-                                    const ghRepo = import.meta.env.VITE_GITHUB_REPO || 'thanglh9-maker/PM-POSM';
-                                    const ghToken = localStorage.getItem('github_pat_token') || import.meta.env.VITE_GITHUB_TOKEN;
-
+                                    // 1. Trigger GitHub Action (manual-sync.yml) trên repo thanglh9-maker/PM-POSM
                                     if (ghToken && ghToken.trim()) {
                                         try {
                                             const ghRes = await fetch(`https://api.github.com/repos/${ghRepo}/actions/workflows/manual-sync.yml/dispatches`, {
@@ -298,7 +309,21 @@ export default function ModelTest() {
                                         }
                                     }
 
-                                    toast.success('🚀 Đã kích hoạt đồng bộ Mail tự động thành công!', { id: 'sync_mail_toast' });
+                                    // 2. Kích hoạt Supabase Edge Function làm kênh song song
+                                    try {
+                                        const { data: edgeData, error: edgeErr } = await supabase.functions.invoke('cron-sync-gmail');
+                                        if (!edgeErr && edgeData) {
+                                            isSynced = true;
+                                        }
+                                    } catch (efErr: any) {
+                                        console.warn('Supabase Edge Function sync error:', efErr);
+                                    }
+
+                                    if (isSynced) {
+                                        toast.success('🚀 Đã kích hoạt Workflow trên GitHub & đồng bộ Mail thành công!', { id: 'sync_mail_toast' });
+                                    } else {
+                                        toast.success('🚀 Đã gửi lệnh đồng bộ Mail tự động!', { id: 'sync_mail_toast' });
+                                    }
 
                                     // Refetch data
                                     queryClient.invalidateQueries({ queryKey: ['project_activities_with_attachments_all'] });
@@ -389,14 +414,27 @@ export default function ModelTest() {
                             Hủy
                         </button>
                         <button
-                            onClick={() => {
-                                if (!patTokenInput.trim()) {
+                            onClick={async () => {
+                                const trimmed = patTokenInput.trim();
+                                if (!trimmed) {
                                     toast.error('Vui lòng dán Token GitHub PAT!');
                                     return;
                                 }
-                                localStorage.setItem('github_pat_token', patTokenInput.trim());
+                                localStorage.setItem('github_pat_token', trimmed);
+                                
+                                // Lưu token chung vào DB để tất cả thiết bị khác (Mobile, máy khác) tự dùng chung!
+                                try {
+                                    await supabase.from('sync_jobs').insert({
+                                        status: 'configured',
+                                        config_token: trimmed,
+                                        created_at: new Date().toISOString()
+                                    });
+                                } catch (_e) {
+                                    // Ignore if RLS or column missing
+                                }
+
                                 setIsTokenModalOpen(false);
-                                toast.success('✅ Đã lưu Token GitHub! Đang kích hoạt Workflow trên GitHub...');
+                                toast.success('✅ Đã lưu Token chia sẻ! Đang kích hoạt Workflow trên GitHub...');
                                 setTimeout(() => {
                                     document.getElementById('trigger-sync-mail-btn')?.click();
                                 }, 300);
