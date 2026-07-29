@@ -91,6 +91,10 @@ export interface ProjectGroup {
         phase: string;
         posmType: string;
         status?: string;
+        lastSyncedAt?: string;
+        lastSyncedMs?: number;
+        isRecentlySynced?: boolean;
+        recentSyncCount?: number;
     };
 }
 

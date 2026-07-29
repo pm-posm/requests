@@ -188,6 +188,26 @@ export default function ModelTest() {
             const matchedProj = projects?.find(p => p.final_key === fp || p.source_key === group.key_project || p.source_project_name === group.name_project);
             const status = matchedProj?.status || computedStatus;
 
+            // Tính toán mốc thời gian cào/đồng bộ mail gần nhất
+            let latestActivityMs = 0;
+            let latestActivityDate = '';
+            if (group.activities && group.activities.length > 0) {
+                group.activities.forEach(act => {
+                    const actTime = new Date(act.created_at || (act as any).date_created || 0).getTime();
+                    if (!isNaN(actTime) && actTime > latestActivityMs) {
+                        latestActivityMs = actTime;
+                        latestActivityDate = act.created_at || (act as any).date_created || '';
+                    }
+                });
+            }
+
+            const nowMs = Date.now();
+            const isRecentlySynced = latestActivityMs > 0 && (nowMs - latestActivityMs) < (24 * 60 * 60 * 1000); // Nạp trong 24h
+            const recentSyncCount = group.activities ? group.activities.filter(a => {
+                const t = new Date(a.created_at || (a as any).date_created || 0).getTime();
+                return !isNaN(t) && (nowMs - t) < (24 * 60 * 60 * 1000);
+            }).length : 0;
+
             return {
                 ...group,
                 stats: {
@@ -199,10 +219,14 @@ export default function ModelTest() {
                     supplier,
                     phase,
                     posmType,
-                    status
+                    status,
+                    lastSyncedAt: latestActivityDate,
+                    lastSyncedMs: latestActivityMs,
+                    isRecentlySynced,
+                    recentSyncCount
                 }
             };
-        });
+        }).sort((a, b) => (b.stats?.lastSyncedMs || 0) - (a.stats?.lastSyncedMs || 0));
     }, [activities, overviews, projects]);
 
     // Lọc theo từ khóa tìm kiếm & quick filter
@@ -223,6 +247,9 @@ export default function ModelTest() {
                 return st.includes('done') || st.includes('hoàn thành') || prog.includes('done') || prog.includes('hoàn thành');
             });
 
+            if (activeQuickFilter === 'RECENT_SYNC') {
+                return matchesSearch && (g.stats?.isRecentlySynced === true || (g.stats?.recentSyncCount || 0) > 0);
+            }
             if (activeQuickFilter === 'ACTIVE') {
                 return matchesSearch && (!isFinished || !g.activities || g.activities.length === 0);
             }
@@ -441,6 +468,59 @@ export default function ModelTest() {
                             🔑
                         </button>
                     </div>
+                </div>
+
+                {/* QUICK FILTER STATUS TABS */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar text-xs">
+                    <button
+                        onClick={() => setActiveQuickFilter('ALL')}
+                        className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                            activeQuickFilter === 'ALL'
+                                ? 'bg-indigo-600 text-white shadow-sm'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                        }`}
+                    >
+                        <span>📌 Tất cả</span>
+                        <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/20 font-mono">
+                            {groupedProjects.length}
+                        </span>
+                    </button>
+
+                    <button
+                        onClick={() => setActiveQuickFilter('RECENT_SYNC')}
+                        className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                            activeQuickFilter === 'RECENT_SYNC'
+                                ? 'bg-emerald-600 text-white shadow-sm'
+                                : 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100'
+                        }`}
+                    >
+                        <span>⚡ Vừa nạp mới (24h)</span>
+                        <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-100 font-mono font-black">
+                            {groupedProjects.filter(g => g.stats?.isRecentlySynced).length}
+                        </span>
+                    </button>
+
+                    <button
+                        onClick={() => setActiveQuickFilter('ACTIVE')}
+                        className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                            activeQuickFilter === 'ACTIVE'
+                                ? 'bg-sky-600 text-white shadow-sm'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                        }`}
+                    >
+                        <span>🚀 Đang thực hiện</span>
+                    </button>
+
+                    <button
+                        onClick={() => setActiveQuickFilter('COMPLETED')}
+                        className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                            activeQuickFilter === 'COMPLETED'
+                                ? 'bg-slate-800 text-white shadow-sm'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                        }`}
+                    >
+                        <span>✅ Hoàn thành</span>
+                    </button>
                 </div>
 
                 {/* Table */}

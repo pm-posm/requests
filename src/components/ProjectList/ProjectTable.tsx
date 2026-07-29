@@ -66,6 +66,7 @@ export function ProjectTable({ groups, findMatchedProject, onRowClick, requestsM
                 <th className="px-4 py-3">Supplier</th>
                 <th className="px-4 py-3">Giai đoạn</th>
                 <th className="px-4 py-3">Trạng thái</th>
+                <th className="px-4 py-3 text-emerald-700 bg-emerald-50/50">Lần cào/Cập nhật</th>
                 
                 {/* Dynamic Columns */}
                 {fields.map(field => (
@@ -163,6 +164,22 @@ export function ProjectTable({ groups, findMatchedProject, onRowClick, requestsM
                         </span>
                       </td>
 
+                      {/* Lần cào / Đồng bộ gần nhất */}
+                      <td className="px-4 py-3 bg-emerald-50/10">
+                        {group.stats?.isRecentlySynced ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shadow-2xs">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                            ⚡ Vừa nạp ({group.stats?.lastSyncedAt ? new Date(group.stats.lastSyncedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : 'gần đây'})
+                          </span>
+                        ) : (
+                          <span className="text-neutral-500 font-mono text-xs">
+                            {group.stats?.lastSyncedAt 
+                              ? `🕒 ${new Date(group.stats.lastSyncedAt).toLocaleDateString('vi-VN')}` 
+                              : '-'}
+                          </span>
+                        )}
+                      </td>
+
                       {/* Dynamic Cells */}
                       {fields.map(field => {
                         const cellValue = projectData[field.field_key];
@@ -203,32 +220,46 @@ export function ProjectTable({ groups, findMatchedProject, onRowClick, requestsM
                     {/* Sub-table for Expanded Activities */}
                     {isExpanded && group.activities && group.activities.length > 0 && (
                       <tr>
-                        <td colSpan={11 + fields.length} className="px-8 py-3 bg-neutral-50/60 border-b border-neutral-200">
+                        <td colSpan={12 + fields.length} className="px-8 py-3 bg-neutral-50/60 border-b border-neutral-200">
                           <div className="text-xs font-semibold text-neutral-500 mb-2 uppercase tracking-wider">
                             Danh sách công việc & Email thuộc dự án (Thread ID):
                           </div>
 
                           <div className="space-y-1.5">
-                            {group.activities.map((act) => (
-                              <div 
-                                key={act.id} 
-                                className="flex items-center justify-between bg-white px-3 py-2 rounded border border-neutral-200 hover:border-neutral-300 transition-colors text-xs"
-                              >
-                                <div className="flex items-center gap-3">
-                                  <span className="font-semibold text-neutral-800">{act.title_mail || act.phase_type}</span>
-                                  {act.merged_from_project && (
-                                    <span className="bg-sky-100 text-sky-700 font-bold px-2 py-0.5 rounded text-[10px]">
-                                      📌 Đã gộp từ: {act.merged_from_project}
-                                    </span>
-                                  )}
-                                  <span className="text-neutral-400">|</span>
-                                  <span className="text-neutral-500 font-mono text-[11px]">Thread ID: {act.thread_id || act.key_project || 'N/A'}</span>
+                            {group.activities.map((act) => {
+                              const actTime = new Date(act.created_at || (act as any).date_created || 0).getTime();
+                              const isActRecent = !isNaN(actTime) && (Date.now() - actTime) < (24 * 60 * 60 * 1000);
+
+                              return (
+                                <div 
+                                  key={act.id} 
+                                  className={`flex items-center justify-between px-3 py-2 rounded border transition-colors text-xs ${
+                                    isActRecent 
+                                      ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 shadow-2xs' 
+                                      : 'bg-white border-neutral-200 hover:border-neutral-300'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2.5 flex-wrap">
+                                    {isActRecent && (
+                                      <span className="bg-emerald-600 text-white font-black px-2 py-0.5 rounded text-[10px] flex items-center gap-1 shadow-2xs">
+                                        ⚡ Mail mới nạp ({actTime ? new Date(actTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''})
+                                      </span>
+                                    )}
+                                    <span className="font-bold text-neutral-900">{act.title_mail || act.phase_type}</span>
+                                    {act.merged_from_project && (
+                                      <span className="bg-sky-100 text-sky-700 font-bold px-2 py-0.5 rounded text-[10px]">
+                                        📌 Đã gộp từ: {act.merged_from_project}
+                                      </span>
+                                    )}
+                                    <span className="text-neutral-400">|</span>
+                                    <span className="text-neutral-500 font-mono text-[11px]">Thread ID: {act.thread_id || act.key_project || 'N/A'}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-neutral-500 font-mono text-[11px] shrink-0">
+                                    <span>{act.created_at ? new Date(act.created_at).toLocaleString('vi-VN') : ''}</span>
+                                  </div>
                                 </div>
-                                <div className="flex items-center gap-2 text-neutral-400 font-mono text-[11px]">
-                                  {act.created_at ? new Date(act.created_at).toLocaleDateString('vi-VN') : ''}
-                                </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </td>
                       </tr>
