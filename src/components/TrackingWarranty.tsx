@@ -521,7 +521,12 @@ export default function TrackingWarranty() {
 
   // Unique filter lists
   const uniqueSuppliers = useMemo(() => {
-    return Array.from(new Set(warrantyItems.map(i => i.supplier).filter(Boolean))).sort();
+    const list = Array.from(new Set(warrantyItems.map(i => i.supplier?.trim()).filter(Boolean))).sort();
+    const hasUnassigned = warrantyItems.some(i => !i.supplier || !i.supplier.trim() || i.supplier.trim() === 'Chưa chọn' || i.supplier.trim() === 'Chưa gán thầu');
+    if (hasUnassigned) {
+      return ['Chưa chọn', ...list.filter(s => s !== 'Chưa chọn' && s !== 'Chưa gán thầu')];
+    }
+    return list;
   }, [warrantyItems]);
 
   const uniqueVisTechs = useMemo(() => {
@@ -568,8 +573,15 @@ export default function TrackingWarranty() {
         }
       }
 
-      // Supplier Filter
-      if (selectedSupplier !== 'all' && item.supplier !== selectedSupplier) return false;
+      // Supplier Filter (Hỗ trợ lọc 'Chưa chọn' cho các ca chưa gán thầu)
+      if (selectedSupplier !== 'all') {
+        const itemSup = item.supplier?.trim();
+        if (selectedSupplier === 'Chưa chọn' || selectedSupplier === 'Chưa gán thầu') {
+          if (itemSup && itemSup !== 'Chưa chọn' && itemSup !== 'Chưa gán thầu') return false;
+        } else if (itemSup !== selectedSupplier) {
+          return false;
+        }
+      }
 
       // VIS-Tech Filter
       if (selectedVisTech !== 'all' && item.visTech !== selectedVisTech) return false;
@@ -665,7 +677,7 @@ export default function TrackingWarranty() {
 
     warrantyItems.forEach(item => {
       // 1. Supplier breakdown
-      const sup = item.supplier?.trim() || 'Chưa gán thầu';
+      const sup = item.supplier?.trim() || 'Chưa chọn';
       supplierMap[sup] = (supplierMap[sup] || 0) + 1;
 
       // 2. Brand breakdown
