@@ -10,6 +10,7 @@ export interface WarrantyItem {
   category: string;           // CAT (vd: Oral, Hair, SCL, FSen)
   brand: string;              // BRAND (vd: P/S, Dove, Close Up, Lifebuoy)
   sentDate: string;           // Ngày gửi yêu cầu (dd/mm/yyyy)
+  requestDeadline?: string;   // Deadline hoàn thành request gốc (Ánh xạ từ Cột T Mer View 2026)
   installationDate?: string;  // Ngày lắp đặt POSM
   projectCode?: string;       // Mã dự án (vd: 105351)
   supplier: string;           // Supplier (Nhà cung cấp / Thầu sản xuất POSM)

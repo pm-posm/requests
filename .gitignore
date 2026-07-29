@@ -12,3 +12,5 @@ debug_*.json
 patch_*.cjs
 apply_*.cjs
 .DS_Store
+
+.vercel

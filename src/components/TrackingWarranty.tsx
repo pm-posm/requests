@@ -474,6 +474,7 @@ export default function TrackingWarranty() {
               const note = row['Note'] || row['Ghi chú'] || (Array.isArray(row) ? row[18] : '') || '';
               const raiseMailTime = row['Ngày raise mail'] || (Array.isArray(row) ? row[19] : '') || '';
               const installationDate = row['Ngày lắp đặt'] || row['Ngày lắp đặt POSM'] || (Array.isArray(row) ? row[20] : '') || '';
+              const requestDeadline = row['Deadline'] || row['Deadline request'] || row['Deadline RQ'] || '';
 
               return {
                 id: `sheet-${rowId}-${idx}`,
@@ -487,6 +488,7 @@ export default function TrackingWarranty() {
                 category: category.trim(),
                 brand: brand.trim(),
                 sentDate: sentDate.trim() || raiseMailTime.trim(),
+                requestDeadline: requestDeadline.trim(),
                 installationDate: installationDate.trim(),
                 projectCode: projectCode.trim(),
                 supplier: supplier.trim(),
@@ -1819,7 +1821,7 @@ export default function TrackingWarranty() {
                       Deadline request:
                     </label>
                     <span className="font-bold text-indigo-700 dark:text-indigo-300 block text-xs">
-                      {selectedItem.expectedDate || 'Chưa có deadline'}
+                      {selectedItem.requestDeadline || selectedItem.expectedDate || 'Chưa có deadline'}
                     </span>
                   </div>
 
