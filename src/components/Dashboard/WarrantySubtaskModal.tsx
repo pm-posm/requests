@@ -24,11 +24,7 @@ const WARRANTY_PROGRESS_OPTIONS = [
   'Cancelled'
 ];
 
-// Official Warranty Coverage Options matching Column O on BaoHanh_Model
-const WARRANTY_COVERAGE_OPTIONS = [
-  'Trong phạm vi bảo hành',
-  'Ngoài phạm vi bảo hành'
-];
+
 
 // Helper to convert DD/MM/YYYY or string to YYYY-MM-DD for native <input type="date">
 const toHtmlDateStr = (str?: string): string => {
@@ -89,8 +85,6 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
   const [completedDate, setCompletedDate] = useState('');
   const [errorDetail, setErrorDetail] = useState('');
   const [note, setNote] = useState('');
-  const [warrantyCoverage, setWarrantyCoverage] = useState('Trong phạm vi bảo hành');
-  const [warrantyCost, setWarrantyCost] = useState('Miễn phí');
 
   const [isSaving, setIsSaving] = useState(false);
   const [isSyncingSheet, setIsSyncingSheet] = useState(false);
@@ -169,30 +163,16 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
       setInstallationDate((record as any).installation_date || (record as any).installationDate || '');
       setExpectedDate(record.ngay_quick_fix || (record as any).expected_date || (record as any).expectedDate || '');
       setCompletedDate((record as any).completed_date || (record as any).completedDate || '');
-      if ((record as any).warranty_coverage || (record as any).warrantyCoverage) {
-        setWarrantyCoverage((record as any).warranty_coverage || (record as any).warrantyCoverage);
-      }
-      if ((record as any).warranty_cost || (record as any).warrantyCost) {
-        setWarrantyCost((record as any).warranty_cost || (record as any).warrantyCost);
-      }
     }
   }, [record]);
 
-  // Dynamic dropdown list for Tiến Độ (Progress) matching Sheet BaoHanh_Model Column Q
+  // Dynamic dropdown list for Tiến Độ (Progress) matching Sheet BaoHanh_Model Column O
   const dynamicProgressOptions = useMemo(() => {
     const set = new Set<string>();
     WARRANTY_PROGRESS_OPTIONS.forEach(s => set.add(s));
     if (tienDo) set.add(tienDo);
     return Array.from(set);
   }, [tienDo]);
-
-  // Dynamic dropdown list for Phạm Vi Bảo Hành matching Sheet BaoHanh_Model Column O
-  const dynamicCoverageOptions = useMemo(() => {
-    const set = new Set<string>();
-    WARRANTY_COVERAGE_OPTIONS.forEach(c => set.add(c));
-    if (warrantyCoverage) set.add(warrantyCoverage);
-    return Array.from(set);
-  }, [warrantyCoverage]);
 
   // Click outside listener for project suggestions
   useEffect(() => {
@@ -327,8 +307,6 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
         ngay_quick_fix: expectedDate,
         expected_date: expectedDate,
         completed_date: completedDate,
-        warranty_coverage: warrantyCoverage,
-        warranty_cost: warrantyCost,
         mer_note: note
       };
 
@@ -342,20 +320,19 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
 
       // Reverse sync to Google Sheet via Web App (Multi-channel GET + POST for 100% reliability)
       const targetUrl = (localStorage.getItem('warranty_web_app_url') || DEFAULT_WEB_APP_URL).trim();
-      const syncParams = {
+      const syncParams: Record<string, string> = {
         rowId: String(rowIdNum),
         requestId: requestId,
-        projectCode: maDuAn,
-        supplier: supplier,
-        titleMail: titleEmail,
-        raiseMailTime: raiseMailTime,
-        progress: tienDo,
-        expectedDate: expectedDate,
-        completedDate: completedDate,
-        warrantyCoverage: warrantyCoverage,
-        warrantyCost: warrantyCost,
-        note: note
       };
+      if (maDuAn.trim()) syncParams.projectCode = maDuAn.trim();
+      if (supplier.trim()) syncParams.supplier = supplier.trim();
+      if (titleEmail.trim()) syncParams.titleMail = titleEmail.trim();
+      if (raiseMailTime.trim()) syncParams.raiseMailTime = raiseMailTime.trim();
+      if (tienDo.trim()) syncParams.progress = tienDo.trim();
+      if (installationDate.trim()) syncParams.installationDate = installationDate.trim();
+      if (expectedDate.trim()) syncParams.expectedDate = expectedDate.trim();
+      if (completedDate.trim()) syncParams.completedDate = completedDate.trim();
+      if (note.trim()) syncParams.note = note.trim();
 
       try {
         const queryStr = new URLSearchParams(syncParams as any).toString();
@@ -541,34 +518,7 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
                 </select>
               </div>
 
-              <div className="space-y-1">
-                <label className="font-semibold text-slate-700 dark:text-slate-300">
-                  Phạm Vi Bảo Hành:
-                </label>
-                <select
-                  value={warrantyCoverage}
-                  disabled={true}
-                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 cursor-not-allowed opacity-80"
-                >
-                  {dynamicCoverageOptions.map(cov => (
-                    <option key={cov} value={cov}>{cov}</option>
-                  ))}
-                </select>
-              </div>
 
-              <div className="space-y-1">
-                <label className="font-semibold text-slate-700 dark:text-slate-300">
-                  Chi Phí Bảo Hành:
-                </label>
-                <select
-                  value={warrantyCost}
-                  disabled={true}
-                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-200 cursor-not-allowed opacity-80"
-                >
-                  <option value="Miễn phí">Miễn phí (Theo hợp đồng)</option>
-                  <option value="Có tính phí">Có tính phí phát sinh</option>
-                </select>
-              </div>
             </div>
 
             {/* Dates & Timeline Section */}

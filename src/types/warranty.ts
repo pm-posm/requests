@@ -15,8 +15,8 @@ export interface WarrantyItem {
   supplier: string;           // Supplier (Nhà cung cấp / Thầu sản xuất POSM)
   mailTitle?: string;         // Title mail
   errorDetail: string;        // Chi tiết lỗi
-  warrantyCoverage?: string;  // Trạng thái bảo hành (Trong phạm vi BH, ngoài phạm vi BH...)
-  warrantyCost?: string;      // Chi phí bảo hành (Miễn phí, Có tính phí...)
+  warrantyCoverage?: string;  // Trạng thái bảo hành (Không dùng)
+  warrantyCost?: string;      // Chi phí bảo hành (Không dùng)
   progress: 'Hoàn Thành' | 'Tiếp nhận' | 'Đang xử lý' | 'Not Started' | string; // Tiến độ
   expectedDate?: string;      // Ngày xử lý dự kiến
   completedDate?: string;     // Ngày hoàn thành thực tế
@@ -29,5 +29,5 @@ export interface WarrantyStats {
   completedItems: number;
   inProgressItems: number;
   notStartedItems: number;
-  freeCoverageItems: number;
+  freeCoverageItems?: number;
 }

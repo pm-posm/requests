@@ -467,14 +467,13 @@ export default function TrackingWarranty() {
               const supplier = row['Supplier'] || row['Nhà Cung Cấp'] || '';
               const mailTitle = row['Title mail '] || row['Title mail'] || '';
               const errorDetail = row['Chi tiết lỗi'] || row['Lỗi'] || '';
-              const warrantyCoverage = row['Trạng thái bảo hành'] || '';
-              const warrantyCost = row['Chi phí bảo hành'] || '';
-              const progress = row['Tiến độ'] || row['Trạng thái'] || 'Not started';
-              const expectedDate = row['Ngày xử lý dự kiến'] || '';
-              const completedDate = row['Ngày hoàn thành thực tế'] || '';
-              const installationDate = row['Ngày lắp đặt'] || row['Ngày lắp đặt POSM'] || '';
-              const proofImage = row['Hình ảnh nghiệm thu'] || '';
-              const note = row['Note'] || row['Ghi chú'] || '';
+              const progress = row['Tiến độ'] || row['Trạng thái'] || (Array.isArray(row) ? row[14] : '') || 'Not started';
+              const expectedDate = row['Ngày xử lý dự kiến'] || (Array.isArray(row) ? row[15] : '') || '';
+              const completedDate = row['Ngày hoàn thành thực tế'] || (Array.isArray(row) ? row[16] : '') || '';
+              const proofImage = row['Hình ảnh nghiệm thu'] || (Array.isArray(row) ? row[17] : '') || '';
+              const note = row['Note'] || row['Ghi chú'] || (Array.isArray(row) ? row[18] : '') || '';
+              const raiseMailTime = row['Ngày raise mail'] || (Array.isArray(row) ? row[19] : '') || '';
+              const installationDate = row['Ngày lắp đặt'] || row['Ngày lắp đặt POSM'] || (Array.isArray(row) ? row[20] : '') || '';
 
               return {
                 id: `sheet-${rowId}-${idx}`,
@@ -487,14 +486,12 @@ export default function TrackingWarranty() {
                 posmType: posmType.trim(),
                 category: category.trim(),
                 brand: brand.trim(),
-                sentDate: sentDate.trim(),
+                sentDate: sentDate.trim() || raiseMailTime.trim(),
                 installationDate: installationDate.trim(),
                 projectCode: projectCode.trim(),
                 supplier: supplier.trim(),
                 mailTitle: mailTitle.trim(),
                 errorDetail: errorDetail.trim(),
-                warrantyCoverage: warrantyCoverage.trim(),
-                warrantyCost: warrantyCost.trim(),
                 progress: progress.trim() || 'Not started',
                 expectedDate: expectedDate.trim(),
                 completedDate: completedDate.trim(),
@@ -1424,40 +1421,6 @@ export default function TrackingWarranty() {
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">VIS-Tech (Quản lý POSM):</span>
                     <span className="font-bold text-sky-700 dark:text-sky-300">{selectedItem.visTech || 'N/A'}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* WARRANTY COVERAGE & COST DROPDOWNS */}
-              <div className="space-y-3 p-4 border border-border rounded-xl bg-card">
-                <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                  <Tag className="w-3.5 h-3.5 text-emerald-500" />
-                  Phạm Vi & Chi Phí Bảo Hành
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-muted-foreground font-semibold">Phạm vi bảo hành:</label>
-                    <select
-                      value={editWarrantyCoverage}
-                      onChange={(e) => setEditWarrantyCoverage(e.target.value)}
-                      className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs font-semibold text-emerald-600 cursor-pointer"
-                    >
-                      <option value="">-- Chưa chọn (Để trống) --</option>
-                      <option value="Trong phạm vi bảo hành">Trong phạm vi bảo hành</option>
-                      <option value="Ngoài phạm vi bảo hành">Ngoài phạm vi bảo hành</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-muted-foreground font-semibold">Chi phí bảo hành:</label>
-                    <select
-                      value={editWarrantyCost}
-                      onChange={(e) => setEditWarrantyCost(e.target.value)}
-                      className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs font-semibold text-foreground cursor-pointer"
-                    >
-                      <option value="">-- Chưa chọn (Để trống) --</option>
-                      <option value="Miễn phí">Miễn phí (Theo hợp đồng)</option>
-                      <option value="Có tính phí">Có tính phí phát sinh</option>
-                    </select>
                   </div>
                 </div>
               </div>
