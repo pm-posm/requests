@@ -20,7 +20,7 @@ export default function ModelTest() {
     const [isTokenModalOpen, setIsTokenModalOpen] = React.useState(false);
     const [patTokenInput, setPatTokenInput] = React.useState(localStorage.getItem('github_pat_token') || '');
 
-    // Fetch latest GitHub Action Workflow Run status from GitHub API
+    // Fetch latest GitHub Action Workflow Run status from GitHub API (Live polling)
     const { data: latestGhRun, refetch: refetchGhRun } = useQuery({
         queryKey: ['github_action_latest_run'],
         queryFn: async () => {
@@ -33,7 +33,8 @@ export default function ModelTest() {
                 return null;
             }
         },
-        refetchInterval: 5000 // Poll every 5s for live status updates!
+        staleTime: 0, // 0 staleTime để luôn lấy dữ liệu mới nhất!
+        refetchInterval: 3000 // Poll mỗi 3 giây để cập nhật tiến độ Real-time!
     });
 
     // Fetch unified project activities and their attachments
