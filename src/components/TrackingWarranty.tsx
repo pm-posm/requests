@@ -192,6 +192,14 @@ export default function TrackingWarranty() {
   const [expandedMid, setExpandedMid] = useState(false);
   const [expandedLong, setExpandedLong] = useState(false);
 
+  // Dedicated Popup Modal State for SLA Duration Breakdown
+  const [slaModalData, setSlaModalData] = useState<{
+    title: string;
+    badge: string;
+    items: Array<{ item: WarrantyItem; days: number }>;
+  } | null>(null);
+  const [slaModalFilter, setSlaModalFilter] = useState('');
+
   // Copy helper
   const handleCopy = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -1205,10 +1213,7 @@ export default function TrackingWarranty() {
                       <p className="text-[11px] text-rose-600/70 italic">Không có ca nào bị hỏng sớm dưới 30 ngày.</p>
                     ) : (
                       <div className="space-y-1.5 pt-1">
-                        {(expandedEarly 
-                          ? analystBreakdowns.slaMetrics.earlyFailItems 
-                          : analystBreakdowns.slaMetrics.earlyFailItems.slice(0, 3)
-                        ).map(({ item, days }) => (
+                        {analystBreakdowns.slaMetrics.earlyFailItems.slice(0, 2).map(({ item, days }) => (
                           <div 
                             key={item.id}
                             onClick={() => { setSelectedItem(item); }}
@@ -1224,14 +1229,20 @@ export default function TrackingWarranty() {
                             </span>
                           </div>
                         ))}
-                        {analystBreakdowns.slaMetrics.earlyFailItems.length > 3 && (
+                        {analystBreakdowns.slaMetrics.earlyFailItems.length > 2 && (
                           <button
-                            onClick={() => setExpandedEarly(!expandedEarly)}
-                            className="w-full py-1.5 text-center text-xs font-bold text-rose-700 dark:text-rose-300 hover:bg-rose-100/60 dark:hover:bg-rose-900/60 rounded-lg border border-dashed border-rose-300 dark:border-rose-700 transition-colors cursor-pointer"
+                            onClick={() => {
+                              setSlaModalFilter('');
+                              setSlaModalData({
+                                title: '🚨 Ca Hỏng Sớm (< 30 Ngày Từ Khi Lắp Đặt)',
+                                badge: `${analystBreakdowns.slaMetrics.earlyFailCount} ca`,
+                                items: analystBreakdowns.slaMetrics.earlyFailItems
+                              });
+                            }}
+                            className="w-full py-2 text-center text-xs font-bold text-rose-700 dark:text-rose-300 bg-rose-100/50 hover:bg-rose-100 dark:bg-rose-900/40 dark:hover:bg-rose-900/80 rounded-lg border border-rose-300 dark:border-rose-700 transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
                           >
-                            {expandedEarly 
-                              ? '▲ Thu gọn danh sách ca hỏng sớm' 
-                              : `▼ Xem thêm ${analystBreakdowns.slaMetrics.earlyFailItems.length - 3} ca hỏng sớm`}
+                            <Search className="w-3.5 h-3.5" />
+                            <span>Mở Modal Xem Chi Tiết Tất Cả ({analystBreakdowns.slaMetrics.earlyFailCount} ca)</span>
                           </button>
                         )}
                       </div>
@@ -1248,10 +1259,7 @@ export default function TrackingWarranty() {
                       <p className="text-[11px] text-amber-600/70 italic">Không có ca nào rơi vào khoảng 1 - 3 tháng.</p>
                     ) : (
                       <div className="space-y-1.5 pt-1">
-                        {(expandedMid 
-                          ? analystBreakdowns.slaMetrics.midFailItems 
-                          : analystBreakdowns.slaMetrics.midFailItems.slice(0, 3)
-                        ).map(({ item, days }) => (
+                        {analystBreakdowns.slaMetrics.midFailItems.slice(0, 2).map(({ item, days }) => (
                           <div 
                             key={item.id}
                             onClick={() => { setSelectedItem(item); }}
@@ -1267,14 +1275,20 @@ export default function TrackingWarranty() {
                             </span>
                           </div>
                         ))}
-                        {analystBreakdowns.slaMetrics.midFailItems.length > 3 && (
+                        {analystBreakdowns.slaMetrics.midFailItems.length > 2 && (
                           <button
-                            onClick={() => setExpandedMid(!expandedMid)}
-                            className="w-full py-1.5 text-center text-xs font-bold text-amber-700 dark:text-amber-300 hover:bg-amber-100/60 dark:hover:bg-amber-900/60 rounded-lg border border-dashed border-amber-300 dark:border-amber-700 transition-colors cursor-pointer"
+                            onClick={() => {
+                              setSlaModalFilter('');
+                              setSlaModalData({
+                                title: '⚠️ Ca Phát Sinh Sự Cố Sau 1 - 3 Tháng (30 - 90 Ngày)',
+                                badge: `${analystBreakdowns.slaMetrics.midFailCount} ca`,
+                                items: analystBreakdowns.slaMetrics.midFailItems
+                              });
+                            }}
+                            className="w-full py-2 text-center text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-100/50 hover:bg-amber-100 dark:bg-amber-900/40 dark:hover:bg-amber-900/80 rounded-lg border border-amber-300 dark:border-amber-700 transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
                           >
-                            {expandedMid 
-                              ? '▲ Thu gọn danh sách ca (1 - 3 tháng)' 
-                              : `▼ Xem thêm ${analystBreakdowns.slaMetrics.midFailItems.length - 3} ca (1 - 3 tháng)`}
+                            <Search className="w-3.5 h-3.5" />
+                            <span>Mở Modal Xem Chi Tiết Tất Cả ({analystBreakdowns.slaMetrics.midFailCount} ca)</span>
                           </button>
                         )}
                       </div>
@@ -1291,10 +1305,7 @@ export default function TrackingWarranty() {
                       <p className="text-[11px] text-emerald-600/70 italic">Chưa có dữ liệu ca hỏng sau 3 tháng.</p>
                     ) : (
                       <div className="space-y-1.5 pt-1">
-                        {(expandedLong 
-                          ? analystBreakdowns.slaMetrics.longFailItems 
-                          : analystBreakdowns.slaMetrics.longFailItems.slice(0, 3)
-                        ).map(({ item, days }) => (
+                        {analystBreakdowns.slaMetrics.longFailItems.slice(0, 2).map(({ item, days }) => (
                           <div 
                             key={item.id}
                             onClick={() => { setSelectedItem(item); }}
@@ -1310,14 +1321,20 @@ export default function TrackingWarranty() {
                             </span>
                           </div>
                         ))}
-                        {analystBreakdowns.slaMetrics.longFailItems.length > 3 && (
+                        {analystBreakdowns.slaMetrics.longFailItems.length > 2 && (
                           <button
-                            onClick={() => setExpandedLong(!expandedLong)}
-                            className="w-full py-1.5 text-center text-xs font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100/60 dark:hover:bg-emerald-900/60 rounded-lg border border-dashed border-emerald-300 dark:border-emerald-700 transition-colors cursor-pointer"
+                            onClick={() => {
+                              setSlaModalFilter('');
+                              setSlaModalData({
+                                title: '🟢 Ca Độ Bền Tốt (> 3 Tháng / > 90 Ngày)',
+                                badge: `${analystBreakdowns.slaMetrics.longFailCount} ca`,
+                                items: analystBreakdowns.slaMetrics.longFailItems
+                              });
+                            }}
+                            className="w-full py-2 text-center text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100/50 hover:bg-emerald-100 dark:bg-emerald-900/40 dark:hover:bg-emerald-900/80 rounded-lg border border-emerald-300 dark:border-emerald-700 transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
                           >
-                            {expandedLong 
-                              ? '▲ Thu gọn danh sách ca (> 3 tháng)' 
-                              : `▼ Xem thêm ${analystBreakdowns.slaMetrics.longFailItems.length - 3} ca (> 3 tháng)`}
+                            <Search className="w-3.5 h-3.5" />
+                            <span>Mở Modal Xem Chi Tiết Tất Cả ({analystBreakdowns.slaMetrics.longFailCount} ca)</span>
                           </button>
                         )}
                       </div>
@@ -2257,6 +2274,110 @@ export default function TrackingWarranty() {
                 className="px-4 py-2 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-700 rounded-lg shadow-sm cursor-pointer"
               >
                 Lưu Cấu Hình
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POPUP MODAL FOR DEDICATED SLA DURATION BREAKDOWN LIST */}
+      {slaModalData && (
+        <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-card w-full max-w-3xl rounded-2xl shadow-2xl border border-border p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[85vh]">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-border pb-3 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <Clock className="w-5 h-5 text-sky-500 shrink-0" />
+                <div>
+                  <h3 className="font-bold text-base text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    {slaModalData.title}
+                    <Badge variant="outline" className="bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300 font-mono text-xs">
+                      {slaModalData.badge}
+                    </Badge>
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Bấm vào bất kỳ ca nào để mở bảng chỉnh sửa chi tiết.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSlaModalData(null)}
+                className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg cursor-pointer transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Live Search & Filter Bar */}
+            <div className="relative shrink-0">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={slaModalFilter}
+                onChange={(e) => setSlaModalFilter(e.target.value)}
+                placeholder="Tìm kiếm mã request, tên cửa hàng, loại POSM..."
+                className="w-full pl-9 pr-4 py-2 text-xs bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500/20 font-medium"
+              />
+            </div>
+
+            {/* Scrollable Cases List */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-1 min-h-0">
+              {slaModalData.items
+                .filter(({ item }) => {
+                  if (!slaModalFilter.trim()) return true;
+                  const q = slaModalFilter.toLowerCase().trim();
+                  return (
+                    item.requestId.toLowerCase().includes(q) ||
+                    item.storeName.toLowerCase().includes(q) ||
+                    item.storeCode.toLowerCase().includes(q) ||
+                    item.posmType.toLowerCase().includes(q)
+                  );
+                })
+                .map(({ item, days }) => (
+                  <div
+                    key={item.id}
+                    onClick={() => {
+                      setSlaModalData(null);
+                      setSelectedItem(item);
+                    }}
+                    className="p-3 bg-slate-50 dark:bg-slate-900/60 hover:bg-sky-50 dark:hover:bg-sky-950/50 border border-slate-200 dark:border-slate-800 hover:border-sky-300 rounded-xl flex items-center justify-between text-xs cursor-pointer transition-all shadow-2xs group"
+                  >
+                    <div className="flex items-center gap-3 truncate">
+                      <span className="font-mono font-black text-sky-700 dark:text-sky-400 bg-sky-100 dark:bg-sky-950 px-2 py-0.5 rounded shrink-0">
+                        {item.requestId}
+                      </span>
+                      <div className="truncate">
+                        <span className="font-bold text-slate-900 dark:text-slate-100 block truncate">
+                          {item.storeName}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground block truncate">
+                          {item.storeCode ? `${item.storeCode} • ` : ''}{item.posmType} {item.brand ? `(${item.brand})` : ''}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="font-mono font-bold text-amber-600 dark:text-amber-400 text-xs">
+                        Lắp xong {days} ngày ➔ Bị lỗi
+                      </span>
+                      <button className="px-2.5 py-1 text-[11px] font-bold text-sky-600 bg-sky-100 dark:bg-sky-950 rounded-lg group-hover:bg-sky-600 group-hover:text-white transition-colors cursor-pointer flex items-center gap-1">
+                        <Eye className="w-3 h-3" />
+                        <span>Xem</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between border-t border-border pt-3 shrink-0">
+              <span className="text-xs text-muted-foreground font-mono">
+                Tổng số: <strong>{slaModalData.items.length}</strong> ca trong nhóm
+              </span>
+              <button
+                onClick={() => setSlaModalData(null)}
+                className="px-4 py-2 text-xs font-semibold text-white bg-slate-800 hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-lg shadow-sm cursor-pointer transition-colors"
+              >
+                Đóng Modal
               </button>
             </div>
           </div>
