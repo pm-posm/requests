@@ -15,8 +15,8 @@ import { useDashboardStore } from '@/stores/useDashboardStore';
 // Official Public Google Sheet CSV URL for BaoHanh_Model
 const DEFAULT_WARRANTY_SHEET_CSV = 'https://docs.google.com/spreadsheets/d/119LpiU1XheXgOxKWxw17E_u4vgRTBPhc-4FADDS8B1Q/export?format=csv&gid=2053849390';
 
-// Deployed Web App URL for Apps Script Reverse Sync (Version 5 - Active)
-const DEFAULT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxLRsNBMc4MguQlCOdgmlO6NRsfPG9AltjFCnS8I7GRMwZPNeiVCaqLiDc_vwpbogcK/exec';
+// Deployed Web App URL for Apps Script Reverse Sync (Active Production)
+const DEFAULT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxfRHXEd8bWkavq93RWBG7eOOrOgZglzDOjK-Ey7L6vZmT2FM1piausg9AOk8_aStae/exec';
 
 // Helper to format Web App URL or raw Deployment ID
 const formatWebAppUrl = (rawUrl?: string): string => {
