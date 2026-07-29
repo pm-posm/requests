@@ -95,6 +95,8 @@ export interface ProjectGroup {
         lastSyncedMs?: number;
         isRecentlySynced?: boolean;
         recentSyncCount?: number;
+        isProcessed?: boolean;
+        isOverdue?: boolean;
     };
 }
 

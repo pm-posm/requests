@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import type { ProjectGroup } from '@/types';
 import type { Project } from '@/hooks/useProjects';
-import { ChevronRight, ChevronDown, Plus } from 'lucide-react';
+import { ChevronRight, ChevronDown, Plus, CheckCircle2, AlertTriangle, Clock } from 'lucide-react';
 import { useGlobalProjectFields, useGlobalProjectCustomData } from '../../hooks/useGlobalProjectFields';
 import { ManageProjectFieldsModal } from './ManageProjectFieldsModal';
+import toast from 'react-hot-toast';
 
 interface ProjectTableProps {
   groups: ProjectGroup[];
@@ -66,6 +67,7 @@ export function ProjectTable({ groups, findMatchedProject, onRowClick, requestsM
                 <th className="px-4 py-3">Supplier</th>
                 <th className="px-4 py-3">Giai đoạn</th>
                 <th className="px-4 py-3">Trạng thái</th>
+                <th className="px-4 py-3 text-amber-700 bg-amber-50/50">Xử lý Inbox</th>
                 <th className="px-4 py-3 text-emerald-700 bg-emerald-50/50">Lần cào/Cập nhật</th>
                 
                 {/* Dynamic Columns */}
@@ -162,6 +164,50 @@ export function ProjectTable({ groups, findMatchedProject, onRowClick, requestsM
                         <span className="text-neutral-600 font-medium">
                             {group.stats?.status || '-'}
                         </span>
+                      </td>
+
+                      {/* Trạng thái Xử lý Inbox */}
+                      <td className="px-4 py-3 bg-amber-50/10" onClick={(e) => e.stopPropagation()}>
+                        {group.stats?.isProcessed ? (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              await updateField({ finalProject: group.final_project, fieldKey: 'is_processed', value: false });
+                              toast.success('Đã chuyển dự án về danh sách Chờ xử lý');
+                            }}
+                            className="px-2.5 py-1 text-[11px] font-bold text-emerald-700 bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300 rounded-lg flex items-center gap-1 border border-emerald-300 hover:bg-emerald-200 transition-colors cursor-pointer"
+                            title="Bấm để mở lại trạng thái Chờ xử lý"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>✅ Đã xử lý</span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              await updateField({ finalProject: group.final_project, fieldKey: 'is_processed', value: true });
+                              toast.success('Đã đánh dấu ĐÃ XỬ LÝ thành công!');
+                            }}
+                            className={`px-2.5 py-1 text-[11px] font-bold rounded-lg flex items-center gap-1 border transition-all cursor-pointer shadow-2xs ${
+                              group.stats?.isOverdue
+                                ? 'bg-rose-100 text-rose-900 dark:bg-rose-950 dark:text-rose-200 border-rose-300 animate-pulse hover:bg-rose-200'
+                                : 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200 border-amber-300 hover:bg-amber-200'
+                            }`}
+                            title="Bấm để đánh dấu đã xử lý xong (sẽ tự động rời khỏi tab Chờ xử lý)"
+                          >
+                            {group.stats?.isOverdue ? (
+                              <>
+                                <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                                <span>⚠️ Chờ quá 24h</span>
+                              </>
+                            ) : (
+                              <>
+                                <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                <span>📥 Chờ xử lý</span>
+                              </>
+                            )}
+                          </button>
+                        )}
                       </td>
 
                       {/* Lần cào / Đồng bộ gần nhất */}

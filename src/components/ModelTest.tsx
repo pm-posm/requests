@@ -7,15 +7,17 @@ import { Loader2, Search, Table, BarChart3, RefreshCw, CheckCircle2, AlertTriang
 import type { ProjectGroup, ActivityRow } from '@/types';
 import { ProjectTable } from './ProjectList/ProjectTable';
 import { ProjectCommandCenterHeader } from './Dashboard/ProjectCommandCenterHeader';
+import { useGlobalProjectCustomData } from '@/hooks/useGlobalProjectFields';
 import toast from 'react-hot-toast';
 
 export default function ModelTest() {
     const queryClient = useQueryClient();
     const navigate = useNavigate();
     const { data: projects, isLoading: projectsLoading } = useProjects();
+    const { customDataMap } = useGlobalProjectCustomData();
     const [activeModuleTab, setActiveModuleTab] = React.useState<'DATA_LIST' | 'ANALYST'>('DATA_LIST');
     const [searchTerm, setSearchTerm] = React.useState('');
-    const [activeQuickFilter, setActiveQuickFilter] = React.useState<'ALL' | 'ACTIVE' | 'COMPLETED' | 'HIGH_STORE_COUNT'>('ALL');
+    const [activeQuickFilter, setActiveQuickFilter] = React.useState<'ALL' | 'UNPROCESSED'>('ALL');
     const [isTriggeringSync, setIsTriggeringSync] = React.useState(false);
     const [isTokenModalOpen, setIsTokenModalOpen] = React.useState(false);
     const [patTokenInput, setPatTokenInput] = React.useState(localStorage.getItem('github_pat_token') || '');
@@ -208,6 +210,11 @@ export default function ModelTest() {
                 return !isNaN(t) && (nowMs - t) < (24 * 60 * 60 * 1000);
             }).length : 0;
 
+            // Kiểm tra trạng thái Đã xử lý / Chờ xử lý
+            const customProps = customDataMap[fp] || {};
+            const isProcessed = customProps.is_processed === true;
+            const isOverdue = !isProcessed && latestActivityMs > 0 && (nowMs - latestActivityMs) >= (24 * 60 * 60 * 1000);
+
             return {
                 ...group,
                 stats: {
@@ -223,11 +230,18 @@ export default function ModelTest() {
                     lastSyncedAt: latestActivityDate,
                     lastSyncedMs: latestActivityMs,
                     isRecentlySynced,
-                    recentSyncCount
+                    recentSyncCount,
+                    isProcessed,
+                    isOverdue
                 }
             };
-        }).sort((a, b) => (b.stats?.lastSyncedMs || 0) - (a.stats?.lastSyncedMs || 0));
-    }, [activities, overviews, projects]);
+        }).sort((a, b) => {
+            // Đưa các dự án Chưa xử lý (UNPROCESSED) & Trễ quá 24h lên đầu tiên!
+            if (!a.stats?.isProcessed && b.stats?.isProcessed) return -1;
+            if (a.stats?.isProcessed && !b.stats?.isProcessed) return 1;
+            return (b.stats?.lastSyncedMs || 0) - (a.stats?.lastSyncedMs || 0);
+        });
+    }, [activities, overviews, projects, customDataMap]);
 
     // Lọc theo từ khóa tìm kiếm & quick filter
     const filteredGroups = React.useMemo(() => {
@@ -241,23 +255,8 @@ export default function ModelTest() {
                 (g.stats?.supplier || '').toLowerCase().includes(term) ||
                 (g.stats?.posmType || '').toLowerCase().includes(term);
 
-            const isFinished = g.activities?.every(a => {
-                const st = (a.status || '').toLowerCase();
-                const prog = ((a as any).tien_do || '').toLowerCase();
-                return st.includes('done') || st.includes('hoàn thành') || prog.includes('done') || prog.includes('hoàn thành');
-            });
-
-            if (activeQuickFilter === 'RECENT_SYNC') {
-                return matchesSearch && (g.stats?.isRecentlySynced === true || (g.stats?.recentSyncCount || 0) > 0);
-            }
-            if (activeQuickFilter === 'ACTIVE') {
-                return matchesSearch && (!isFinished || !g.activities || g.activities.length === 0);
-            }
-            if (activeQuickFilter === 'COMPLETED') {
-                return matchesSearch && isFinished && g.activities && g.activities.length > 0;
-            }
-            if (activeQuickFilter === 'HIGH_STORE_COUNT') {
-                return matchesSearch && (g.stats?.storeCount || 0) > 0;
+            if (activeQuickFilter === 'UNPROCESSED') {
+                return matchesSearch && g.stats?.isProcessed !== true && g.activities && g.activities.length > 0;
             }
             return matchesSearch;
         });
@@ -474,30 +473,35 @@ export default function ModelTest() {
                 <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar text-xs">
                     <button
                         onClick={() => setActiveQuickFilter('ALL')}
-                        className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                        className={`px-3.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                             activeQuickFilter === 'ALL'
                                 ? 'bg-indigo-600 text-white shadow-sm'
                                 : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
                         }`}
                     >
                         <span>📌 Tất cả</span>
-                        <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/20 font-mono">
+                        <span className="px-2 py-0.2 rounded-full text-[10px] bg-white/20 font-mono font-bold">
                             {groupedProjects.length}
                         </span>
                     </button>
 
                     <button
-                        onClick={() => setActiveQuickFilter('RECENT_SYNC')}
-                        className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                            activeQuickFilter === 'RECENT_SYNC'
-                                ? 'bg-emerald-600 text-white shadow-sm'
-                                : 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100'
+                        onClick={() => setActiveQuickFilter('UNPROCESSED')}
+                        className={`px-3.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                            activeQuickFilter === 'UNPROCESSED'
+                                ? 'bg-amber-600 text-white shadow-sm'
+                                : 'bg-amber-50 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800 hover:bg-amber-100'
                         }`}
                     >
-                        <span>⚡ Vừa nạp mới (24h)</span>
-                        <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-100 font-mono font-black">
-                            {groupedProjects.filter(g => g.stats?.isRecentlySynced).length}
+                        <span>📥 Chờ xử lý</span>
+                        <span className="px-2 py-0.2 rounded-full text-[10px] bg-amber-200 dark:bg-amber-900 text-amber-950 dark:text-amber-100 font-mono font-black">
+                            {groupedProjects.filter(g => !g.stats?.isProcessed && g.activities && g.activities.length > 0).length}
                         </span>
+                        {groupedProjects.some(g => g.stats?.isOverdue) && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] bg-rose-600 text-white font-mono font-black animate-pulse">
+                                ⚠️ CÓ CA QUÁ 24H
+                            </span>
+                        )}
                     </button>
                 </div>
 
