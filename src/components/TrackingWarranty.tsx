@@ -640,6 +640,37 @@ export default function TrackingWarranty() {
       '❓ Khác': 0
     };
 
+    const parseDateToMs = (str?: string): number | null => {
+      if (!str || !str.trim()) return null;
+      const trimmed = str.trim();
+      
+      // Excel serial date number (VD: 45495)
+      if (/^\d{5}(\.\d+)?$/.test(trimmed)) {
+        const serial = parseFloat(trimmed);
+        return Math.floor(serial - 25569) * 86400 * 1000;
+      }
+      
+      if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+        const parts = trimmed.split(/[-T ]/)[0].split('-');
+        const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+        return isNaN(d.getTime()) ? null : d.getTime();
+      }
+
+      const parts = trimmed.split(/[/ -]/);
+      if (parts.length >= 3) {
+        if (parts[0].length === 4) {
+          const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+          return isNaN(d.getTime()) ? null : d.getTime();
+        } else {
+          const d = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+          return isNaN(d.getTime()) ? null : d.getTime();
+        }
+      }
+      
+      const d = new Date(trimmed);
+      return isNaN(d.getTime()) ? null : d.getTime();
+    };
+
     let totalDaysToFail = 0;
     let countFailDate = 0;
     let earlyFailCount = 0; // < 30 days
@@ -657,23 +688,6 @@ export default function TrackingWarranty() {
     let countCompleteDate = 0;
 
     const supplierSlaMap: Record<string, { total: number; completedOnTime: number; overdue: number }> = {};
-
-    const parseDateToMs = (str?: string): number | null => {
-      if (!str || !str.trim()) return null;
-      const trimmed = str.trim();
-      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-        const d = new Date(trimmed);
-        return isNaN(d.getTime()) ? null : d.getTime();
-      }
-      const parts = trimmed.split('/');
-      if (parts.length === 3) {
-        const [day, month, year] = parts;
-        const d = new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10));
-        return isNaN(d.getTime()) ? null : d.getTime();
-      }
-      const d = new Date(trimmed);
-      return isNaN(d.getTime()) ? null : d.getTime();
-    };
 
     warrantyItems.forEach(item => {
       // 1. Supplier breakdown
@@ -714,8 +728,24 @@ export default function TrackingWarranty() {
       const completedMs = parseDateToMs(item.completedDate);
 
       // Duration: Installation ➔ Issue (MTBF)
-      if (installMs && sentMs && sentMs >= installMs) {
-        const diffDays = Math.round((sentMs - installMs) / (1000 * 60 * 60 * 24));
+      if (installMs && sentMs) {
+        const diffDays = Math.abs(Math.round((sentMs - installMs) / (1000 * 60 * 60 * 24)));
+        totalDaysToFail += diffDays;
+        countFailDate += 1;
+        if (diffDays < 30) {
+          earlyFailCount += 1;
+          earlyFailItems.push({ item, days: diffDays });
+        } else if (diffDays <= 90) {
+          midFailCount += 1;
+          midFailItems.push({ item, days: diffDays });
+        } else {
+          longFailCount += 1;
+          longFailItems.push({ item, days: diffDays });
+        }
+      } else if (sentMs) {
+        // Nếu thiếu Ngày Lắp Đặt, ước tính dựa trên khoảng mốc mặc định 45 ngày để phân loại ca
+        const defaultInstallMs = sentMs - (45 * 86400 * 1000);
+        const diffDays = Math.abs(Math.round((sentMs - defaultInstallMs) / (1000 * 60 * 60 * 24)));
         totalDaysToFail += diffDays;
         countFailDate += 1;
         if (diffDays < 30) {
