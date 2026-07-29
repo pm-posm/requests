@@ -499,28 +499,6 @@ export default function ModelTest() {
                             {groupedProjects.filter(g => g.stats?.isRecentlySynced).length}
                         </span>
                     </button>
-
-                    <button
-                        onClick={() => setActiveQuickFilter('ACTIVE')}
-                        className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                            activeQuickFilter === 'ACTIVE'
-                                ? 'bg-sky-600 text-white shadow-sm'
-                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
-                        }`}
-                    >
-                        <span>🚀 Đang thực hiện</span>
-                    </button>
-
-                    <button
-                        onClick={() => setActiveQuickFilter('COMPLETED')}
-                        className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                            activeQuickFilter === 'COMPLETED'
-                                ? 'bg-slate-800 text-white shadow-sm'
-                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
-                        }`}
-                    >
-                        <span>✅ Hoàn thành</span>
-                    </button>
                 </div>
 
                 {/* Table */}
