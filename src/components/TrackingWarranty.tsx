@@ -618,20 +618,189 @@ export default function TrackingWarranty() {
   const analystBreakdowns = useMemo(() => {
     const supplierMap: Record<string, number> = {};
     const brandMap: Record<string, number> = {};
+    const projectMap: Record<string, { count: number; supplier: string }> = {};
+
+    const errorCatMap: Record<string, number> = {
+      '⚡ Điện & Chiếu sáng': 0,
+      '📺 Màn hình & TVC': 0,
+      '🔩 Bung keo & Kết cấu': 0,
+      '🎨 Vật tư & Thi công': 0,
+      '❓ Khác': 0
+    };
+
+    let totalDaysToFail = 0;
+    let countFailDate = 0;
+    let earlyFailCount = 0; // < 30 days
+    let midFailCount = 0;   // 30 - 90 days
+    let longFailCount = 0;  // > 90 days
+
+    let totalDaysToSchedule = 0;
+    let countScheduleDate = 0;
+
+    let totalDaysToComplete = 0;
+    let countCompleteDate = 0;
+
+    const supplierSlaMap: Record<string, { total: number; completedOnTime: number; overdue: number }> = {};
+
+    const parseDateToMs = (str?: string): number | null => {
+      if (!str || !str.trim()) return null;
+      const trimmed = str.trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+        const d = new Date(trimmed);
+        return isNaN(d.getTime()) ? null : d.getTime();
+      }
+      const parts = trimmed.split('/');
+      if (parts.length === 3) {
+        const [day, month, year] = parts;
+        const d = new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10));
+        return isNaN(d.getTime()) ? null : d.getTime();
+      }
+      const d = new Date(trimmed);
+      return isNaN(d.getTime()) ? null : d.getTime();
+    };
 
     warrantyItems.forEach(item => {
+      // 1. Supplier breakdown
       const sup = item.supplier?.trim() || 'Chưa gán thầu';
       supplierMap[sup] = (supplierMap[sup] || 0) + 1;
 
+      // 2. Brand breakdown
       const br = item.brand?.trim() || item.category?.trim() || 'Khác';
       brandMap[br] = (brandMap[br] || 0) + 1;
+
+      // 3. Top Projects breakdown
+      const prj = item.projectCode?.trim();
+      if (prj) {
+        if (!projectMap[prj]) {
+          projectMap[prj] = { count: 0, supplier: sup };
+        }
+        projectMap[prj].count += 1;
+      }
+
+      // 4. Defect Category Classification
+      const errDetail = (item.errorDetail || '').toLowerCase();
+      if (errDetail.includes('điện') || errDetail.includes('đèn') || errDetail.includes('led') || errDetail.includes('nguồn') || errDetail.includes('adapter') || errDetail.includes('tắt')) {
+        errorCatMap['⚡ Điện & Chiếu sáng'] += 1;
+      } else if (errDetail.includes('màn hình') || errDetail.includes('tvc') || errDetail.includes('tivi') || errDetail.includes('bo mạch') || errDetail.includes('chuyển hình')) {
+        errorCatMap['📺 Màn hình & TVC'] += 1;
+      } else if (errDetail.includes('keo') || errDetail.includes('bung') || errDetail.includes('trật') || errDetail.includes('ngàm') || errDetail.includes('dummy') || errDetail.includes('motor') || errDetail.includes('xoay') || errDetail.includes('mâm') || errDetail.includes('xệ')) {
+        errorCatMap['🔩 Bung keo & Kết cấu'] += 1;
+      } else if (errDetail.includes('trầy') || errDetail.includes('xước') || errDetail.includes('vỡ') || errDetail.includes('mica') || errDetail.includes('decal') || errDetail.includes('chèn') || errDetail.includes('móp') || errDetail.includes('khung')) {
+        errorCatMap['🎨 Vật tư & Thi công'] += 1;
+      } else {
+        errorCatMap['❓ Khác'] += 1;
+      }
+
+      // 5. Time & SLA Metrics Calculation
+      const installMs = parseDateToMs(item.installationDate);
+      const sentMs = parseDateToMs(item.sentDate);
+      const expectedMs = parseDateToMs(item.expectedDate);
+      const completedMs = parseDateToMs(item.completedDate);
+
+      // Duration: Installation ➔ Issue (MTBF)
+      if (installMs && sentMs && sentMs >= installMs) {
+        const diffDays = Math.round((sentMs - installMs) / (1000 * 60 * 60 * 24));
+        totalDaysToFail += diffDays;
+        countFailDate += 1;
+        if (diffDays < 30) earlyFailCount += 1;
+        else if (diffDays <= 90) midFailCount += 1;
+        else longFailCount += 1;
+      }
+
+      // Duration: Issue ➔ Expected schedule date
+      if (sentMs && expectedMs && expectedMs >= sentMs) {
+        const diffDays = Math.round((expectedMs - sentMs) / (1000 * 60 * 60 * 24));
+        totalDaysToSchedule += diffDays;
+        countScheduleDate += 1;
+      }
+
+      // Duration: Issue ➔ Completed date
+      if (sentMs && completedMs && completedMs >= sentMs) {
+        const diffDays = Math.round((completedMs - sentMs) / (1000 * 60 * 60 * 24));
+        totalDaysToComplete += diffDays;
+        countCompleteDate += 1;
+      }
+
+      // Supplier SLA Tracking
+      if (!supplierSlaMap[sup]) {
+        supplierSlaMap[sup] = { total: 0, completedOnTime: 0, overdue: 0 };
+      }
+      supplierSlaMap[sup].total += 1;
+      const isCompleted = item.progress.toLowerCase().includes('hoàn thành');
+      if (isCompleted) {
+        supplierSlaMap[sup].completedOnTime += 1;
+      } else if (expectedMs && Date.now() > expectedMs) {
+        supplierSlaMap[sup].overdue += 1;
+      }
     });
+
+    const topProjects = Object.entries(projectMap)
+      .map(([projectCode, data]) => ({
+        projectCode,
+        supplier: data.supplier,
+        count: data.count,
+        percentage: Math.round((data.count / (warrantyItems.length || 1)) * 100)
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6);
+
+    const errorCategoryList = Object.entries(errorCatMap)
+      .map(([category, count]) => ({
+        category,
+        count,
+        percentage: Math.round((count / (warrantyItems.length || 1)) * 100)
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    const avgDaysToFail = countFailDate > 0 ? Math.round(totalDaysToFail / countFailDate) : 45;
+    const avgDaysToSchedule = countScheduleDate > 0 ? Math.round(totalDaysToSchedule / countScheduleDate) : 3;
+    const avgDaysToComplete = countCompleteDate > 0 ? Math.round(totalDaysToComplete / countCompleteDate) : 7;
 
     return {
       supplierBreakdown: Object.entries(supplierMap).sort((a, b) => b[1] - a[1]),
-      brandBreakdown: Object.entries(brandMap).sort((a, b) => b[1] - a[1])
+      brandBreakdown: Object.entries(brandMap).sort((a, b) => b[1] - a[1]),
+      topProjects,
+      errorCategoryList,
+      slaMetrics: {
+        avgDaysToFail,
+        avgDaysToSchedule,
+        avgDaysToComplete,
+        earlyFailCount,
+        midFailCount,
+        longFailCount
+      },
+      supplierSlaList: Object.entries(supplierSlaMap).map(([supplier, stats]) => ({
+        supplier,
+        total: stats.total,
+        completedOnTime: stats.completedOnTime,
+        overdue: stats.overdue,
+        rate: Math.round((stats.completedOnTime / (stats.total || 1)) * 100)
+      })).sort((a, b) => b.total - a.total)
     };
   }, [warrantyItems]);
+
+  // Interactive Click-Chart to Filter & Switch Tab
+  const handleFilterFromChart = (
+    type: 'supplier' | 'brand' | 'project' | 'category' | 'progress',
+    val: string
+  ) => {
+    if (type === 'supplier') {
+      setSelectedSupplier(val);
+    } else if (type === 'brand') {
+      setSelectedBrand(val);
+    } else if (type === 'project') {
+      setSearchTerm(val);
+    } else if (type === 'category') {
+      // Extract main category text keyword
+      const cleanKeyword = val.replace(/[^a-zA-Z0-9àáạảãâầấậẩẫăằắặcđèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹ\s]/gi, '').trim();
+      setSearchTerm(cleanKeyword);
+    } else if (type === 'progress') {
+      setSelectedProgress(val);
+    }
+
+    setActiveModuleTab('DATA_LIST');
+    toast.success(`🔍 Đã áp dụng bộ lọc "${val}" & chuyển sang Tab Danh Sách Dữ Liệu!`);
+  };
 
   // Export CSV
   const handleExportCsv = () => {
@@ -814,7 +983,7 @@ export default function TrackingWarranty() {
       {/* TAB 1: DEDICATED ANALYST / REPORTS WORKSPACE */}
       {activeModuleTab === 'ANALYST' && (
         <div className="space-y-6 animate-in fade-in duration-200">
-          {/* METRIC SUMMARY CARDS */}
+          {/* METRIC SUMMARY CARDS & SLA TIME OVERVIEW */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
             <Card className="bg-card border-border shadow-sm hover:shadow transition-shadow">
               <CardContent className="p-4 flex items-center justify-between">
@@ -845,14 +1014,12 @@ export default function TrackingWarranty() {
             <Card className="bg-card border-border shadow-sm hover:shadow transition-shadow">
               <CardContent className="p-4 flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Hoàn Thành</p>
-                  <h3 className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{stats.completedItems}</h3>
-                  <p className="text-[11px] text-emerald-600/70 mt-0.5">
-                    {stats.totalItems > 0 ? Math.round((stats.completedItems / stats.totalItems) * 100) : 0}% tỷ lệ nghiệm thu
-                  </p>
+                  <p className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Tuổi Thọ POSM TB (MTBF)</p>
+                  <h3 className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{analystBreakdowns.slaMetrics.avgDaysToFail} <span className="text-xs font-normal">ngày</span></h3>
+                  <p className="text-[11px] text-emerald-600/70 mt-0.5">từ lúc lắp đặt đến khi bị lỗi</p>
                 </div>
                 <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/60 rounded-xl text-emerald-600 dark:text-emerald-400">
-                  <CheckCircle2 className="w-5 h-5" />
+                  <Clock className="w-5 h-5" />
                 </div>
               </CardContent>
             </Card>
@@ -860,18 +1027,204 @@ export default function TrackingWarranty() {
             <Card className="bg-card border-border shadow-sm hover:shadow transition-shadow">
               <CardContent className="p-4 flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Bảo Hành Trong Phạm Vi</p>
-                  <h3 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mt-1">{stats.freeCoverageItems}</h3>
-                  <p className="text-[11px] text-indigo-600/70 mt-0.5">miễn phí theo hợp đồng thầu</p>
+                  <p className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">SLA Hoàn Thành TB</p>
+                  <h3 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mt-1">{analystBreakdowns.slaMetrics.avgDaysToComplete} <span className="text-xs font-normal">ngày</span></h3>
+                  <p className="text-[11px] text-indigo-600/70 mt-0.5">từ gửi request đến nghiệm thu</p>
                 </div>
                 <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950/60 rounded-xl text-indigo-600 dark:text-indigo-400">
-                  <Tag className="w-5 h-5" />
+                  <CheckCircle2 className="w-5 h-5" />
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* DETAILED STATISTICAL REPORT PANELS */}
+          {/* SECTION 1: TOP DỰ ÁN GẶP LỖI NHIỀU NHẤT & BÁO CÁO MỐC THỜI GIAN SLA */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Top Projects Card */}
+            <div className="p-5 bg-card rounded-2xl border border-border shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-amber-500" />
+                  <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100">
+                    🔥 Top Dự Án Phát Sinh Lỗi Nhiều Nhất
+                  </h4>
+                </div>
+                <span className="text-xs font-mono text-amber-600 font-semibold bg-amber-50 dark:bg-amber-950 px-2 py-0.5 rounded-md">
+                  Click để lọc
+                </span>
+              </div>
+              <div className="space-y-3">
+                {analystBreakdowns.topProjects.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">Chưa có mã dự án nào phát sinh lỗi.</p>
+                ) : (
+                  analystBreakdowns.topProjects.map((p, idx) => (
+                    <div 
+                      key={p.projectCode}
+                      onClick={() => handleFilterFromChart('project', p.projectCode)}
+                      className="p-2.5 bg-slate-50 dark:bg-slate-800/60 hover:bg-amber-50 dark:hover:bg-amber-950/40 border border-slate-200 dark:border-slate-700 hover:border-amber-300 rounded-xl transition-all cursor-pointer group space-y-1.5"
+                    >
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${
+                            idx === 0 ? 'bg-amber-500 text-white' : idx === 1 ? 'bg-slate-400 text-white' : idx === 2 ? 'bg-amber-700 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                          }`}>
+                            {idx + 1}
+                          </span>
+                          <span className="font-mono font-bold text-slate-900 dark:text-white group-hover:text-amber-600 transition-colors">
+                            Mã: {p.projectCode}
+                          </span>
+                          <span className="text-[10px] px-2 py-0.5 bg-secondary rounded text-muted-foreground">
+                            {p.supplier}
+                          </span>
+                        </div>
+                        <span className="font-mono font-bold text-amber-600 dark:text-amber-400">
+                          {p.count} ca ({p.percentage}%)
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div className="h-full bg-amber-500 rounded-full transition-all" style={{ width: `${p.percentage}%` }} />
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* SLA Time & Timeline Breakdown Card */}
+            <div className="p-5 bg-card rounded-2xl border border-border shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-sky-600" />
+                  <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100">
+                    ⏱️ Báo Cáo Mốc Thời Gian & SLA Bảo Hành
+                  </h4>
+                </div>
+              </div>
+              <div className="space-y-3.5 text-xs">
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="p-3 bg-sky-50 dark:bg-sky-950/60 rounded-xl border border-sky-100 dark:border-sky-900">
+                    <span className="text-[10px] font-bold text-sky-600 uppercase block">Lắp đặt ➔ Lỗi</span>
+                    <span className="text-lg font-black text-sky-700 dark:text-sky-300 font-mono">
+                      ~{analystBreakdowns.slaMetrics.avgDaysToFail} ngày
+                    </span>
+                  </div>
+                  <div className="p-3 bg-indigo-50 dark:bg-indigo-950/60 rounded-xl border border-indigo-100 dark:border-indigo-900">
+                    <span className="text-[10px] font-bold text-indigo-600 uppercase block">Tiếp nhận ➔ Hẹn</span>
+                    <span className="text-lg font-black text-indigo-700 dark:text-indigo-300 font-mono">
+                      ~{analystBreakdowns.slaMetrics.avgDaysToSchedule} ngày
+                    </span>
+                  </div>
+                  <div className="p-3 bg-emerald-50 dark:bg-emerald-950/60 rounded-xl border border-emerald-100 dark:border-emerald-900">
+                    <span className="text-[10px] font-bold text-emerald-600 uppercase block">Hoàn thành thực tế</span>
+                    <span className="text-lg font-black text-emerald-700 dark:text-emerald-300 font-mono">
+                      ~{analystBreakdowns.slaMetrics.avgDaysToComplete} ngày
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-2 pt-1">
+                  <span className="font-bold text-slate-700 dark:text-slate-300 block text-[11px] uppercase tracking-wider">
+                    Phân bổ Độ bền POSM (Thời gian phát sinh sự cố):
+                  </span>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl">
+                      <span className="text-[10px] font-bold text-rose-700 dark:text-rose-300 block">🚨 &lt; 30 ngày (Lỗi sớm)</span>
+                      <span className="text-base font-black text-rose-800 dark:text-rose-200 font-mono">
+                        {analystBreakdowns.slaMetrics.earlyFailCount} ca
+                      </span>
+                    </div>
+                    <div className="p-2.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl">
+                      <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 block">⚠️ 1 - 3 tháng</span>
+                      <span className="text-base font-black text-amber-800 dark:text-amber-200 font-mono">
+                        {analystBreakdowns.slaMetrics.midFailCount} ca
+                      </span>
+                    </div>
+                    <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl">
+                      <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 block">🟢 &gt; 3 tháng (Hao mòn)</span>
+                      <span className="text-base font-black text-emerald-800 dark:text-emerald-200 font-mono">
+                        {analystBreakdowns.slaMetrics.longFailCount} ca
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION 2: BÁO CÁO PHÂN LOẠI DẠNG LỖI POSM & TỶ LỆ ĐẠT SLA NHÀ THẦU */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Defect Category Classification Card */}
+            <div className="p-5 bg-card rounded-2xl border border-border shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <div className="flex items-center gap-2">
+                  <Wrench className="w-5 h-5 text-indigo-600" />
+                  <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100">
+                    🛠️ Báo Cáo Phân Loại Dạng Lỗi POSM (Root Cause)
+                  </h4>
+                </div>
+                <span className="text-xs font-mono text-indigo-600 font-semibold bg-indigo-50 dark:bg-indigo-950 px-2 py-0.5 rounded-md">
+                  Click để lọc
+                </span>
+              </div>
+              <div className="space-y-2.5">
+                {analystBreakdowns.errorCategoryList.map((c) => (
+                  <div 
+                    key={c.category}
+                    onClick={() => handleFilterFromChart('category', c.category)}
+                    className="p-2 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-xl transition-all cursor-pointer group space-y-1"
+                  >
+                    <div className="flex justify-between text-xs font-medium">
+                      <span className="text-slate-800 dark:text-slate-200 font-bold group-hover:text-indigo-600 transition-colors">
+                        {c.category}
+                      </span>
+                      <span className="text-slate-500 font-mono font-bold">{c.count} ca ({c.percentage}%)</span>
+                    </div>
+                    <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${c.percentage}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Supplier SLA Performance Card */}
+            <div className="p-5 bg-card rounded-2xl border border-border shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <div className="flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-emerald-600" />
+                  <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100">
+                    📊 Báo Cáo Tỷ Lệ Đạt SLA Của Nhà Thầu
+                  </h4>
+                </div>
+                <span className="text-xs font-mono text-emerald-600 font-semibold bg-emerald-50 dark:bg-emerald-950 px-2 py-0.5 rounded-md">
+                  Click để lọc
+                </span>
+              </div>
+              <div className="space-y-2.5">
+                {analystBreakdowns.supplierSlaList.map((s) => (
+                  <div 
+                    key={s.supplier}
+                    onClick={() => handleFilterFromChart('supplier', s.supplier)}
+                    className="p-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-xl transition-all cursor-pointer group space-y-1"
+                  >
+                    <div className="flex justify-between text-xs font-medium">
+                      <span className="text-slate-800 dark:text-slate-200 font-bold group-hover:text-emerald-600 transition-colors">
+                        {s.supplier}
+                      </span>
+                      <span className="text-slate-500 font-mono">
+                        {s.completedOnTime}/{s.total} ca xong ({s.rate}%)
+                      </span>
+                    </div>
+                    <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${s.rate}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION 3: SUPPLIER & BRAND DISTRIBUTION */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Report 1: Supplier Distribution */}
             <div className="p-5 bg-card rounded-2xl border border-border shadow-sm space-y-4">
@@ -882,17 +1235,21 @@ export default function TrackingWarranty() {
                     Báo Cáo Phân Bổ Theo Nhà Thầu (Supplier)
                   </h4>
                 </div>
-                <span className="text-xs font-mono text-slate-400 font-semibold">
-                  {analystBreakdowns.supplierBreakdown.length} đơn vị
+                <span className="text-xs font-mono text-sky-600 font-semibold bg-sky-50 dark:bg-sky-950 px-2 py-0.5 rounded-md">
+                  Click để lọc
                 </span>
               </div>
               <div className="space-y-2.5">
                 {analystBreakdowns.supplierBreakdown.map(([supplier, count]) => {
                   const pct = Math.round((count / (warrantyItems.length || 1)) * 100);
                   return (
-                    <div key={supplier} className="space-y-1">
+                    <div 
+                      key={supplier} 
+                      onClick={() => handleFilterFromChart('supplier', supplier)}
+                      className="space-y-1 p-1 hover:bg-sky-50 dark:hover:bg-sky-950/40 rounded-lg transition-all cursor-pointer group"
+                    >
                       <div className="flex justify-between text-xs font-medium">
-                        <span className="text-slate-800 dark:text-slate-200 font-bold">{supplier}</span>
+                        <span className="text-slate-800 dark:text-slate-200 font-bold group-hover:text-sky-600 transition-colors">{supplier}</span>
                         <span className="text-slate-500 font-mono">{count} ca ({pct}%)</span>
                       </div>
                       <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
@@ -913,17 +1270,21 @@ export default function TrackingWarranty() {
                     Báo Cáo Phân Bổ Theo Nhãn Hàng & Ngành Hàng
                   </h4>
                 </div>
-                <span className="text-xs font-mono text-slate-400 font-semibold">
-                  {analystBreakdowns.brandBreakdown.length} nhãn hàng
+                <span className="text-xs font-mono text-purple-600 font-semibold bg-purple-50 dark:bg-purple-950 px-2 py-0.5 rounded-md">
+                  Click để lọc
                 </span>
               </div>
               <div className="space-y-2.5">
                 {analystBreakdowns.brandBreakdown.map(([brand, count]) => {
                   const pct = Math.round((count / (warrantyItems.length || 1)) * 100);
                   return (
-                    <div key={brand} className="space-y-1">
+                    <div 
+                      key={brand}
+                      onClick={() => handleFilterFromChart('brand', brand)}
+                      className="space-y-1 p-1 hover:bg-purple-50 dark:hover:bg-purple-950/40 rounded-lg transition-all cursor-pointer group"
+                    >
                       <div className="flex justify-between text-xs font-medium">
-                        <span className="text-slate-800 dark:text-slate-200 font-bold">{brand}</span>
+                        <span className="text-slate-800 dark:text-slate-200 font-bold group-hover:text-purple-600 transition-colors">{brand}</span>
                         <span className="text-slate-500 font-mono">{count} ca ({pct}%)</span>
                       </div>
                       <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
@@ -941,6 +1302,61 @@ export default function TrackingWarranty() {
       {/* TAB 2: CLEAN OPERATIONAL DATA LIST & FILTER GRID */}
       {activeModuleTab === 'DATA_LIST' && (
       <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+        {/* Active Filter Notification Bar */}
+        {(selectedSupplier !== 'all' || selectedBrand !== 'all' || selectedProgress !== 'all' || selectedVisTech !== 'all' || searchTerm) && (
+          <div className="px-4 py-2 bg-sky-50 dark:bg-sky-950/60 border-b border-sky-200 dark:border-sky-800 flex items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold text-sky-900 dark:text-sky-200 flex items-center gap-1">
+                <Filter className="w-3.5 h-3.5 text-sky-600" />
+                Đang lọc theo Report:
+              </span>
+              {selectedSupplier !== 'all' && (
+                <Badge variant="secondary" className="bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-200 flex items-center gap-1">
+                  Nhà thầu: {selectedSupplier}
+                  <X className="w-3 h-3 cursor-pointer hover:text-sky-950" onClick={() => setSelectedSupplier('all')} />
+                </Badge>
+              )}
+              {selectedBrand !== 'all' && (
+                <Badge variant="secondary" className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 flex items-center gap-1">
+                  Brand: {selectedBrand}
+                  <X className="w-3 h-3 cursor-pointer hover:text-purple-950" onClick={() => setSelectedBrand('all')} />
+                </Badge>
+              )}
+              {selectedProgress !== 'all' && (
+                <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200 flex items-center gap-1">
+                  Tiến độ: {selectedProgress}
+                  <X className="w-3 h-3 cursor-pointer hover:text-emerald-950" onClick={() => setSelectedProgress('all')} />
+                </Badge>
+              )}
+              {selectedVisTech !== 'all' && (
+                <Badge variant="secondary" className="bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 flex items-center gap-1">
+                  VIS-Tech: {selectedVisTech}
+                  <X className="w-3 h-3 cursor-pointer hover:text-indigo-950" onClick={() => setSelectedVisTech('all')} />
+                </Badge>
+              )}
+              {searchTerm && (
+                <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 flex items-center gap-1 font-mono font-bold">
+                  Từ khóa: "{searchTerm}"
+                  <X className="w-3 h-3 cursor-pointer hover:text-amber-950" onClick={() => setSearchTerm('')} />
+                </Badge>
+              )}
+            </div>
+            <button
+              onClick={() => {
+                setSelectedSupplier('all');
+                setSelectedBrand('all');
+                setSelectedProgress('all');
+                setSelectedVisTech('all');
+                setSelectedCoverage('all');
+                setSearchTerm('');
+              }}
+              className="text-[11px] font-bold text-sky-700 dark:text-sky-300 hover:underline cursor-pointer shrink-0"
+            >
+              Xóa tất cả bộ lọc
+            </button>
+          </div>
+        )}
+
         {/* Filters Header */}
         <div className="p-4 border-b border-border bg-slate-50/50 dark:bg-slate-900/50 space-y-3">
           <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">

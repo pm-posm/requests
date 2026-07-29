@@ -31,3 +31,26 @@ export interface WarrantyStats {
   notStartedItems: number;
   freeCoverageItems?: number;
 }
+
+export interface ProjectDefectStat {
+  projectCode: string;
+  supplier: string;
+  count: number;
+  percentage: number;
+}
+
+export interface ErrorCategoryStat {
+  category: string;
+  iconName: string;
+  count: number;
+  percentage: number;
+}
+
+export interface WarrantySlaMetrics {
+  avgDaysToFail: number;        // Lắp đặt ➔ Lỗi (MTBF)
+  avgDaysToSchedule: number;    // Gửi ➔ Hẹn dự kiến
+  avgDaysToComplete: number;    // Gửi ➔ Hoàn thành
+  earlyFailCount: number;       // < 30 ngày
+  midFailCount: number;         // 1 - 3 tháng
+  longFailCount: number;        // > 3 tháng
+}
