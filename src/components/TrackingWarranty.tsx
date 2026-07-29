@@ -18,6 +18,16 @@ const DEFAULT_WARRANTY_SHEET_CSV = 'https://docs.google.com/spreadsheets/d/119Lp
 // Deployed Web App URL for Apps Script Reverse Sync (Version 5 - Active)
 const DEFAULT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxLRsNBMc4MguQlCOdgmlO6NRsfPG9AltjFCnS8I7GRMwZPNeiVCaqLiDc_vwpbogcK/exec';
 
+// Helper to format Web App URL or raw Deployment ID
+const formatWebAppUrl = (rawUrl?: string): string => {
+  if (!rawUrl || !rawUrl.trim()) return DEFAULT_WEB_APP_URL;
+  const trimmed = rawUrl.trim();
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed;
+  }
+  return `https://script.google.com/macros/s/${trimmed}/exec`;
+};
+
 // Helper to convert DD/MM/YYYY or string to YYYY-MM-DD for native <input type="date">
 const toHtmlDateStr = (str?: string): string => {
   if (!str) return '';
@@ -269,7 +279,7 @@ export default function TrackingWarranty() {
     setWarrantyItems(prev => prev.map(i => i.id === updatedItem.id ? updatedItem : i));
 
     // 2. Trigger Multi-channel Sync to Google Sheet
-    const targetUrl = (webAppUrl || DEFAULT_WEB_APP_URL).trim();
+    const targetUrl = formatWebAppUrl(webAppUrl);
     if (targetUrl) {
       try {
         setIsSyncingToSheet(true);
@@ -368,7 +378,7 @@ export default function TrackingWarranty() {
     }
 
     // Multi-channel reverse sync to Google Sheet via Web App
-    const targetUrl = (webAppUrl || DEFAULT_WEB_APP_URL).trim();
+    const targetUrl = formatWebAppUrl(webAppUrl);
     if (targetUrl) {
       try {
         const queryParams = new URLSearchParams({
