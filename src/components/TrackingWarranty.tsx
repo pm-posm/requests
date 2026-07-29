@@ -394,8 +394,16 @@ export default function TrackingWarranty() {
         if (editInstallationDate.trim()) payload.installationDate = editInstallationDate.trim();
         if (editExpectedDate.trim()) payload.expectedDate = editExpectedDate.trim();
         if (editCompletedDate.trim()) payload.completedDate = editCompletedDate.trim();
-        if (editWarrantyCoverage.trim()) payload.warrantyCoverage = editWarrantyCoverage.trim();
-        if (editWarrantyCost.trim()) payload.warrantyCost = editWarrantyCost.trim();
+        if (editWarrantyCoverage.trim()) {
+          payload.warrantyCoverage = editWarrantyCoverage.trim();
+          payload.coverage = editWarrantyCoverage.trim();
+          payload.trangThaiBH = editWarrantyCoverage.trim();
+        }
+        if (editWarrantyCost.trim()) {
+          payload.warrantyCost = editWarrantyCost.trim();
+          payload.cost = editWarrantyCost.trim();
+          payload.chiPhiBH = editWarrantyCost.trim();
+        }
         if (editNote.trim()) payload.note = editNote.trim();
 
         const queryParams = new URLSearchParams(payload).toString();
