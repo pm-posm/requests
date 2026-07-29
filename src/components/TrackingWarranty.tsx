@@ -382,22 +382,23 @@ export default function TrackingWarranty() {
     const targetUrl = formatWebAppUrl(webAppUrl);
     if (targetUrl) {
       try {
-        const queryParams = new URLSearchParams({
+        const payload: Record<string, string> = {
           rowId: selectedItem.rowId,
           requestId: selectedItem.requestId,
-          projectCode: editProjectCode.trim(),
-          supplier: editSupplier.trim(),
-          progress: editProgress.trim(),
-          titleMail: editTitleMail.trim(),
-          raiseMailTime: editRaiseMailTime.trim(),
-          installationDate: editInstallationDate.trim(),
-          expectedDate: editExpectedDate.trim(),
-          completedDate: editCompletedDate.trim(),
-          warrantyCoverage: editWarrantyCoverage.trim(),
-          warrantyCost: editWarrantyCost.trim(),
-          note: editNote.trim()
-        }).toString();
+        };
+        if (editProjectCode.trim()) payload.projectCode = editProjectCode.trim();
+        if (editSupplier.trim()) payload.supplier = editSupplier.trim();
+        if (editProgress.trim()) payload.progress = editProgress.trim();
+        if (editTitleMail.trim()) payload.titleMail = editTitleMail.trim();
+        if (editRaiseMailTime.trim()) payload.raiseMailTime = editRaiseMailTime.trim();
+        if (editInstallationDate.trim()) payload.installationDate = editInstallationDate.trim();
+        if (editExpectedDate.trim()) payload.expectedDate = editExpectedDate.trim();
+        if (editCompletedDate.trim()) payload.completedDate = editCompletedDate.trim();
+        if (editWarrantyCoverage.trim()) payload.warrantyCoverage = editWarrantyCoverage.trim();
+        if (editWarrantyCost.trim()) payload.warrantyCost = editWarrantyCost.trim();
+        if (editNote.trim()) payload.note = editNote.trim();
 
+        const queryParams = new URLSearchParams(payload).toString();
         const fullGetUrl = `${targetUrl}?${queryParams}`;
         const img = new Image();
         img.src = fullGetUrl;
@@ -407,21 +408,7 @@ export default function TrackingWarranty() {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({
-            rowId: selectedItem.rowId,
-            requestId: selectedItem.requestId,
-            projectCode: editProjectCode.trim(),
-            supplier: editSupplier.trim(),
-            progress: editProgress.trim(),
-            titleMail: editTitleMail.trim(),
-            raiseMailTime: editRaiseMailTime.trim(),
-            installationDate: editInstallationDate.trim(),
-            expectedDate: editExpectedDate.trim(),
-            completedDate: editCompletedDate.trim(),
-            warrantyCoverage: editWarrantyCoverage.trim(),
-            warrantyCost: editWarrantyCost.trim(),
-            note: editNote.trim()
-          })
+          body: JSON.stringify(payload)
         }).catch(() => {});
 
         toast.success(`🟢 Đã lưu dữ liệu ca ${selectedItem.requestId} & đồng bộ 2 chiều về Google Sheet!`);
