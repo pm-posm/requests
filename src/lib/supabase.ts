@@ -6,8 +6,8 @@ const defaultSupabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ
 const envUrl = import.meta.env.VITE_SUPABASE_URL;
 const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-const supabaseUrl = (envUrl && envUrl.startsWith('http')) ? envUrl : defaultSupabaseUrl;
-const supabaseAnonKey = envKey || defaultSupabaseAnonKey;
+export const supabaseUrl = (envUrl && envUrl.startsWith('http')) ? envUrl : defaultSupabaseUrl;
+export const supabaseAnonKey = envKey || defaultSupabaseAnonKey;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 

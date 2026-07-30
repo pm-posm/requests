@@ -1,6 +1,6 @@
 import React from 'react';
 import * as XLSX from 'xlsx';
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseUrl, supabaseAnonKey } from '@/lib/supabase';
 import { useQueryClient } from '@tanstack/react-query';
 
 export function useExcelUploader(
@@ -116,9 +116,6 @@ export function useExcelUploader(
         const downloadAndParse = async () => {
             setDownloading(true);
             try {
-                const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-                const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-                
                 const tokenRes = await fetch(`${supabaseUrl}/functions/v1/download-drive-file?mode=token`, {
                     headers: { 
                         'Authorization': `Bearer ${supabaseAnonKey}`,

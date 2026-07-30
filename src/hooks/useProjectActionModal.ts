@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseUrl, supabaseAnonKey } from '@/lib/supabase';
 import * as XLSX from 'xlsx';
 import type { StoreItem, ProjectGroup } from '@/types';
 import toast from 'react-hot-toast';
@@ -119,9 +119,6 @@ export function useProjectActionModal(projectGroup: ProjectGroup, downloadFileId
         const downloadAndParse = async () => {
             setDownloading(true);
             try {
-                const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-                const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
                 // 1. Lấy Access Token từ Edge Function
                 const tokenRes = await fetch(`${supabaseUrl}/functions/v1/download-drive-file?mode=token`, {
                     headers: { 

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Mail, CheckCircle2, FileSpreadsheet } from 'lucide-react';
 import type { ProjectGroup, ActivityRow } from '@/types';
-
+import { supabaseUrl, supabaseAnonKey } from '@/lib/supabase';
 
 function FolderLinkButton({ finalProject, phaseType }: { finalProject: string, phaseType: string }) {
     const [loading, setLoading] = React.useState(false);
@@ -9,8 +9,6 @@ function FolderLinkButton({ finalProject, phaseType }: { finalProject: string, p
     const handleOpen = async () => {
         setLoading(true);
         try {
-            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-            const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
             const response = await fetch(
                 `${supabaseUrl}/functions/v1/project-folder-link?phase_type=${phaseType}&final_project=${encodeURIComponent(finalProject)}`,
                 { 
@@ -101,12 +99,11 @@ function ChangePhaseSelector({ activityId, currentPhase, finalProject }: { activ
 
             // 3. Tự động di chuyển file đính kèm trên Google Drive nếu có
             try {
-                const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-                const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
                 await fetch(`${supabaseUrl}/functions/v1/change-activity-phase`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${supabaseAnonKey}`,
+                        'apikey': supabaseAnonKey,
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
