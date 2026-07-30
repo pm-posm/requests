@@ -306,22 +306,25 @@ export function useProjectActionModal(projectGroup: ProjectGroup, downloadFileId
 
             // 2. Match by store_name
             if (names.length > 0) {
-                const orConditions = names.slice(0, 30).map(n => `store_name.ilike.*${encodeURIComponent(n.replace(/[%_\s]+/g, '*'))}*`).join(',');
-                const { data: nameData } = await supabase
-                    .from('master_stores_directory')
-                    .select('*')
-                    .or(orConditions);
+                const validNames = names.filter(n => n.length >= 2 && !['stt', 'mã số đh', 'tên siêu thị', 'hạng mục'].includes(n.toLowerCase()));
+                if (validNames.length > 0) {
+                    const orConditions = encodeURIComponent(validNames.slice(0, 30).map(n => `store_name.ilike.%${n}%`).join(','));
+                    const { data: nameData } = await supabase
+                        .from('master_stores_directory')
+                        .select('*')
+                        .or(orConditions);
 
-                (nameData || []).forEach((item: any) => {
-                    if (!item.store_name) return;
-                    const normName = item.store_name.toLowerCase().replace(/[^a-z0-9]/g, '');
-                    if (!map.has('NAME:' + normName)) {
-                        map.set('NAME:' + normName, item);
-                    }
-                    if (item.store_code && !map.has(item.store_code.toUpperCase())) {
-                        map.set(item.store_code.toUpperCase(), item);
-                    }
-                });
+                    (nameData || []).forEach((item: any) => {
+                        if (!item.store_name) return;
+                        const normName = item.store_name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                        if (!map.has('NAME:' + normName)) {
+                            map.set('NAME:' + normName, item);
+                        }
+                        if (item.store_code && !map.has(item.store_code.toUpperCase())) {
+                            map.set(item.store_code.toUpperCase(), item);
+                        }
+                    });
+                }
             }
 
             return map;

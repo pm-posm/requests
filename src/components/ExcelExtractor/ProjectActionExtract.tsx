@@ -1,5 +1,96 @@
-import React from 'react';
-import { Loader2, CheckCircle2, Layers, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Loader2, CheckCircle2, Layers, AlertCircle, Search, Sparkles } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+
+function StoreSearchInput({ 
+    value, 
+    placeholder, 
+    onSelectStore,
+    onChangeText 
+}: { 
+    value: string; 
+    placeholder: string; 
+    onSelectStore: (store: any) => void;
+    onChangeText?: (txt: string) => void;
+}) {
+    const [query, setQuery] = useState(value || '');
+    const [isOpen, setIsOpen] = useState(false);
+    const [results, setResults] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        setQuery(value || '');
+    }, [value]);
+
+    useEffect(() => {
+        if (!query || query.length < 2 || !isOpen) {
+            setResults([]);
+            return;
+        }
+        const timer = setTimeout(async () => {
+            setLoading(true);
+            try {
+                const norm = encodeURIComponent(query.trim());
+                const { data } = await supabase
+                    .from('master_stores_directory')
+                    .select('store_code, store_name, region, customer, ka, sr')
+                    .or(`store_code.ilike.%${norm}%,store_name.ilike.%${norm}%`)
+                    .limit(8);
+                setResults(data || []);
+            } catch (err) {
+                console.error(err);
+            } finally {
+                setLoading(false);
+            }
+        }, 200);
+        return () => clearTimeout(timer);
+    }, [query, isOpen]);
+
+    return (
+        <div className="relative w-full">
+            <div className="relative flex items-center">
+                <input
+                    type="text"
+                    value={query}
+                    placeholder={placeholder}
+                    onFocus={() => setIsOpen(true)}
+                    onBlur={() => setTimeout(() => setIsOpen(false), 200)}
+                    onChange={(e) => {
+                        const txt = e.target.value;
+                        setQuery(txt);
+                        if (onChangeText) onChangeText(txt);
+                        setIsOpen(true);
+                    }}
+                    className="w-full text-xs px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded focus:border-indigo-500 outline-none text-slate-800 dark:text-slate-200 font-medium pr-6"
+                />
+                <Search className="w-3 h-3 text-slate-400 absolute right-2 pointer-events-none" />
+            </div>
+
+            {isOpen && (results.length > 0 || loading) && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto custom-scrollbar">
+                    {loading && <div className="p-2 text-[10px] text-slate-400 italic flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Đang tìm trong Danh Bạ Store...</div>}
+                    {results.map((item) => (
+                        <div
+                            key={item.store_code}
+                            onMouseDown={() => {
+                                onSelectStore(item);
+                                setQuery(item.store_name);
+                                setIsOpen(false);
+                            }}
+                            className="p-2 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 cursor-pointer border-b border-slate-100 dark:border-slate-800/60 text-xs flex flex-col gap-0.5"
+                        >
+                            <div className="flex items-center justify-between">
+                                <span className="font-bold text-indigo-600 dark:text-indigo-400">{item.store_code}</span>
+                                <span className="text-[10px] text-slate-400 font-semibold">{item.region || ''} • {item.customer || ''}</span>
+                            </div>
+                            <span className="text-slate-700 dark:text-slate-300 font-medium truncate">{item.store_name}</span>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
 
 export function ProjectActionExtract({
     downloading,
@@ -21,6 +112,8 @@ export function ProjectActionExtract({
     headerRowIdx,
     masterDirMap
 }: any) {
+    // Local row overrides for manual typing or dropdown selection
+    const [rowOverrides, setRowOverrides] = useState<Record<number, any>>({});
 
     if (downloading) {
         return (
@@ -42,22 +135,32 @@ export function ProjectActionExtract({
 
     const renderChecklistItem = ({ row, originalIdx }: { row: any[], originalIdx: number }, isExisting: boolean) => {
         const isChecked = selectedRows.has(originalIdx);
+        const override = rowOverrides[originalIdx] || {};
+
         const rawCode = mapping.store_code !== -1 && row[mapping.store_code] ? String(row[mapping.store_code]).trim() : '';
         const rawName = mapping.store_name !== -1 && row[mapping.store_name] ? String(row[mapping.store_name]).trim() : '';
 
-        let masterData = (rawCode && isNaN(Number(rawCode)) && masterDirMap) ? masterDirMap.get(rawCode.toUpperCase()) : null;
-        if (!masterData && rawName && masterDirMap) {
-            const normName = rawName.toLowerCase().replace(/[^a-z0-9]/g, '');
-            masterData = masterDirMap.get('NAME:' + normName);
+        // Auto-match from Master Directory
+        let masterData = override.masterData;
+        if (!masterData) {
+            if (rawCode && isNaN(Number(rawCode)) && masterDirMap) {
+                masterData = masterDirMap.get(rawCode.toUpperCase());
+            }
+            if (!masterData && rawName && masterDirMap) {
+                const normName = rawName.toLowerCase().replace(/[^a-z0-9]/g, '');
+                masterData = masterDirMap.get('NAME:' + normName);
+            }
         }
 
-        const displayCode = (rawCode && isNaN(Number(rawCode))) ? rawCode : (masterData?.store_code || rawCode || '-');
-        const displayName = rawName || masterData?.store_name || '-';
-        const displayRegion = (mapping.region !== -1 && row[mapping.region]) ? row[mapping.region] : (masterData?.region || '-');
-        const displayCustomer = (mapping.customer !== -1 && row[mapping.customer]) ? row[mapping.customer] : (masterData?.customer || '-');
-        const displayKa = (mapping.ka !== -1 && row[mapping.ka]) ? row[mapping.ka] : (masterData?.ka || '-');
-        const displaySr = (mapping.sr !== -1 && row[mapping.sr]) ? row[mapping.sr] : (masterData?.sr || '-');
+        const displayCode = override.store_code || (rawCode && isNaN(Number(rawCode)) ? rawCode : (masterData?.store_code || rawCode || ''));
+        const displayName = override.store_name || rawName || masterData?.store_name || '';
+        const displayRegion = override.region || ((mapping.region !== -1 && row[mapping.region]) ? row[mapping.region] : (masterData?.region || '-'));
+        const displayCustomer = override.customer || ((mapping.customer !== -1 && row[mapping.customer]) ? row[mapping.customer] : (masterData?.customer || '-'));
+        const displayKa = override.ka || ((mapping.ka !== -1 && row[mapping.ka]) ? row[mapping.ka] : (masterData?.ka || '-'));
+        const displaySr = override.sr || ((mapping.sr !== -1 && row[mapping.sr]) ? row[mapping.sr] : (masterData?.sr || '-'));
         const displayCategory = (mapping.category !== -1 && row[mapping.category]) ? row[mapping.category] : '-';
+
+        const isAutoMapped = !!masterData || !!override.masterData;
 
         return (
             <tr key={originalIdx} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${isExisting ? 'bg-amber-50/20 text-slate-500' : 'bg-white dark:bg-slate-900'} border-b border-slate-100 dark:border-slate-800`}>
@@ -70,21 +173,74 @@ export function ProjectActionExtract({
                         className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                     />
                 </td>
-                <td className="p-2 text-xs font-bold text-slate-700 dark:text-slate-200">
-                    <div className="flex flex-col gap-0.5">
-                        <span>{displayCode}</span>
-                        {masterData && (
-                            <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1 py-0.2 rounded w-fit border border-emerald-200 dark:border-emerald-800">
-                                ⚡ Tự động map từ Danh bạ
+                
+                {/* MÃ CH Cell with Interactive Auto-Search */}
+                <td className="p-2 text-xs min-w-[140px]">
+                    <div className="flex flex-col gap-1">
+                        <StoreSearchInput
+                            value={displayCode}
+                            placeholder="Nhập Mã CH..."
+                            onSelectStore={(st) => {
+                                setRowOverrides(prev => ({
+                                    ...prev,
+                                    [originalIdx]: {
+                                        store_code: st.store_code,
+                                        store_name: st.store_name,
+                                        region: st.region,
+                                        customer: st.customer,
+                                        ka: st.ka,
+                                        sr: st.sr,
+                                        masterData: st
+                                    }
+                                }));
+                            }}
+                            onChangeText={(txt) => {
+                                setRowOverrides(prev => ({
+                                    ...prev,
+                                    [originalIdx]: { ...prev[originalIdx], store_code: txt }
+                                }));
+                            }}
+                        />
+                        {isAutoMapped && (
+                            <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded w-fit border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
+                                <Sparkles className="w-2.5 h-2.5" /> ⚡ Đã map từ Danh bạ
                             </span>
                         )}
                     </div>
                 </td>
-                <td className="p-2 text-xs text-slate-600 dark:text-slate-300 max-w-[150px] truncate" title={displayName}>{displayName}</td>
-                <td className="p-2 text-xs text-slate-500 font-medium">{displayRegion}</td>
-                <td className="p-2 text-xs text-slate-500 font-medium">{displayCustomer}</td>
-                <td className="p-2 text-xs text-slate-500 font-medium">{displayKa}</td>
-                <td className="p-2 text-xs text-slate-500 font-medium">{displaySr}</td>
+
+                {/* TÊN CH Cell with Interactive Auto-Search */}
+                <td className="p-2 text-xs min-w-[160px]">
+                    <StoreSearchInput
+                        value={displayName}
+                        placeholder="Nhập Tên CH..."
+                        onSelectStore={(st) => {
+                            setRowOverrides(prev => ({
+                                ...prev,
+                                [originalIdx]: {
+                                    store_code: st.store_code,
+                                    store_name: st.store_name,
+                                    region: st.region,
+                                    customer: st.customer,
+                                    ka: st.ka,
+                                    sr: st.sr,
+                                    masterData: st
+                                }
+                            }));
+                        }}
+                        onChangeText={(txt) => {
+                            setRowOverrides(prev => ({
+                                ...prev,
+                                [originalIdx]: { ...prev[originalIdx], store_name: txt }
+                            }));
+                        }}
+                    />
+                </td>
+
+                <td className="p-2 text-xs text-slate-600 dark:text-slate-300 font-semibold">{displayRegion}</td>
+                <td className="p-2 text-xs text-slate-600 dark:text-slate-300 font-semibold">{displayCustomer}</td>
+                <td className="p-2 text-xs text-slate-600 dark:text-slate-300 font-semibold">{displayKa}</td>
+                <td className="p-2 text-xs text-slate-600 dark:text-slate-300 font-semibold">{displaySr}</td>
                 <td className="p-2 text-xs text-slate-500 font-medium">{displayCategory}</td>
                 <td className="p-2 text-center">
                     <button className="text-indigo-500 hover:bg-indigo-50 p-1 rounded transition-colors" title="Thêm file tùy chỉnh">
@@ -127,7 +283,7 @@ export function ProjectActionExtract({
 
             {/* Middle: Preview Data Checklist */}
             <div className="flex-1 flex flex-col min-h-0 bg-slate-50/50 dark:bg-slate-950/10 overflow-hidden">
-                <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
+                <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6 custom-scrollbar">
                     {/* New Rows */}
                     <div>
                         <div className="flex items-center justify-between mb-3 border-b border-slate-200 dark:border-slate-700 pb-2">
@@ -160,12 +316,12 @@ export function ProjectActionExtract({
                         </div>
                         
                         <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
-                            <table className="w-full text-left border-collapse min-w-[800px]">
+                            <table className="w-full text-left border-collapse min-w-[850px]">
                                 <thead className="bg-slate-50 dark:bg-slate-800">
                                     <tr>
                                         <th className="p-2 w-10 text-center"><input type="checkbox" onChange={() => {}} className="rounded" /></th>
-                                        <th className="p-2 text-xs font-bold text-slate-500 uppercase">Mã CH</th>
-                                        <th className="p-2 text-xs font-bold text-slate-500 uppercase">Tên CH</th>
+                                        <th className="p-2 text-xs font-bold text-slate-500 uppercase min-w-[140px]">Mã CH (Gõ/Tìm)</th>
+                                        <th className="p-2 text-xs font-bold text-slate-500 uppercase min-w-[160px]">Tên CH (Gõ/Tìm)</th>
                                         <th className="p-2 text-xs font-bold text-slate-500 uppercase">Region</th>
                                         <th className="p-2 text-xs font-bold text-slate-500 uppercase">Customer</th>
                                         <th className="p-2 text-xs font-bold text-slate-500 uppercase">KA</th>
@@ -210,12 +366,12 @@ export function ProjectActionExtract({
                             </div>
                             
                             <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700 opacity-80">
-                                <table className="w-full text-left border-collapse min-w-[800px]">
+                                <table className="w-full text-left border-collapse min-w-[850px]">
                                     <thead className="bg-slate-50 dark:bg-slate-800">
                                         <tr>
                                             <th className="p-2 w-10 text-center"><input type="checkbox" disabled className="rounded" /></th>
-                                            <th className="p-2 text-xs font-bold text-slate-500 uppercase">Mã CH</th>
-                                            <th className="p-2 text-xs font-bold text-slate-500 uppercase">Tên CH</th>
+                                            <th className="p-2 text-xs font-bold text-slate-500 uppercase min-w-[140px]">Mã CH</th>
+                                            <th className="p-2 text-xs font-bold text-slate-500 uppercase min-w-[160px]">Tên CH</th>
                                             <th className="p-2 text-xs font-bold text-slate-500 uppercase">Region</th>
                                             <th className="p-2 text-xs font-bold text-slate-500 uppercase">Customer</th>
                                             <th className="p-2 text-xs font-bold text-slate-500 uppercase">KA</th>
