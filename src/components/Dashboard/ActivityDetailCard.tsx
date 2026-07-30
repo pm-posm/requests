@@ -13,7 +13,12 @@ function FolderLinkButton({ finalProject, phaseType }: { finalProject: string, p
             const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
             const response = await fetch(
                 `${supabaseUrl}/functions/v1/project-folder-link?phase_type=${phaseType}&final_project=${encodeURIComponent(finalProject)}`,
-                { headers: { 'Authorization': `Bearer ${supabaseAnonKey}` } }
+                { 
+                    headers: { 
+                        'Authorization': `Bearer ${supabaseAnonKey}`,
+                        'apikey': supabaseAnonKey
+                    } 
+                }
             );
 
             const contentType = response.headers.get('content-type') || '';

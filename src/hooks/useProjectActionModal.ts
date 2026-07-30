@@ -124,7 +124,10 @@ export function useProjectActionModal(projectGroup: ProjectGroup, downloadFileId
 
                 // 1. Lấy Access Token từ Edge Function
                 const tokenRes = await fetch(`${supabaseUrl}/functions/v1/download-drive-file?mode=token`, {
-                    headers: { 'Authorization': `Bearer ${supabaseAnonKey}` }
+                    headers: { 
+                        'Authorization': `Bearer ${supabaseAnonKey}`,
+                        'apikey': supabaseAnonKey 
+                    }
                 });
                 
                 const tokenText = await tokenRes.text();

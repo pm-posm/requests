@@ -120,13 +120,17 @@ export function useExcelUploader(
                 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
                 
                 const tokenRes = await fetch(`${supabaseUrl}/functions/v1/download-drive-file?mode=token`, {
-                    headers: { 'Authorization': `Bearer ${supabaseAnonKey}` }
+                    headers: { 
+                        'Authorization': `Bearer ${supabaseAnonKey}`,
+                        'apikey': supabaseAnonKey
+                    }
                 });
                 const tokenCT = tokenRes.headers.get('content-type') || '';
-                if (!tokenRes.ok || !tokenCT.includes('application/json')) {
-                    throw new Error('Không lấy được mã xác thực Google Drive.');
+                const tokenText = await tokenRes.text();
+                if (!tokenRes.ok || !tokenCT.includes('application/json') || tokenText.trim().startsWith('<')) {
+                    throw new Error(`Không lấy được mã xác thực Google Drive (HTTP ${tokenRes.status}).`);
                 }
-                const tokenData = await tokenRes.json();
+                const tokenData = JSON.parse(tokenText);
                 if (!tokenData.token) throw new Error('Access Token Google Drive rỗng.');
 
                 const response = await fetch(`https://www.googleapis.com/drive/v3/files/${downloadFileId}?alt=media`, {
