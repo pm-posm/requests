@@ -15,15 +15,24 @@ function FolderLinkButton({ finalProject, phaseType }: { finalProject: string, p
                 `${supabaseUrl}/functions/v1/project-folder-link?phase_type=${phaseType}&final_project=${encodeURIComponent(finalProject)}`,
                 { headers: { 'Authorization': `Bearer ${supabaseAnonKey}` } }
             );
-            if (!response.ok) throw new Error('Không lấy được link thư mục.');
+
+            const contentType = response.headers.get('content-type') || '';
+            if (!contentType.includes('application/json')) {
+                throw new Error('Dịch vụ Google Drive chưa sẵn sàng hoặc thiếu cấu hình.');
+            }
+
             const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || 'Chưa tìm thấy thư mục Drive tương ứng.');
+            }
+
             if (data.folder_url) {
                 window.open(data.folder_url, '_blank');
             } else {
-                alert('Không tìm thấy thư mục Drive tương ứng với mã dự án: ' + finalProject);
+                toast.error('Không tìm thấy thư mục Drive cho dự án: ' + finalProject);
             }
         } catch (err: any) {
-            alert('Lỗi: ' + err.message);
+            toast.error('Lỗi Drive: ' + err.message);
         } finally {
             setLoading(false);
         }
@@ -41,7 +50,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
-function ChangePhaseSelector({ activityId, currentPhase }: { activityId: string, currentPhase: string }) {
+function ChangePhaseSelector({ activityId, currentPhase, finalProject }: { activityId: string, currentPhase: string, finalProject: string }) {
     const queryClient = useQueryClient();
     const [isUpdating, setIsUpdating] = React.useState(false);
 
@@ -58,14 +67,42 @@ function ChangePhaseSelector({ activityId, currentPhase }: { activityId: string,
 
         try {
             const { supabase } = await import('@/lib/supabase');
-            const { error } = await supabase
+
+            // 1. Cập nhật project_activities
+            const { error: actErr } = await supabase
                 .from('project_activities')
                 .update({ phase_type: newPhase })
                 .eq('id', activityId);
 
-            if (error) throw error;
+            if (actErr) throw actErr;
 
-            toast.success(`✅ Đã chuyển email sang giai đoạn ${phaseLabels[newPhase] || newPhase}!`);
+            // 2. Cập nhật activity_attachments
+            await supabase
+                .from('activity_attachments')
+                .update({ phase_type: newPhase })
+                .eq('activity_id', activityId);
+
+            // 3. Tự động di chuyển file đính kèm trên Google Drive nếu có
+            try {
+                const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+                const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+                await fetch(`${supabaseUrl}/functions/v1/change-activity-phase`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${supabaseAnonKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        activity_id: activityId,
+                        final_project: finalProject,
+                        new_phase_type: newPhase
+                    })
+                });
+            } catch (edgeErr) {
+                console.warn('Chuyển file Drive ngầm:', edgeErr);
+            }
+
+            toast.success(`✅ Đã chuyển email & file sang giai đoạn ${phaseLabels[newPhase] || newPhase}!`);
             queryClient.invalidateQueries({ queryKey: ['project_activities_with_attachments_all'] });
             queryClient.invalidateQueries({ queryKey: ['project_groups'] });
             queryClient.invalidateQueries({ queryKey: ['project_overviews_rpc'] });
@@ -177,7 +214,7 @@ export function ActivityDetailCard({ activity, projectGroup, onProcessData }: {
                     <span className="font-medium text-slate-700 dark:text-slate-300">{activity.nguoi_gui || 'N/A'} ({new Date(activity.created_at).toLocaleString('vi-VN')})</span>
                 </div>
                 <div className="flex items-center gap-3">
-                    <ChangePhaseSelector activityId={activity.id} currentPhase={activity.phase_type || ''} />
+                    <ChangePhaseSelector activityId={activity.id} currentPhase={activity.phase_type || ''} finalProject={projectGroup.final_project} />
                     <FolderLinkButton finalProject={projectGroup.final_project} phaseType={activity.phase_type || ''} />
                 </div>
             </div>
