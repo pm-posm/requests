@@ -104,19 +104,30 @@ export function useProjectActionModal(projectGroup: ProjectGroup, downloadFileId
     const detectHeaderRow = (rows: any[][]): number => {
         let bestRowIdx = 0;
         let maxScore = -1;
-        const limit = Math.min(rows.length, 15);
+        const limit = Math.min(rows.length, 20);
         for (let r = 0; r < limit; r++) {
             const row = rows[r];
             if (!row || row.length === 0) continue;
+            // Bỏ qua hàng chỉ có 1 cột text dài (thường là header mô tả)
+            const nonEmpty = row.filter(c => c != null && String(c).trim() !== '');
+            if (nonEmpty.length <= 1 && nonEmpty.length > 0 && String(nonEmpty[0]).length > 30) continue;
             let score = 0;
+            let colCount = nonEmpty.length;
+            // Thưởng điểm cho hàng có nhiều cột (bảng dữ liệu thường >=4 cột)
+            if (colCount >= 4) score += colCount;
             row.forEach(cell => {
                 if (!cell) return;
-                const str = String(cell).toLowerCase().trim();
-                if (str === 'stt' || str === 'no.') score += 2;
-                if (str.includes('store code') || str.includes('mã ch')) score += 5;
-                if (str.includes('store name') || str.includes('tên ch')) score += 4;
-                if (str.includes('hạng mục') || str.includes('posm')) score += 3;
-                if (str.includes('nhà thầu') || str.includes('supplier')) score += 3;
+                const raw = String(cell).trim();
+                const str = raw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+                if (str === 'stt' || str === 'no' || str === 'no.') score += 3;
+                if (str.includes('store code') || str.includes('store_code') || str.includes('storeid') || str.includes('site id') || str.includes('ma ch') || str.includes('ma cua hang') || str.includes('ma store')) score += 8;
+                if (str.includes('store name') || str.includes('ten sieu thi') || str.includes('ten ch') || str.includes('ten cua hang') || str.includes('site name')) score += 6;
+                if (str.includes('hang muc') || str.includes('posm') || str.includes('category') || str.includes('item')) score += 4;
+                if (str.includes('nha thau') || str.includes('supplier') || str.includes('vendor') || str.includes('don vi')) score += 3;
+                if (str.includes('region') || str.includes('area') || str.includes('vung') || str.includes('khu vuc')) score += 2;
+                if (str.includes('khach hang') || str.includes('customer')) score += 2;
+                if (str.includes('merchandiser') || str.includes('mr') || str.includes('staff')) score += 2;
+                if (str.includes('lich') || str.includes('ngay') || str.includes('date') || str.includes('schedule')) score += 1;
             });
             if (score > maxScore) { maxScore = score; bestRowIdx = r; }
         }
