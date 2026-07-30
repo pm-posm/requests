@@ -267,32 +267,66 @@ export function useProjectActionModal(projectGroup: ProjectGroup, downloadFileId
         setSelectedRows(next);
     };
 
-    // Fetch Master Store Directory records matching extracted store codes for auto-filling
-    const extractedStoreCodes = useMemo(() => {
-        if (mapping.store_code === -1 || excelRows.length === 0) return [];
+    // Fetch Master Store Directory records matching extracted store codes OR store names for auto-filling
+    const extractedSearchKeys = useMemo(() => {
+        if (excelRows.length === 0) return { codes: [], names: [] };
         const codes = new Set<string>();
+        const names = new Set<string>();
         excelRows.forEach(r => {
-            const val = r[mapping.store_code] ? String(r[mapping.store_code]).trim() : '';
-            if (val && val.length >= 3) codes.add(val.toUpperCase());
+            const codeVal = mapping.store_code !== -1 && r[mapping.store_code] ? String(r[mapping.store_code]).trim() : '';
+            const nameVal = mapping.store_name !== -1 && r[mapping.store_name] ? String(r[mapping.store_name]).trim() : '';
+            
+            // Only treat code as a true Store Code if it's not a single STT number like "1", "2", "3"
+            if (codeVal && codeVal.length >= 3 && isNaN(Number(codeVal))) {
+                codes.add(codeVal.toUpperCase());
+            }
+            if (nameVal && nameVal.length >= 2) {
+                names.add(nameVal.trim());
+            }
         });
-        return Array.from(codes);
-    }, [excelRows, mapping.store_code]);
+        return { codes: Array.from(codes), names: Array.from(names) };
+    }, [excelRows, mapping.store_code, mapping.store_name]);
 
     const { data: masterDirMap = new Map<string, any>() } = useQuery({
-        queryKey: ['master_stores_directory_batch', extractedStoreCodes],
+        queryKey: ['master_stores_directory_smart_batch', extractedSearchKeys],
         queryFn: async () => {
-            if (extractedStoreCodes.length === 0) return new Map<string, any>();
-            const { data } = await supabase
-                .from('master_stores_directory')
-                .select('*')
-                .in('store_code', extractedStoreCodes);
-            const m = new Map<string, any>();
-            (data || []).forEach((item: any) => {
-                if (item.store_code) m.set(item.store_code.toUpperCase(), item);
-            });
-            return m;
+            const map = new Map<string, any>();
+            const { codes, names } = extractedSearchKeys;
+
+            // 1. Match by store_code
+            if (codes.length > 0) {
+                const { data: codeData } = await supabase
+                    .from('master_stores_directory')
+                    .select('*')
+                    .in('store_code', codes);
+                (codeData || []).forEach((item: any) => {
+                    if (item.store_code) map.set(item.store_code.toUpperCase(), item);
+                });
+            }
+
+            // 2. Match by store_name
+            if (names.length > 0) {
+                const orConditions = names.slice(0, 30).map(n => `store_name.ilike.*${encodeURIComponent(n.replace(/[%_\s]+/g, '*'))}*`).join(',');
+                const { data: nameData } = await supabase
+                    .from('master_stores_directory')
+                    .select('*')
+                    .or(orConditions);
+
+                (nameData || []).forEach((item: any) => {
+                    if (!item.store_name) return;
+                    const normName = item.store_name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                    if (!map.has('NAME:' + normName)) {
+                        map.set('NAME:' + normName, item);
+                    }
+                    if (item.store_code && !map.has(item.store_code.toUpperCase())) {
+                        map.set(item.store_code.toUpperCase(), item);
+                    }
+                });
+            }
+
+            return map;
         },
-        enabled: extractedStoreCodes.length > 0
+        enabled: extractedSearchKeys.codes.length > 0 || extractedSearchKeys.names.length > 0
     });
 
     const handleImportAll = async () => {
@@ -305,12 +339,17 @@ export function useProjectActionModal(projectGroup: ProjectGroup, downloadFileId
         try {
             const payloadMap = new Map();
             excelRows.filter((_, idx) => selectedRows.has(idx)).forEach(row => {
-                const storeCode = mapping.store_code !== -1 && row[mapping.store_code] ? String(row[mapping.store_code]).trim() : '';
+                const rawCode = mapping.store_code !== -1 && row[mapping.store_code] ? String(row[mapping.store_code]).trim() : '';
                 const rawStoreName = mapping.store_name !== -1 && row[mapping.store_name] ? String(row[mapping.store_name]).trim() : '';
                 
-                // Lookup in Master Store Directory if data is missing
-                const masterData = storeCode ? masterDirMap.get(storeCode.toUpperCase()) : null;
+                // Lookup in Master Store Directory: try code first, then normalized store_name
+                let masterData = (rawCode && isNaN(Number(rawCode))) ? masterDirMap.get(rawCode.toUpperCase()) : null;
+                if (!masterData && rawStoreName) {
+                    const normName = rawStoreName.toLowerCase().replace(/[^a-z0-9]/g, '');
+                    masterData = masterDirMap.get('NAME:' + normName);
+                }
 
+                const storeCode = (rawCode && isNaN(Number(rawCode))) ? rawCode : (masterData?.store_code || rawCode);
                 const storeName = rawStoreName || masterData?.store_name || '';
                 const region = (mapping.region !== -1 && row[mapping.region]) ? String(row[mapping.region]).trim() : (masterData?.region || undefined);
                 const customer = (mapping.customer !== -1 && row[mapping.customer]) ? String(row[mapping.customer]).trim() : (masterData?.customer || undefined);
