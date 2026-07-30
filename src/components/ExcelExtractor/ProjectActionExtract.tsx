@@ -18,7 +18,8 @@ export function ProjectActionExtract({
     setShowAdvancedMapping,
     mapping,
     setMapping,
-    headerRowIdx
+    headerRowIdx,
+    masterDirMap
 }: any) {
 
     if (downloading) {
@@ -41,6 +42,16 @@ export function ProjectActionExtract({
 
     const renderChecklistItem = ({ row, originalIdx }: { row: any[], originalIdx: number }, isExisting: boolean) => {
         const isChecked = selectedRows.has(originalIdx);
+        const storeCode = mapping.store_code !== -1 && row[mapping.store_code] ? String(row[mapping.store_code]).trim() : '';
+        const masterData = (storeCode && masterDirMap) ? masterDirMap.get(storeCode.toUpperCase()) : null;
+
+        const storeName = (mapping.store_name !== -1 && row[mapping.store_name]) ? row[mapping.store_name] : (masterData?.store_name || '-');
+        const region = (mapping.region !== -1 && row[mapping.region]) ? row[mapping.region] : (masterData?.region || '-');
+        const customer = (mapping.customer !== -1 && row[mapping.customer]) ? row[mapping.customer] : (masterData?.customer || '-');
+        const ka = (mapping.ka !== -1 && row[mapping.ka]) ? row[mapping.ka] : (masterData?.ka || '-');
+        const sr = (mapping.sr !== -1 && row[mapping.sr]) ? row[mapping.sr] : (masterData?.sr || '-');
+        const category = (mapping.category !== -1 && row[mapping.category]) ? row[mapping.category] : '-';
+
         return (
             <tr key={originalIdx} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${isExisting ? 'bg-amber-50/20 text-slate-500' : 'bg-white dark:bg-slate-900'} border-b border-slate-100 dark:border-slate-800`}>
                 <td className="p-2 text-center w-10">
@@ -52,13 +63,22 @@ export function ProjectActionExtract({
                         className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                     />
                 </td>
-                <td className="p-2 text-xs font-bold text-slate-700 dark:text-slate-200">{mapping.store_code !== -1 && row[mapping.store_code] ? row[mapping.store_code] : '-'}</td>
-                <td className="p-2 text-xs text-slate-600 dark:text-slate-300 max-w-[150px] truncate" title={mapping.store_name !== -1 ? row[mapping.store_name] : ''}>{mapping.store_name !== -1 && row[mapping.store_name] ? row[mapping.store_name] : '-'}</td>
-                <td className="p-2 text-xs text-slate-500">{mapping.region !== -1 && row[mapping.region] ? row[mapping.region] : '-'}</td>
-                <td className="p-2 text-xs text-slate-500">{mapping.customer !== -1 && row[mapping.customer] ? row[mapping.customer] : '-'}</td>
-                <td className="p-2 text-xs text-slate-500">{mapping.ka !== -1 && row[mapping.ka] ? row[mapping.ka] : '-'}</td>
-                <td className="p-2 text-xs text-slate-500">{mapping.sr !== -1 && row[mapping.sr] ? row[mapping.sr] : '-'}</td>
-                <td className="p-2 text-xs text-slate-500">{mapping.category !== -1 && row[mapping.category] ? row[mapping.category] : '-'}</td>
+                <td className="p-2 text-xs font-bold text-slate-700 dark:text-slate-200">
+                    <div className="flex flex-col gap-0.5">
+                        <span>{storeCode || '-'}</span>
+                        {masterData && (
+                            <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1 py-0.2 rounded w-fit border border-emerald-200 dark:border-emerald-800">
+                                ⚡ Tự động map từ Danh bạ
+                            </span>
+                        )}
+                    </div>
+                </td>
+                <td className="p-2 text-xs text-slate-600 dark:text-slate-300 max-w-[150px] truncate" title={storeName}>{storeName}</td>
+                <td className="p-2 text-xs text-slate-500">{region}</td>
+                <td className="p-2 text-xs text-slate-500">{customer}</td>
+                <td className="p-2 text-xs text-slate-500">{ka}</td>
+                <td className="p-2 text-xs text-slate-500">{sr}</td>
+                <td className="p-2 text-xs text-slate-500">{category}</td>
                 <td className="p-2 text-center">
                     <button className="text-indigo-500 hover:bg-indigo-50 p-1 rounded transition-colors" title="Thêm file tùy chỉnh">
                         <Layers className="w-4 h-4 mx-auto" />

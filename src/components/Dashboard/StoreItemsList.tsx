@@ -102,6 +102,7 @@ export function StoreItemsList({
                     visTechs={visTechs}
                     suppliers={suppliers}
                     customFields={fields}
+                    finalProjectName={finalProjectName}
                 />
             ) : (
                 <StoreItemsLogs logs={logs} isLoadingLogs={isLoadingLogs} />

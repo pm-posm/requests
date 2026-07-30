@@ -267,6 +267,34 @@ export function useProjectActionModal(projectGroup: ProjectGroup, downloadFileId
         setSelectedRows(next);
     };
 
+    // Fetch Master Store Directory records matching extracted store codes for auto-filling
+    const extractedStoreCodes = useMemo(() => {
+        if (mapping.store_code === -1 || excelRows.length === 0) return [];
+        const codes = new Set<string>();
+        excelRows.forEach(r => {
+            const val = r[mapping.store_code] ? String(r[mapping.store_code]).trim() : '';
+            if (val && val.length >= 3) codes.add(val.toUpperCase());
+        });
+        return Array.from(codes);
+    }, [excelRows, mapping.store_code]);
+
+    const { data: masterDirMap = new Map<string, any>() } = useQuery({
+        queryKey: ['master_stores_directory_batch', extractedStoreCodes],
+        queryFn: async () => {
+            if (extractedStoreCodes.length === 0) return new Map<string, any>();
+            const { data } = await supabase
+                .from('master_stores_directory')
+                .select('*')
+                .in('store_code', extractedStoreCodes);
+            const m = new Map<string, any>();
+            (data || []).forEach((item: any) => {
+                if (item.store_code) m.set(item.store_code.toUpperCase(), item);
+            });
+            return m;
+        },
+        enabled: extractedStoreCodes.length > 0
+    });
+
     const handleImportAll = async () => {
         if (mapping.store_code === -1 && mapping.store_name === -1) { 
             toast.error('Vui lòng ánh xạ ít nhất cột Mã Cửa Hàng hoặc Tên Cửa Hàng!'); 
@@ -278,8 +306,17 @@ export function useProjectActionModal(projectGroup: ProjectGroup, downloadFileId
             const payloadMap = new Map();
             excelRows.filter((_, idx) => selectedRows.has(idx)).forEach(row => {
                 const storeCode = mapping.store_code !== -1 && row[mapping.store_code] ? String(row[mapping.store_code]).trim() : '';
-                const storeName = mapping.store_name !== -1 && row[mapping.store_name] ? String(row[mapping.store_name]).trim() : '';
+                const rawStoreName = mapping.store_name !== -1 && row[mapping.store_name] ? String(row[mapping.store_name]).trim() : '';
                 
+                // Lookup in Master Store Directory if data is missing
+                const masterData = storeCode ? masterDirMap.get(storeCode.toUpperCase()) : null;
+
+                const storeName = rawStoreName || masterData?.store_name || '';
+                const region = (mapping.region !== -1 && row[mapping.region]) ? String(row[mapping.region]).trim() : (masterData?.region || undefined);
+                const customer = (mapping.customer !== -1 && row[mapping.customer]) ? String(row[mapping.customer]).trim() : (masterData?.customer || undefined);
+                const ka = (mapping.ka !== -1 && row[mapping.ka]) ? String(row[mapping.ka]).trim() : (masterData?.ka || undefined);
+                const sr = (mapping.sr !== -1 && row[mapping.sr]) ? String(row[mapping.sr]).trim() : (masterData?.sr || undefined);
+
                 let f_storeCode = storeCode;
                 if (!f_storeCode) {
                     if (storeName) {
@@ -298,10 +335,10 @@ export function useProjectActionModal(projectGroup: ProjectGroup, downloadFileId
                     payloadMap.set(f_storeCode, {
                         final_project: projectGroup.final_project,
                         store_name: storeName || undefined,
-                        region: mapping.region !== -1 && row[mapping.region] ? String(row[mapping.region]).trim() : undefined,
-                        customer: mapping.customer !== -1 && row[mapping.customer] ? String(row[mapping.customer]).trim() : undefined,
-                        ka: mapping.ka !== -1 && row[mapping.ka] ? String(row[mapping.ka]).trim() : undefined,
-                        sr: mapping.sr !== -1 && row[mapping.sr] ? String(row[mapping.sr]).trim() : undefined,
+                        region: region,
+                        customer: customer,
+                        ka: ka,
+                        sr: sr,
                         category: mapping.category !== -1 && row[mapping.category] ? String(row[mapping.category]).trim() : 'POSM',
                         supplier_name: globalSupplier || (mapping.supplier_name !== -1 && row[mapping.supplier_name] ? String(row[mapping.supplier_name]).trim() : undefined),
                         notes: mapping.notes !== -1 && row[mapping.notes] ? String(row[mapping.notes]).trim() : undefined,
@@ -339,7 +376,11 @@ export function useProjectActionModal(projectGroup: ProjectGroup, downloadFileId
         allExcelFiles,
         storeItems,
         selectedRows, setSelectedRows,
-        allValidRows, newRows, existingRows,
-        toggleRow, handleImportAll
+        allValidRows,
+        newRows,
+        existingRows,
+        toggleRow,
+        handleImportAll,
+        masterDirMap
     };
 }

@@ -39,7 +39,8 @@ export function UnifiedProjectActionModal({
         storeItems,
         selectedRows, setSelectedRows,
         allValidRows, newRows, existingRows,
-        toggleRow, handleImportAll
+        toggleRow, handleImportAll,
+        masterDirMap
     } = useProjectActionModal(projectGroup, downloadFileId, setDownloadFileId);
 
     const handlePublish = async () => {
@@ -134,6 +135,7 @@ export function UnifiedProjectActionModal({
                                 mapping={mapping}
                                 setMapping={setMapping}
                                 headerRowIdx={headerRowIdx}
+                                masterDirMap={masterDirMap}
                             />
                         )}
                     </div>
