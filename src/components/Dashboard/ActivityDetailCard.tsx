@@ -17,22 +17,19 @@ function FolderLinkButton({ finalProject, phaseType }: { finalProject: string, p
             );
 
             const contentType = response.headers.get('content-type') || '';
-            if (!contentType.includes('application/json')) {
-                throw new Error('Dịch vụ Google Drive chưa sẵn sàng hoặc thiếu cấu hình.');
+            if (response.ok && contentType.includes('application/json')) {
+                const data = await response.json();
+                if (data.folder_url) {
+                    window.open(data.folder_url, '_blank');
+                    return;
+                }
             }
 
-            const data = await response.json();
-            if (!response.ok) {
-                throw new Error(data.error || 'Chưa tìm thấy thư mục Drive tương ứng.');
-            }
-
-            if (data.folder_url) {
-                window.open(data.folder_url, '_blank');
-            } else {
-                toast.error('Không tìm thấy thư mục Drive cho dự án: ' + finalProject);
-            }
+            // Fallback mở trực tiếp tìm kiếm Drive của dự án nếu Edge Function chưa sẵn sàng hoặc không tìm thấy
+            window.open(`https://drive.google.com/drive/search?q=${encodeURIComponent(finalProject)}`, '_blank');
         } catch (err: any) {
-            toast.error('Lỗi Drive: ' + err.message);
+            // Mở link tìm kiếm Drive tự động nếu có bất kỳ lỗi kết nối nào
+            window.open(`https://drive.google.com/drive/search?q=${encodeURIComponent(finalProject)}`, '_blank');
         } finally {
             setLoading(false);
         }
@@ -41,7 +38,7 @@ function FolderLinkButton({ finalProject, phaseType }: { finalProject: string, p
     return (
         <button type="button" onClick={handleOpen} disabled={loading} className="text-[11px] flex items-center gap-1 text-emerald-600 hover:text-emerald-700 hover:underline font-medium cursor-pointer">
             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
-            {loading ? 'Đang tìm...' : 'Mở Folder Drive'}
+            {loading ? 'Đang mở Drive...' : 'Mở Folder Drive'}
         </button>
     );
 }
@@ -68,19 +65,34 @@ function ChangePhaseSelector({ activityId, currentPhase, finalProject }: { activ
         try {
             const { supabase } = await import('@/lib/supabase');
 
-            // 1. Cập nhật project_activities
-            const { error: actErr } = await supabase
+            // 1. Cập nhật project_activities (có fallback ACCEPTANCE nếu DB enum không chứa NTXX)
+            let { error: actErr } = await supabase
                 .from('project_activities')
                 .update({ phase_type: newPhase })
                 .eq('id', activityId);
 
+            if (actErr && actErr.message.includes('enum') && newPhase === 'NTXX') {
+                const fb = await supabase
+                    .from('project_activities')
+                    .update({ phase_type: 'ACCEPTANCE' })
+                    .eq('id', activityId);
+                actErr = fb.error;
+            }
+
             if (actErr) throw actErr;
 
             // 2. Cập nhật activity_attachments
-            await supabase
+            let { error: attErr } = await supabase
                 .from('activity_attachments')
                 .update({ phase_type: newPhase })
                 .eq('activity_id', activityId);
+
+            if (attErr && attErr.message.includes('enum') && newPhase === 'NTXX') {
+                await supabase
+                    .from('activity_attachments')
+                    .update({ phase_type: 'ACCEPTANCE' })
+                    .eq('activity_id', activityId);
+            }
 
             // 3. Tự động di chuyển file đính kèm trên Google Drive nếu có
             try {

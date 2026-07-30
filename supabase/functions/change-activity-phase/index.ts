@@ -11,6 +11,7 @@ const PHASE_FOLDER_MAP: Record<string, string> = {
   'BRIEF': 'Brief',
   'SURVEY': 'Khảo sát',
   'NTXX': 'Nghiệm thu Xuất xưởng',
+  'ACCEPTANCE': 'Nghiệm thu Xuất xưởng',
   'INSTALLATION': 'Lắp đặt'
 };
 
@@ -30,26 +31,39 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // 1. Cập nhật Database Supabase
-    const { error: actErr } = await supabase
+    // 1. Cập nhật Database Supabase (Có fallback ACCEPTANCE nếu Enum không có NTXX)
+    let { error: actErr } = await supabase
       .from('project_activities')
       .update({ phase_type: new_phase_type })
       .eq('id', activity_id)
 
+    if (actErr && actErr.message.includes('enum') && new_phase_type === 'NTXX') {
+      const fb = await supabase
+        .from('project_activities')
+        .update({ phase_type: 'ACCEPTANCE' })
+        .eq('id', activity_id)
+      actErr = fb.error
+    }
+
     if (actErr) throw new Error(`Lỗi update DB activities: ${actErr.message}`)
 
-    const { data: attachments, error: attErr } = await supabase
+    const { data: attachments } = await supabase
       .from('activity_attachments')
       .select('*')
       .eq('activity_id', activity_id)
 
-    if (attErr) console.error('Lỗi lấy attachments:', attErr)
-
     if (attachments && attachments.length > 0) {
-      await supabase
+      let { error: attErr } = await supabase
         .from('activity_attachments')
         .update({ phase_type: new_phase_type })
         .eq('activity_id', activity_id)
+
+      if (attErr && attErr.message.includes('enum') && new_phase_type === 'NTXX') {
+        await supabase
+          .from('activity_attachments')
+          .update({ phase_type: 'ACCEPTANCE' })
+          .eq('activity_id', activity_id)
+      }
     }
 
     // 2. Chuyển File trên Google Drive (nếu có cấu hình Drive & final_project)
@@ -111,7 +125,6 @@ Deno.serve(async (req) => {
             // Chuyển từng file đính kèm sang targetFolderId
             for (const att of attachments) {
               if (att.drive_file_id && att.drive_file_id !== 'unknown') {
-                // Lấy thông tin old parents
                 const fileMetaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${att.drive_file_id}?fields=parents`, {
                   headers: { 'Authorization': `Bearer ${accessToken}` }
                 })
@@ -119,7 +132,6 @@ Deno.serve(async (req) => {
                   const fileMeta = await fileMetaRes.json()
                   const oldParents = (fileMeta.parents || []).join(',')
 
-                  // PATCH move file
                   const moveUrl = `https://www.googleapis.com/drive/v3/files/${att.drive_file_id}?addParents=${targetFolderId}&removeParents=${oldParents}&fields=id,parents`
                   const moveRes = await fetch(moveUrl, {
                     method: 'PATCH',
