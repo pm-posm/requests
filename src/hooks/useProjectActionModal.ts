@@ -130,20 +130,36 @@ export function useProjectActionModal(projectGroup: ProjectGroup, downloadFileId
             try {
                 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
                 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
                 // Fetch the Google Access Token first
                 const tokenRes = await fetch(`${supabaseUrl}/functions/v1/download-drive-file?mode=token`, {
                     headers: { 'Authorization': `Bearer ${supabaseAnonKey}` }
                 });
-                if (!tokenRes.ok) {
-                    throw new Error('Không lấy được mã xác thực Google Drive.');
+                const tokenCT = tokenRes.headers.get('content-type') || '';
+                if (!tokenRes.ok || !tokenCT.includes('application/json')) {
+                    const tokenErrText = await tokenRes.text();
+                    console.error('Token endpoint error:', tokenErrText.substring(0, 200));
+                    throw new Error('Không lấy được mã xác thực Google Drive. Kiểm tra cấu hình GOOGLE_CLIENT_ID / GOOGLE_REFRESH_TOKEN.');
                 }
                 const tokenData = await tokenRes.json();
+                if (!tokenData.token) throw new Error('Access Token Google Drive rỗng.');
 
-                // Download directly from Google Drive API (Bypasses Supabase Egress)
+                // Download directly from Google Drive API
                 const response = await fetch(`https://www.googleapis.com/drive/v3/files/${downloadFileId}?alt=media`, {
                     headers: { 'Authorization': `Bearer ${tokenData.token}` }
                 });
-                if (!response.ok) throw new Error('Không tải được tệp từ máy chủ.');
+                if (!response.ok) {
+                    const driveErr = await response.text();
+                    console.error('Drive download error:', response.status, driveErr.substring(0, 200));
+                    throw new Error(`Không tải được tệp từ Google Drive (${response.status}). File có thể đã bị xóa hoặc không có quyền truy cập.`);
+                }
+                
+                // Check content-type: phải là binary, không phải HTML
+                const driveCT = response.headers.get('content-type') || '';
+                if (driveCT.includes('text/html')) {
+                    throw new Error('Google Drive trả về trang lỗi HTML thay vì file. File có thể không còn tồn tại.');
+                }
+
                 const buffer = await response.arrayBuffer();
                 const data = new Uint8Array(buffer);
                 const workbook = XLSX.read(data, { type: 'array' });

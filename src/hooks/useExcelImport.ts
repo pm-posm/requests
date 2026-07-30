@@ -123,12 +123,23 @@ export function useExcelImport(
                 const tokenRes = await fetch(`${supabaseUrl}/functions/v1/download-drive-file?mode=token`, {
                     headers: { 'Authorization': `Bearer ${supabaseAnonKey}` }
                 });
-                if (!tokenRes.ok) throw new Error('Không lấy được mã xác thực Google Drive.');
+                const tokenCT = tokenRes.headers.get('content-type') || '';
+                if (!tokenRes.ok || !tokenCT.includes('application/json')) {
+                    throw new Error('Không lấy được mã xác thực Google Drive.');
+                }
                 const tokenData = await tokenRes.json();
+                if (!tokenData.token) throw new Error('Access Token Google Drive rỗng.');
+
                 const response = await fetch(`https://www.googleapis.com/drive/v3/files/${downloadFileId}?alt=media`, {
                     headers: { 'Authorization': `Bearer ${tokenData.token}` }
                 });
-                if (!response.ok) throw new Error('Không tải được tệp từ máy chủ.');
+                if (!response.ok) {
+                    throw new Error(`Không tải được tệp từ Google Drive (${response.status}). File có thể đã bị xóa hoặc không có quyền.`);
+                }
+                const driveCT = response.headers.get('content-type') || '';
+                if (driveCT.includes('text/html')) {
+                    throw new Error('Google Drive trả về trang lỗi HTML. File có thể không còn tồn tại.');
+                }
                 const buffer = await response.arrayBuffer();
                 const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' });
                 const worksheet = workbook.Sheets[workbook.SheetNames[0]];
