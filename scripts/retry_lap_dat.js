@@ -104,7 +104,7 @@ async function callAIWithFallback(prompt, imageParts) {
   let groqRetries = 3;
   while (groqRetries > 0) {
     try {
-      const GROQ_API_KEY = process.env.GROQ_API_KEY || "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";
+      const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
       if (!GROQ_API_KEY) {
         console.error("   ❌ Không có GROQ_API_KEY để chạy fallback.");
         return null;

@@ -121,7 +121,7 @@ async function callAIWithFallback(prompt, imageParts) {
 
   // 2. Fallback sang Groq API sử dụng Llama 3.3 / Llama 3.2 Vision
   try {
-    const GROQ_API_KEY = process.env.GROQ_API_KEY || "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";
+    const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
     if (!GROQ_API_KEY) {
       console.error("   ❌ Không có GROQ_API_KEY để chạy fallback.");
       return null;
