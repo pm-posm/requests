@@ -41,6 +41,59 @@ import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
+function ChangePhaseSelector({ activityId, currentPhase }: { activityId: string, currentPhase: string }) {
+    const queryClient = useQueryClient();
+    const [isUpdating, setIsUpdating] = React.useState(false);
+
+    const phaseLabels: Record<string, string> = {
+        'BRIEF': '📋 Brief Nhãn Hàng',
+        'SURVEY': '📐 Khảo sát',
+        'NTXX': '🏭 Nghiệm thu Xuất xưởng (NTXX)',
+        'INSTALLATION': '🛠️ Lắp đặt'
+    };
+
+    const handlePhaseChange = async (newPhase: string) => {
+        if (!newPhase || newPhase === currentPhase) return;
+        setIsUpdating(true);
+
+        try {
+            const { supabase } = await import('@/lib/supabase');
+            const { error } = await supabase
+                .from('project_activities')
+                .update({ phase_type: newPhase })
+                .eq('id', activityId);
+
+            if (error) throw error;
+
+            toast.success(`✅ Đã chuyển email sang giai đoạn ${phaseLabels[newPhase] || newPhase}!`);
+            queryClient.invalidateQueries({ queryKey: ['project_activities_with_attachments_all'] });
+            queryClient.invalidateQueries({ queryKey: ['project_groups'] });
+            queryClient.invalidateQueries({ queryKey: ['project_overviews_rpc'] });
+        } catch (err: any) {
+            toast.error(`❌ Lỗi chuyển giai đoạn: ${err.message}`);
+        } finally {
+            setIsUpdating(false);
+        }
+    };
+
+    return (
+        <div className="flex items-center gap-1">
+            <span className="text-[11px] font-semibold text-slate-500">🔁 Giai đoạn:</span>
+            <select
+                disabled={isUpdating}
+                value={currentPhase || 'NTXX'}
+                onChange={(e) => handlePhaseChange(e.target.value)}
+                className="px-2 py-0.5 text-[11px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-2xs disabled:opacity-50"
+            >
+                <option value="BRIEF">📋 Brief Nhãn Hàng</option>
+                <option value="SURVEY">📐 Khảo sát</option>
+                <option value="NTXX">🏭 Nghiệm thu Xuất xưởng (NTXX)</option>
+                <option value="INSTALLATION">🛠️ Lắp đặt</option>
+            </select>
+        </div>
+    );
+}
+
 export function ActivityDetailCard({ activity, projectGroup, onProcessData }: { 
     activity: ActivityRow, 
     projectGroup: ProjectGroup,
@@ -118,12 +171,15 @@ export function ActivityDetailCard({ activity, projectGroup, onProcessData }: {
                 </div>
             </div>
             
-            <div className="text-xs text-slate-500 mb-3 flex items-center justify-between">
+            <div className="text-xs text-slate-500 mb-3 flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2">
                     <span>Người gửi:</span>
                     <span className="font-medium text-slate-700 dark:text-slate-300">{activity.nguoi_gui || 'N/A'} ({new Date(activity.created_at).toLocaleString('vi-VN')})</span>
                 </div>
-                <FolderLinkButton finalProject={projectGroup.final_project} phaseType={activity.phase_type || ''} />
+                <div className="flex items-center gap-3">
+                    <ChangePhaseSelector activityId={activity.id} currentPhase={activity.phase_type || ''} />
+                    <FolderLinkButton finalProject={projectGroup.final_project} phaseType={activity.phase_type || ''} />
+                </div>
             </div>
 
             {activity.activity_attachments && activity.activity_attachments.length > 0 && (
