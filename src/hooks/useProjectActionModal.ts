@@ -95,87 +95,74 @@ export function useProjectActionModal(projectGroup: ProjectGroup, downloadFileId
     }, [projectGroup]);
 
     useEffect(() => {
-        if (downloadFileId && !selectedFile) {
-            const fileInfo = allExcelFiles.find(f => f.id === downloadFileId || f.drive_file_id === downloadFileId);
-            if (fileInfo) setSelectedFile(fileInfo);
-        }
-    }, [downloadFileId, allExcelFiles]);
-
-    const detectHeaderRow = (rows: any[][]): number => {
-        let bestRowIdx = 0;
-        let maxScore = -1;
-        const limit = Math.min(rows.length, 20);
-        for (let r = 0; r < limit; r++) {
-            const row = rows[r];
-            if (!row || row.length === 0) continue;
-            // Bỏ qua hàng chỉ có 1 cột text dài (thường là header mô tả)
-            const nonEmpty = row.filter(c => c != null && String(c).trim() !== '');
-            if (nonEmpty.length <= 1 && nonEmpty.length > 0 && String(nonEmpty[0]).length > 30) continue;
-            let score = 0;
-            let colCount = nonEmpty.length;
-            // Thưởng điểm cho hàng có nhiều cột (bảng dữ liệu thường >=4 cột)
-            if (colCount >= 4) score += colCount;
-            row.forEach(cell => {
-                if (!cell) return;
-                const raw = String(cell).trim();
-                const str = raw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-                if (str === 'stt' || str === 'no' || str === 'no.') score += 3;
-                if (str.includes('store code') || str.includes('store_code') || str.includes('storeid') || str.includes('site id') || str.includes('ma ch') || str.includes('ma cua hang') || str.includes('ma store')) score += 8;
-                if (str.includes('store name') || str.includes('ten sieu thi') || str.includes('ten ch') || str.includes('ten cua hang') || str.includes('site name')) score += 6;
-                if (str.includes('hang muc') || str.includes('posm') || str.includes('category') || str.includes('item')) score += 4;
-                if (str.includes('nha thau') || str.includes('supplier') || str.includes('vendor') || str.includes('don vi')) score += 3;
-                if (str.includes('region') || str.includes('area') || str.includes('vung') || str.includes('khu vuc')) score += 2;
-                if (str.includes('khach hang') || str.includes('customer')) score += 2;
-                if (str.includes('merchandiser') || str.includes('mr') || str.includes('staff')) score += 2;
-                if (str.includes('lich') || str.includes('ngay') || str.includes('date') || str.includes('schedule')) score += 1;
-            });
-            if (score > maxScore) { maxScore = score; bestRowIdx = r; }
-        }
-        return maxScore > 0 ? bestRowIdx : 0;
-    };
-
-    useEffect(() => {
         if (!downloadFileId) return;
+
+        // Giải mã downloadFileId: nếu là UUID (id bảng Supabase), tìm drive_file_id thực sự hoặc bóc tách từ drive_url
+        let targetDriveId = downloadFileId;
+        const matchedFile = allExcelFiles.find(f => f.id === downloadFileId || f.drive_file_id === downloadFileId);
+        if (matchedFile) {
+            setSelectedFile(matchedFile);
+            if (matchedFile.drive_file_id && matchedFile.drive_file_id.length > 20 && !matchedFile.drive_file_id.includes('-')) {
+                targetDriveId = matchedFile.drive_file_id;
+            } else if (matchedFile.drive_url) {
+                const extracted = matchedFile.drive_url.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1] || matchedFile.drive_url.match(/id=([a-zA-Z0-9_-]+)/)?.[1];
+                if (extracted) targetDriveId = extracted;
+            }
+        }
+
+        if (!targetDriveId || targetDriveId.includes('-') || targetDriveId.length < 15) {
+            toast.error('File này chưa được lưu Mã Google Drive (Drive File ID) hợp lệ.');
+            setDownloading(false);
+            return;
+        }
+
         const downloadAndParse = async () => {
             setDownloading(true);
             try {
                 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
                 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-                // Fetch the Google Access Token first
+                // 1. Lấy Access Token từ Edge Function
                 const tokenRes = await fetch(`${supabaseUrl}/functions/v1/download-drive-file?mode=token`, {
                     headers: { 'Authorization': `Bearer ${supabaseAnonKey}` }
                 });
-                const tokenCT = tokenRes.headers.get('content-type') || '';
-                if (!tokenRes.ok || !tokenCT.includes('application/json')) {
-                    const tokenErrText = await tokenRes.text();
-                    console.error('Token endpoint error:', tokenErrText.substring(0, 200));
-                    throw new Error('Không lấy được mã xác thực Google Drive. Kiểm tra cấu hình GOOGLE_CLIENT_ID / GOOGLE_REFRESH_TOKEN.');
+                
+                const tokenText = await tokenRes.text();
+                if (!tokenRes.ok || tokenText.trim().startsWith('<')) {
+                    throw new Error('Dịch vụ Google Drive Token chưa sẵn sàng. Hãy thử lại sau ít phút.');
                 }
-                const tokenData = await tokenRes.json();
-                if (!tokenData.token) throw new Error('Access Token Google Drive rỗng.');
 
-                // Download directly from Google Drive API
-                const response = await fetch(`https://www.googleapis.com/drive/v3/files/${downloadFileId}?alt=media`, {
+                let tokenData: any;
+                try {
+                    tokenData = JSON.parse(tokenText);
+                } catch {
+                    throw new Error('Dữ liệu xác thực từ máy chủ không đúng định dạng JSON.');
+                }
+
+                if (!tokenData.token) throw new Error('Mã Access Token Google Drive rỗng.');
+
+                // 2. Tải trực tiếp file từ Google Drive API
+                const response = await fetch(`https://www.googleapis.com/drive/v3/files/${targetDriveId}?alt=media`, {
                     headers: { 'Authorization': `Bearer ${tokenData.token}` }
                 });
+
                 if (!response.ok) {
-                    const driveErr = await response.text();
-                    console.error('Drive download error:', response.status, driveErr.substring(0, 200));
-                    throw new Error(`Không tải được tệp từ Google Drive (${response.status}). File có thể đã bị xóa hoặc không có quyền truy cập.`);
-                }
-                
-                // Check content-type: phải là binary, không phải HTML
-                const driveCT = response.headers.get('content-type') || '';
-                if (driveCT.includes('text/html')) {
-                    throw new Error('Google Drive trả về trang lỗi HTML thay vì file. File có thể không còn tồn tại.');
+                    throw new Error(`Google Drive trả về lỗi HTTP ${response.status}. File có thể đã bị xóa trên Drive.`);
                 }
 
-                const buffer = await response.arrayBuffer();
+                const blob = await response.blob();
+                const textPreview = await blob.slice(0, 100).text();
+
+                if (textPreview.trim().startsWith('<')) {
+                    throw new Error('File trên Google Drive bị phản hồi trang HTML thay vì file Excel.');
+                }
+
+                const buffer = await blob.arrayBuffer();
                 const data = new Uint8Array(buffer);
                 const workbook = XLSX.read(data, { type: 'array' });
                 const worksheet = workbook.Sheets[workbook.SheetNames[0]];
                 const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+                
                 if (rawRows.length === 0) throw new Error('File Excel rỗng!');
                 setRawExcelRows(rawRows);
                 setHeaderRowIdx(detectHeaderRow(rawRows));
@@ -186,8 +173,9 @@ export function useProjectActionModal(projectGroup: ProjectGroup, downloadFileId
                 setDownloading(false);
             }
         };
+
         downloadAndParse();
-    }, [downloadFileId]);
+    }, [downloadFileId, allExcelFiles]);
 
     useEffect(() => {
         if (rawExcelRows.length === 0) return;

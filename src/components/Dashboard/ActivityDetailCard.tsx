@@ -249,9 +249,11 @@ export function ActivityDetailCard({ activity, projectGroup, onProcessData }: {
                                         <button 
                                             type="button"
                                             onClick={() => {
-                                                const idToPass = att.drive_file_id || att.id;
-                                                if (onProcessData && idToPass) {
-                                                    onProcessData(idToPass);
+                                                const realDriveId = (att.drive_file_id && att.drive_file_id !== 'unknown' && att.drive_file_id.length > 15 && !att.drive_file_id.includes('-'))
+                                                    ? att.drive_file_id
+                                                    : (att.drive_url?.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1] || att.drive_url?.match(/id=([a-zA-Z0-9_-]+)/)?.[1] || att.id);
+                                                if (onProcessData && realDriveId) {
+                                                    onProcessData(realDriveId);
                                                 }
                                             }}
                                             className="ml-auto flex items-center gap-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 dark:border-indigo-800/50 px-2 py-1 rounded text-[10px] font-bold transition-colors cursor-pointer shadow-sm"
