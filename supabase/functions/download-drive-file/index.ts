@@ -4,6 +4,7 @@ import { OAuth2Client } from 'npm:google-auth-library@9.6.3'
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Expose-Headers': '*',
 }
 
 Deno.serve(async (req) => {
@@ -62,7 +63,7 @@ Deno.serve(async (req) => {
         'Content-Disposition': `attachment; filename="drive_file_${fileId}.xlsx"`,
       },
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error(error)
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

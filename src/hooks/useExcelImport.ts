@@ -126,12 +126,21 @@ export function useExcelImport(
                         'apikey': supabaseAnonKey 
                     }
                 });
-                const tokenCT = tokenRes.headers.get('content-type') || '';
                 const tokenText = await tokenRes.text();
-                if (!tokenRes.ok || !tokenCT.includes('application/json') || tokenText.trim().startsWith('<')) {
+                if (!tokenRes.ok || tokenText.trim().startsWith('<')) {
                     throw new Error(`Không lấy được mã xác thực Google Drive (HTTP ${tokenRes.status}).`);
                 }
-                const tokenData = JSON.parse(tokenText);
+                
+                let tokenData: any;
+                try {
+                    tokenData = JSON.parse(tokenText);
+                } catch {
+                    throw new Error('Dữ liệu xác thực không phải JSON.');
+                }
+                
+                if (!tokenData?.token) {
+                    throw new Error(tokenData?.error || 'Access Token Google Drive rỗng.');
+                }
                 if (!tokenData.token) throw new Error('Access Token Google Drive rỗng.');
 
                 const response = await fetch(`https://www.googleapis.com/drive/v3/files/${downloadFileId}?alt=media`, {
