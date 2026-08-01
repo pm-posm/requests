@@ -138,7 +138,7 @@
     @apply border-border outline-ring/50;
   }
   html {
-    font-size: 83.33%; /* Thu nhỏ 83.33% (~80% scale density) giúp giao diện vừa vặn, tinh tế ở zoom 100% mặc định */
+    font-size: 75%; /* Thu nhỏ 75% scale density giúp giao diện siêu gọn gàng, tinh tế ở zoom 100% mặc định */
     @apply font-sans;
   }
   body {
