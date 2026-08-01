@@ -136,12 +136,13 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
-    }
-  body {
-    @apply bg-background text-foreground;
   }
   html {
+    font-size: 83.33%; /* Thu nhỏ 83.33% (~80% scale density) giúp giao diện vừa vặn, tinh tế ở zoom 100% mặc định */
     @apply font-sans;
+  }
+  body {
+    @apply bg-background text-foreground;
   }
   
   .recharts-wrapper {
