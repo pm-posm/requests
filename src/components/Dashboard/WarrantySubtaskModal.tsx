@@ -74,6 +74,15 @@ export function WarrantySubtaskModal({ isOpen, onClose, record, onSave }: Warran
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   const [requestId, setRequestId] = useState('');
   const [maDuAn, setMaDuAn] = useState('');
   const [supplier, setSupplier] = useState('');

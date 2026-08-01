@@ -308,11 +308,11 @@ export function useProjectActionModal(projectGroup: ProjectGroup, downloadFileId
             if (names.length > 0) {
                 const validNames = names.filter(n => n.length >= 2 && !['stt', 'mã số đh', 'tên siêu thị', 'hạng mục'].includes(n.toLowerCase()));
                 if (validNames.length > 0) {
-                    const orConditions = encodeURIComponent(validNames.slice(0, 30).map(n => `store_name.ilike.%${n}%`).join(','));
+                    const orExpr = validNames.slice(0, 30).map(n => `store_name.ilike.%${n}%`).join(',');
                     const { data: nameData } = await supabase
                         .from('master_stores_directory')
                         .select('*')
-                        .or(orConditions);
+                        .or(orExpr);
 
                     (nameData || []).forEach((item: any) => {
                         if (!item.store_name) return;
@@ -332,7 +332,7 @@ export function useProjectActionModal(projectGroup: ProjectGroup, downloadFileId
         enabled: extractedSearchKeys.codes.length > 0 || extractedSearchKeys.names.length > 0
     });
 
-    const handleImportAll = async () => {
+    const handleImportAll = async (rowOverrides?: Record<number, any>) => {
         if (mapping.store_code === -1 && mapping.store_name === -1) { 
             toast.error('Vui lòng ánh xạ ít nhất cột Mã Cửa Hàng hoặc Tên Cửa Hàng!'); 
             return; 
@@ -341,23 +341,30 @@ export function useProjectActionModal(projectGroup: ProjectGroup, downloadFileId
         setLoading(true);
         try {
             const payloadMap = new Map();
-            excelRows.filter((_, idx) => selectedRows.has(idx)).forEach(row => {
+            excelRows.filter((_, idx) => selectedRows.has(idx)).forEach((row, idx) => {
+                const override = rowOverrides?.[idx] || {};
                 const rawCode = mapping.store_code !== -1 && row[mapping.store_code] ? String(row[mapping.store_code]).trim() : '';
                 const rawStoreName = mapping.store_name !== -1 && row[mapping.store_name] ? String(row[mapping.store_name]).trim() : '';
                 
                 // Lookup in Master Store Directory: try code first, then normalized store_name
-                let masterData = (rawCode && isNaN(Number(rawCode))) ? masterDirMap.get(rawCode.toUpperCase()) : null;
-                if (!masterData && rawStoreName) {
-                    const normName = rawStoreName.toLowerCase().replace(/[^a-z0-9]/g, '');
-                    masterData = masterDirMap.get('NAME:' + normName);
+                let masterData = override.masterData;
+                if (!masterData) {
+                    if (rawCode && isNaN(Number(rawCode))) {
+                        masterData = masterDirMap.get(rawCode.toUpperCase());
+                    }
+                    if (!masterData && rawStoreName) {
+                        const normName = rawStoreName.toLowerCase().replace(/[^a-z0-9]/g, '');
+                        masterData = masterDirMap.get('NAME:' + normName);
+                    }
                 }
 
-                const storeCode = (rawCode && isNaN(Number(rawCode))) ? rawCode : (masterData?.store_code || rawCode);
-                const storeName = rawStoreName || masterData?.store_name || '';
-                const region = (mapping.region !== -1 && row[mapping.region]) ? String(row[mapping.region]).trim() : (masterData?.region || undefined);
-                const customer = (mapping.customer !== -1 && row[mapping.customer]) ? String(row[mapping.customer]).trim() : (masterData?.customer || undefined);
-                const ka = (mapping.ka !== -1 && row[mapping.ka]) ? String(row[mapping.ka]).trim() : (masterData?.ka || undefined);
-                const sr = (mapping.sr !== -1 && row[mapping.sr]) ? String(row[mapping.sr]).trim() : (masterData?.sr || undefined);
+                const storeCode = override.store_code || ((rawCode && isNaN(Number(rawCode))) ? rawCode : (masterData?.store_code || rawCode));
+                const storeName = override.store_name || rawStoreName || masterData?.store_name || '';
+                const region = override.region || ((mapping.region !== -1 && row[mapping.region]) ? String(row[mapping.region]).trim() : (masterData?.region || undefined));
+                const customer = override.customer || ((mapping.customer !== -1 && row[mapping.customer]) ? String(row[mapping.customer]).trim() : (masterData?.customer || undefined));
+                const ka = override.ka || ((mapping.ka !== -1 && row[mapping.ka]) ? String(row[mapping.ka]).trim() : (masterData?.ka || undefined));
+                const sr = override.sr || ((mapping.sr !== -1 && row[mapping.sr]) ? String(row[mapping.sr]).trim() : (masterData?.sr || undefined));
+                const category = override.category || ((mapping.category !== -1 && row[mapping.category]) ? String(row[mapping.category]).trim() : 'POSM');
 
                 let f_storeCode = storeCode;
                 if (!f_storeCode) {

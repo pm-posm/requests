@@ -48,7 +48,7 @@ export function useStoreManager(projectGroup: ProjectGroup) {
                 .eq('id', id);
             if (error) throw error;
         },
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['project_store_items', finalProject] }),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['project_store_items'] }),
         onError: (err: any) => toast.error('Lỗi cập nhật: ' + err.message),
     });
 

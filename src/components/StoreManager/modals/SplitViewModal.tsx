@@ -16,6 +16,14 @@ interface SplitViewModalProps {
 export function SplitViewModal({ fileUrl, fileName, projectGroup, phaseType, onClose }: SplitViewModalProps) {
     const queryClient = useQueryClient();
     const [isSaving, setIsSaving] = useState(false);
+
+    React.useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [onClose]);
     
     // Convert Drive view URL to preview URL for iframe
     const previewUrl = fileUrl.replace(/\/view.*$/, '/preview');

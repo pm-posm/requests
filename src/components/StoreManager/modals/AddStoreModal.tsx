@@ -23,7 +23,12 @@ export function AddStoreModal({ isOpen, onClose, onSave }: AddStoreModalProps) {
             setForm({ store_code: '', store_name: '', region: '', customer: '', ka: '', sr: '', category: '' });
             setError('');
         }
-    }, [isOpen]);
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        if (isOpen) window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, onClose]);
 
     if (!isOpen) return null;
 

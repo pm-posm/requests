@@ -55,6 +55,7 @@ export function ExtractTab({
     const isExcel = !!(selectedFile?.file_name?.toLowerCase().endsWith('.xlsx') || selectedFile?.file_name?.toLowerCase().endsWith('.xls'));
     
     const [extractPhase, setExtractPhase] = useState<string>('Brief');
+    const [rowOverrides, setRowOverrides] = useState<Record<number, any>>({});
 
     React.useEffect(() => {
         if (!selectedFile) return;
@@ -156,7 +157,7 @@ export function ExtractTab({
                         </button>
                         {isExcel ? (
                             <button
-                                onClick={() => handleImportAll(extractPhase)}
+                                onClick={() => handleImportAll(extractPhase, rowOverrides)}
                                 disabled={loading || excelSelectedRows.size === 0}
                                 className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white text-[11px] font-bold py-1.5 px-4 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
                             >
@@ -192,6 +193,9 @@ export function ExtractTab({
                 setShowAdvancedMapping={setShowAdvancedMapping}
                 mapping={mapping}
                 setMapping={setMapping}
+                rowOverrides={rowOverrides}
+                setRowOverrides={setRowOverrides}
+                finalProject={projectGroup.final_project}
             />
         ) : (
             <ExtractManualPanel 

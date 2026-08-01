@@ -4,7 +4,7 @@ import type { ProjectGroup, StoreItem } from '@/types';
 
 import { useExcelImport } from '@/hooks/useExcelImport';
 import { useStoreManager } from '@/hooks/useStoreManager';
-import { useStorePhasesByProject, useUpsertStorePhase, useBulkUpsertStorePhases } from '@/hooks/useStorePhases';
+import { useStorePhasesByProject, useUpsertStorePhase, useBulkUpsertStorePhases, getValidPhasesForDecision } from '@/hooks/useStorePhases';
 import { useCustomFields } from '@/hooks/useCustomFields';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
@@ -20,13 +20,31 @@ interface StoreManagerModalProps {
     projectGroup: ProjectGroup;
     downloadFileId?: string;
     setDownloadFileId?: (id?: string) => void;
+    defaultPhase?: string;
     onClose: () => void;
 }
 
-export function StoreManagerModal({ projectGroup, downloadFileId, setDownloadFileId, onClose }: StoreManagerModalProps) {
+export function StoreManagerModal({ projectGroup, downloadFileId, setDownloadFileId, defaultPhase, onClose }: StoreManagerModalProps) {
     const [activeTab, setActiveTab] = React.useState<'EXTRACT' | 'MASTER'>('EXTRACT');
+
+    React.useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                onClose();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [onClose]);
+
     const [phaseModalItems, setPhaseModalItems] = React.useState<StoreItem[]>([]);
-    const [phaseModalPhase, setPhaseModalPhase] = React.useState<'Brief' | 'Khảo sát' | 'NTXX' | 'Lắp đặt'>('Khảo sát');
+    const [phaseModalPhase, setPhaseModalPhase] = React.useState<'Brief' | 'Khảo sát' | 'NTXX' | 'Lắp đặt'>((defaultPhase as any) || 'Khảo sát');
+
+    React.useEffect(() => {
+        if (defaultPhase) {
+            setPhaseModalPhase(defaultPhase as any);
+        }
+    }, [defaultPhase]);
     const [addStoreOpen, setAddStoreOpen] = React.useState(false);
     const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
     const [lastAddedStore, setLastAddedStore] = React.useState<any>(null);
@@ -230,18 +248,7 @@ export function StoreManagerModal({ projectGroup, downloadFileId, setDownloadFil
                 defaultPhase={phaseModalPhase}
                 visTechs={store.visTechs}
                 finalProject={projectGroup.final_project}
-                validPhases={(() => {
-                    const validPhasesSet = new Set<string>();
-                    projectGroup.activities?.forEach(a => {
-                        if (a.phase_type === 'BRIEF') validPhasesSet.add('Brief');
-                        if (a.phase_type === 'SURVEY') validPhasesSet.add('Khảo sát');
-                        if (a.phase_type === 'NTXX') validPhasesSet.add('NTXX');
-                        if (a.phase_type === 'INSTALLATION' || a.phase_type === 'INSTALL') validPhasesSet.add('Lắp đặt');
-                    });
-                    const phases = Array.from(validPhasesSet) as any[];
-                    if (phases.length === 0) phases.push('Khảo sát');
-                    return phases;
-                })()}
+                validPhases={getValidPhasesForDecision(briefDecision?.decision_status)}
                 onPhaseSaved={async (phase, itemIds) => {
                     // Update current_phase of those items
                     for (const id of itemIds) {

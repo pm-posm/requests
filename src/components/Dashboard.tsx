@@ -173,71 +173,29 @@ export default function Dashboard() {
             </div>
           }>
             <Routes>
-              {/* Analytics Route */}
-              <Route path="/analytics" element={
-                <div className="absolute inset-0 p-4 md:p-6 overflow-y-auto custom-scrollbar bg-background">
-                  <div className="max-w-7xl mx-auto">
-                    <Analytics />
-                  </div>
-                </div>
-              } />
-
-              {/* Requests Routes */}
-              <Route path="/requests" element={<DashboardOverview />} />
-              <Route path="/requests/overview" element={<DashboardOverview />} />
-              <Route path="/requests/stores" element={<DashboardStoreList />} />
-              <Route path="/requests/store/:storeCode" element={<DashboardStoreViewRouteWrapper />} />
-
-              {/* Master Projects Routes */}
-              <Route path="/projects" element={
-                <div className="absolute inset-0 p-4 md:p-6 overflow-y-auto custom-scrollbar bg-background">
-                  <div className="max-w-7xl mx-auto">
-                    <ModelTest />
-                  </div>
-                </div>
-              } />
-              <Route path="/project/:id/*" element={<ProjectDetail />} />
-
-              {/* Store Plan Board Routes */}
-              <Route path="/store-plan" element={<StorePlanBoardPage />} />
-              <Route path="/store-plan/:storeCode" element={<StorePlanBoardPage />} />
-
-              {/* Contacts / Master Stores Route */}
-              <Route path="/contacts" element={<StoreContactPage />} />
-
-              {/* Operations / Tracking Routes */}
+              {/* Operations / Tracking Routes - ACCESSIBLE */}
               <Route path="/tracking/warranty" element={
-                <div className="absolute inset-0 p-4 md:p-6 overflow-y-auto custom-scrollbar bg-background">
-                  <div className="max-w-7xl mx-auto">
+                <div className="absolute inset-0 p-2.5 sm:p-4 md:p-5 overflow-y-auto custom-scrollbar bg-background">
+                  <div className="w-full max-w-[1920px] mx-auto">
                     <TrackingWarranty />
                   </div>
                 </div>
               } />
-              <Route path="/tracking/ntxx" element={
-                <div className="absolute inset-0 p-4 md:p-6 overflow-y-auto custom-scrollbar bg-background">
-                  <div className="max-w-7xl mx-auto">
-                    <TrackingNtxx />
-                  </div>
-                </div>
-              } />
-              <Route path="/tracking/installation" element={
-                <div className="absolute inset-0 p-4 md:p-6 overflow-y-auto custom-scrollbar bg-background">
-                  <div className="max-w-7xl mx-auto">
-                    <TrackingInstallation />
-                  </div>
-                </div>
-              } />
 
-              {/* Personalization */}
-              <Route path="/personalization" element={
-                <div className="absolute inset-0 p-0 overflow-y-auto custom-scrollbar bg-background">
-                  <Personalization globalSearchTerm={searchTerm} />
-                </div>
-              } />
+              {/* Contacts / Master Stores Route - ACCESSIBLE */}
+              <Route path="/contacts" element={<StoreContactPage />} />
+
+              {/* TEMPORARILY LOCKED ROUTES - REDIRECT TO WARRANTY DEMO */}
+              <Route path="/analytics" element={<Navigate to="/tracking/warranty" replace />} />
+              <Route path="/requests/*" element={<Navigate to="/tracking/warranty" replace />} />
+              <Route path="/projects/*" element={<Navigate to="/tracking/warranty" replace />} />
+              <Route path="/store-plan/*" element={<Navigate to="/tracking/warranty" replace />} />
+              <Route path="/tracking/ntxx" element={<Navigate to="/tracking/warranty" replace />} />
+              <Route path="/tracking/installation" element={<Navigate to="/tracking/warranty" replace />} />
 
               {/* Default Fallback Redirects */}
-              <Route path="/" element={<Navigate to="/requests" replace />} />
-              <Route path="*" element={<Navigate to="/requests" replace />} />
+              <Route path="/" element={<Navigate to="/tracking/warranty" replace />} />
+              <Route path="*" element={<Navigate to="/tracking/warranty" replace />} />
             </Routes>
           </React.Suspense>
         </div>

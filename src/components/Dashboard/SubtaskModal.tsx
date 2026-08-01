@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import type { RawRequestRecord } from '@/services/sheetSyncService';
+import { SHEET_TIEN_DO_OPTIONS } from '@/services/sheetSyncService';
 import { X, Check, ExternalLink, Calendar, Layers, Tag, ShieldCheck, Link2, Search, FileText, PlusCircle, CheckCircle2, Info, Loader2, History, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -21,10 +22,32 @@ interface AuditLogEntry {
     created_at: string;
 }
 
+// Helper to safely format and resolve Drive URLs (handles raw folder text like "W24/2026 - CAT F.Sol" by opening Drive Search)
+export function resolveDriveUrl(rawLink: string | null | undefined): string {
+    if (!rawLink || !rawLink.trim()) return '#';
+    const trimmed = rawLink.trim();
+    if (/^https?:\/\//i.test(trimmed)) {
+        return trimmed;
+    }
+    if (/^(drive|docs)\.google\.com/i.test(trimmed) || (trimmed.includes('.com/') && !trimmed.includes(' '))) {
+        return `https://${trimmed}`;
+    }
+    return `https://drive.google.com/drive/search?q=${encodeURIComponent(trimmed)}`;
+}
+
 export function SubtaskModal({ isOpen, onClose, record, onSave }: SubtaskModalProps) {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { isAdmin } = useDashboardStore();
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, onClose]);
 
     const [requestId, setRequestId] = useState('');
     const [maDuAn, setMaDuAn] = useState('');
@@ -399,10 +422,11 @@ export function SubtaskModal({ isOpen, onClose, record, onSave }: SubtaskModalPr
                             </label>
                             {linkRq && (
                                 <a
-                                    href={linkRq.startsWith('http') ? linkRq : `https://${linkRq}`}
+                                    href={resolveDriveUrl(linkRq)}
                                     target="_blank"
                                     rel="noreferrer"
                                     className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
+                                    title="Mở liên kết Drive hoặc tìm kiếm thư mục Drive trên tab mới"
                                 >
                                     <ExternalLink className="w-3.5 h-3.5" />
                                     Mở Drive Request
@@ -460,15 +484,20 @@ export function SubtaskModal({ isOpen, onClose, record, onSave }: SubtaskModalPr
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1">
                             <label className="font-bold text-slate-700 dark:text-slate-300 block">
-                                Tiến Độ Dự Án:
+                                Tiến Độ Dự Án (Cột Y trên Sheet Source):
                             </label>
-                            <input
-                                type="text"
+                            <select
                                 value={tienDo}
                                 onChange={e => setTienDo(e.target.value)}
-                                placeholder="Ghi chú tiến độ..."
-                                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 dark:text-slate-200 outline-none"
-                            />
+                                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-200 outline-none cursor-pointer"
+                            >
+                                {tienDo && !SHEET_TIEN_DO_OPTIONS.includes(tienDo as any) && (
+                                    <option value={tienDo}>{tienDo}</option>
+                                )}
+                                {SHEET_TIEN_DO_OPTIONS.map(opt => (
+                                    <option key={opt} value={opt}>{opt}</option>
+                                ))}
+                            </select>
                         </div>
 
                         <div className="space-y-1">

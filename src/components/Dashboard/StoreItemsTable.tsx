@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Lock, Edit2, Check, X, Trash2, CheckSquare, Square, RefreshCw, ChevronDown } from 'lucide-react';
+import { Lock, Edit2, Check, X, Trash2, CheckSquare, Square, RefreshCw, ChevronDown, ClipboardList } from 'lucide-react';
 import type { StoreItem } from '@/types';
 import { computePhaseStatus } from '@/utils';
 import { supabase } from '@/lib/supabase';
 import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
+import { PhaseDetailModal } from '../StoreManager/modals/PhaseDetailModal';
 
 interface StoreItemsTableProps {
     storeItems: StoreItem[];
@@ -29,6 +30,10 @@ export function StoreItemsTable({
     const [bulkField, setBulkField] = useState<string>('');
     const [bulkValue, setBulkValue] = useState<string>('');
     const [isSubmittingBulk, setIsSubmittingBulk] = useState(false);
+    
+    // State for PhaseDetailModal
+    const [phaseModalItem, setPhaseModalItem] = useState<StoreItem | null>(null);
+    const [isPhaseModalOpen, setIsPhaseModalOpen] = useState(false);
 
     const phaseMap = React.useMemo(() => {
         const m = new Map<string, any>();
@@ -133,22 +138,29 @@ export function StoreItemsTable({
         const isEditing = editingCell?.id === item.id && editingCell?.field === field;
         
         if (isEditing) {
-            if (options && options.length > 0) {
+            if (options) {
                 return (
-                    <select
-                        autoFocus
-                        value={editingCell.value}
-                        onChange={(e) => setEditingCell({ ...editingCell, value: e.target.value })}
-                        onBlur={() => handleSaveInline(item.id, field, editingCell.value)}
-                        className="text-xs p-1 rounded border border-indigo-500 bg-white dark:bg-slate-900 outline-none w-full"
-                    >
-                        <option value="">-- Chọn --</option>
-                        {options.map((opt: any) => (
-                            <option key={opt.id || opt.name || opt} value={opt.name || opt}>
-                                {opt.name || opt}
-                            </option>
-                        ))}
-                    </select>
+                    <div className="flex items-center gap-1 w-full">
+                        <input
+                            autoFocus
+                            type="text"
+                            list={`inline-options-${item.id}-${field}`}
+                            value={editingCell.value}
+                            onChange={(e) => setEditingCell({ ...editingCell, value: e.target.value })}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSaveInline(item.id, field, editingCell.value);
+                                if (e.key === 'Escape') setEditingCell(null);
+                            }}
+                            onBlur={() => handleSaveInline(item.id, field, editingCell.value)}
+                            className="text-xs p-1 rounded border border-indigo-500 bg-white dark:bg-slate-900 outline-none w-full font-medium"
+                            placeholder="Gõ hoặc chọn..."
+                        />
+                        <datalist id={`inline-options-${item.id}-${field}`}>
+                            {options.map((opt: any, i: number) => (
+                                <option key={i} value={typeof opt === 'string' ? opt : (opt.name || opt)} />
+                            ))}
+                        </datalist>
+                    </div>
                 );
             }
             return (
@@ -190,105 +202,15 @@ export function StoreItemsTable({
 
     return (
         <div className="space-y-3">
-            {/* BULK EDIT TOOLBAR */}
-            {selectedIds.size > 0 && (
-                <div className="p-3 bg-indigo-600 text-white rounded-xl shadow-lg flex flex-wrap items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <div className="flex items-center gap-2">
-                        <CheckSquare className="w-4 h-4 text-emerald-300" />
-                        <span className="text-xs font-bold">Đã chọn {selectedIds.size}/{storeItems.length} cửa hàng</span>
-                    </div>
-
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs text-indigo-100 font-semibold">Chỉnh sửa hàng loạt:</span>
-                        <select
-                            value={bulkField}
-                            onChange={(e) => {
-                                setBulkField(e.target.value);
-                                setBulkValue('');
-                            }}
-                            className="text-xs p-1.5 rounded-lg bg-indigo-700 text-white font-bold border border-indigo-500 outline-none"
-                        >
-                            <option value="">-- Chọn cột cần cập nhật --</option>
-                            <option value="store_name">Tên Cửa Hàng (Store Name)</option>
-                            <option value="region">Vùng (Region)</option>
-                            <option value="customer">Khách Hàng (Customer)</option>
-                            <option value="ka">KA</option>
-                            <option value="sr">SR</option>
-                            <option value="category">Hạng Mục (Category)</option>
-                            <option value="vis_tech">Kỹ Thuật Viên (Vis-Tech)</option>
-                            <option value="supplier_name">Nhà Thầu (Supplier)</option>
-                        </select>
-
-                        {bulkField === 'vis_tech' ? (
-                            <select
-                                value={bulkValue}
-                                onChange={(e) => setBulkValue(e.target.value)}
-                                className="text-xs p-1.5 rounded-lg bg-white text-slate-800 font-medium outline-none"
-                            >
-                                <option value="">-- Chọn Kỹ thuật viên --</option>
-                                {visTechs.map((v: any) => (
-                                    <option key={v.id} value={v.name}>{v.name}</option>
-                                ))}
-                            </select>
-                        ) : bulkField === 'supplier_name' ? (
-                            <select
-                                value={bulkValue}
-                                onChange={(e) => setBulkValue(e.target.value)}
-                                className="text-xs p-1.5 rounded-lg bg-white text-slate-800 font-medium outline-none"
-                            >
-                                <option value="">-- Chọn Nhà thầu --</option>
-                                {suppliers.map((s: any) => (
-                                    <option key={s.id} value={s.name}>{s.name}</option>
-                                ))}
-                            </select>
-                        ) : bulkField ? (
-                            <input
-                                type="text"
-                                placeholder={`Nhập giá trị mới cho ${bulkField}...`}
-                                value={bulkValue}
-                                onChange={(e) => setBulkValue(e.target.value)}
-                                className="text-xs p-1.5 rounded-lg bg-white text-slate-800 font-medium outline-none min-w-[180px]"
-                            />
-                        ) : null}
-
-                        {bulkField && (
-                            <button
-                                onClick={handleApplyBulkEdit}
-                                disabled={isSubmittingBulk}
-                                className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
-                            >
-                                Áp dụng hàng loạt
-                            </button>
-                        )}
-
-                        <button
-                            onClick={handleBulkDelete}
-                            disabled={isSubmittingBulk}
-                            className="bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1 ml-2"
-                        >
-                            <Trash2 className="w-3.5 h-3.5" /> Xóa các mục chọn
-                        </button>
-                    </div>
-                </div>
-            )}
-
             <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm custom-scrollbar">
                 <div className="px-4 py-2 bg-indigo-50/50 dark:bg-indigo-950/20 border-b border-indigo-100 dark:border-indigo-900/30 flex items-center justify-between">
                     <p className="text-[11px] text-indigo-700 dark:text-indigo-300 font-bold flex items-center gap-1.5">
-                        💡 Mẹo: Bấm trực tiếp vào từng ô để chỉnh sửa nhanh (Inline Edit) hoặc tích chọn các cửa hàng để cập nhật hàng loạt.
+                        💡 Mẹo: Bấm trực tiếp vào từng ô để chỉnh sửa nhanh (Inline Edit).
                     </p>
                 </div>
                 <table className="w-full text-left border-collapse min-w-[1300px]">
                     <thead>
                         <tr className="bg-secondary text-[11px] text-muted-foreground uppercase tracking-wider">
-                            <th className="p-3 font-semibold border-b border-border w-[40px] text-center">
-                                <input 
-                                    type="checkbox" 
-                                    checked={selectedIds.size === storeItems.length && storeItems.length > 0} 
-                                    onChange={handleSelectAll} 
-                                    className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                                />
-                            </th>
                             <th className="p-3 font-semibold border-b border-border w-[120px]">Store Code</th>
                             <th className="p-3 font-semibold border-b border-border w-[180px]">Store Name</th>
                             <th className="p-3 font-semibold border-b border-border min-w-[100px]">Region</th>
@@ -307,6 +229,7 @@ export function StoreItemsTable({
                             <th className="p-3 font-semibold border-b border-border min-w-[140px]">Ngày dự kiến</th>
                             <th className="p-3 font-semibold border-b border-border min-w-[120px]">Ngày thực tế</th>
                             <th className="p-3 font-semibold border-b border-border w-[120px]">Trạng thái</th>
+                            <th className="p-3 font-semibold border-b border-border w-[110px] text-center">Thao tác</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
@@ -314,18 +237,9 @@ export function StoreItemsTable({
                             const currentPhase = item.current_phase || "Khảo sát";
                             const phaseData = phaseMap.get(item.id) || null;
                             const { status: currentStatus, isLate } = computePhaseStatus(phaseData);
-                            const isSelected = selectedIds.has(item.id);
                             
                             return (
-                                <tr key={item.id} className={`group hover:bg-secondary/50 transition-colors ${isSelected ? 'bg-indigo-50/40 dark:bg-indigo-950/30' : ''} ${item.is_locked ? "opacity-70" : ""}`}>
-                                    <td className="p-3 text-center">
-                                        <input 
-                                            type="checkbox" 
-                                            checked={isSelected} 
-                                            onChange={() => toggleSelect(item.id)} 
-                                            className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                                        />
-                                    </td>
+                                <tr key={item.id} className={`group hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors ${isLate ? "bg-amber-50/60 dark:bg-amber-950/20" : ""} ${item.is_locked ? "opacity-70" : ""}`}>
                                     <td className="p-3 text-xs font-bold text-slate-700 dark:text-slate-300">
                                         <div className="flex items-center gap-1.5">
                                             {item.is_locked && <Lock className="w-3 h-3 text-indigo-500 shrink-0" />}
@@ -364,7 +278,19 @@ export function StoreItemsTable({
                                             </td>
                                         );
                                     })}
-                                    <td className="p-3 text-[11px] font-bold text-slate-700 dark:text-slate-300">{currentPhase || "—"}</td>
+                                    <td className="p-3 text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setPhaseModalItem(item);
+                                                setIsPhaseModalOpen(true);
+                                            }}
+                                            className="hover:underline text-indigo-600 dark:text-indigo-400 font-bold cursor-pointer"
+                                            title="Click để cập nhật tiến độ"
+                                        >
+                                            {currentPhase || "Khảo sát"}
+                                        </button>
+                                    </td>
                                     <td className="p-3 text-[10px] font-medium text-slate-500 dark:text-slate-400">
                                         {phaseData?.expected_start ? (
                                             <div className="flex flex-col gap-0.5 whitespace-nowrap">
@@ -381,12 +307,41 @@ export function StoreItemsTable({
                                             {currentStatus}{currentStatus === "Đang làm" && isLate ? " (Trễ)" : ""}
                                         </div>
                                     </td>
+                                    <td className="p-2 text-xs text-center">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setPhaseModalItem(item);
+                                                setIsPhaseModalOpen(true);
+                                            }}
+                                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/80 dark:text-indigo-300 rounded-lg text-xs font-bold transition-all border border-indigo-200 dark:border-indigo-800 cursor-pointer shadow-2xs"
+                                            title="Cập nhật tiến độ / Quyết định & Báo cáo"
+                                        >
+                                            <ClipboardList className="w-3.5 h-3.5" />
+                                            Tiến độ
+                                        </button>
+                                    </td>
                                 </tr>
                             );
                         })}
                     </tbody>
                 </table>
             </div>
+
+            {/* PhaseDetailModal for Store Item */}
+            {isPhaseModalOpen && phaseModalItem && (
+                <PhaseDetailModal
+                    isOpen={isPhaseModalOpen}
+                    onClose={() => {
+                        setIsPhaseModalOpen(false);
+                        setPhaseModalItem(null);
+                    }}
+                    items={[phaseModalItem]}
+                    defaultPhase={(phaseModalItem.current_phase as any) || 'Khảo sát'}
+                    visTechs={visTechs}
+                    finalProject={finalProjectName}
+                />
+            )}
         </div>
     );
 }

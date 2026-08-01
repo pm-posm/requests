@@ -2,9 +2,10 @@ import React from 'react';
 import { 
   BarChart3, Inbox, FolderOpen, PanelLeftClose, PanelLeftOpen, 
   ListTodo, KanbanSquare, ClipboardCheck, BookUser, 
-  Briefcase, Search, Settings, ChevronRight, Menu, X, Rocket, Factory, ShieldCheck
+  Briefcase, Search, Settings, ChevronRight, Menu, X, Rocket, Factory, ShieldCheck, Lock
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import toast from 'react-hot-toast';
 
 interface SidebarProps {
   mainMenu: string;
@@ -17,6 +18,8 @@ interface SidebarProps {
   setIsMobileOpen: (v: boolean) => void;
 }
 
+const ALLOWED_PATHS = ['/tracking/warranty', '/contacts'];
+
 export function Sidebar({
   mainMenu, setMainMenu, requestMenu, setRequestMenu, setSelectedStore, setIsNewRequestOpen, isMobileOpen, setIsMobileOpen
 }: SidebarProps) {
@@ -26,6 +29,11 @@ export function Sidebar({
   const [isCollapsed, setIsCollapsed] = React.useState(false);
 
   const handleRouteClick = (path: string, menuKey?: string) => {
+    const isAllowed = ALLOWED_PATHS.some(allowed => path.startsWith(allowed));
+    if (!isAllowed) {
+      toast.error('🔒 Module đang phát triển - Tạm khóa phục vụ Báo cáo Sếp');
+      return;
+    }
     navigate(path);
     if (menuKey) setMainMenu(menuKey);
     if (window.innerWidth < 768) setIsMobileOpen(false);
@@ -53,7 +61,7 @@ export function Sidebar({
         {/* Workspace Header */}
         <div className="h-14 px-4 flex items-center justify-between border-b border-border shrink-0 bg-sky-600 text-white">
           {!isCollapsed && (
-            <div className="flex items-center gap-2.5 font-bold tracking-tight text-white cursor-pointer" onClick={() => handleRouteClick('/requests')}>
+            <div className="flex items-center gap-2.5 font-bold tracking-tight text-white cursor-pointer" onClick={() => handleRouteClick('/tracking/warranty')}>
               <div className="bg-white/20 p-1.5 rounded-lg shadow-sm text-white">
                 <Rocket className="w-4 h-4" />
               </div>
@@ -61,7 +69,7 @@ export function Sidebar({
             </div>
           )}
           {isCollapsed && (
-            <div className="bg-white/20 p-1.5 rounded-lg mx-auto shadow-sm text-white cursor-pointer" onClick={() => handleRouteClick('/requests')}>
+            <div className="bg-white/20 p-1.5 rounded-lg mx-auto shadow-sm text-white cursor-pointer" onClick={() => handleRouteClick('/tracking/warranty')}>
               <Rocket className="w-4 h-4" />
             </div>
           )}
@@ -87,12 +95,14 @@ export function Sidebar({
                 icon={<BarChart3 />} label="Dashboard Báo Cáo" 
                 active={pathname.startsWith('/analytics')} 
                 isCollapsed={isCollapsed}
+                isLocked={true}
                 onClick={() => handleRouteClick('/analytics', 'analytics')} 
               />
               <SidebarItem 
                 icon={<Inbox />} label="Xử lý Request" 
                 active={pathname.startsWith('/requests')} 
                 isCollapsed={isCollapsed}
+                isLocked={true}
                 onClick={() => handleRouteClick('/requests', 'request')} 
               />
               {!isCollapsed && (
@@ -100,6 +110,7 @@ export function Sidebar({
                   <SubSidebarItem 
                     label="Tất cả Request (Overview)" 
                     active={pathname === '/requests' || pathname === '/requests/overview'} 
+                    isLocked={true}
                     onClick={() => handleRouteClick('/requests', 'request')} 
                   />
                 </div>
@@ -115,12 +126,14 @@ export function Sidebar({
                 icon={<FolderOpen />} label="Tổng hợp dự án" 
                 active={pathname.startsWith('/projects') || pathname.startsWith('/project')} 
                 isCollapsed={isCollapsed}
+                isLocked={true}
                 onClick={() => handleRouteClick('/projects', 'tong_du_an')} 
               />
               <SidebarItem 
                 icon={<KanbanSquare />} label="Bảng kế hoạch" 
                 active={pathname.startsWith('/store-plan')} 
                 isCollapsed={isCollapsed}
+                isLocked={true}
                 onClick={() => handleRouteClick('/store-plan', 'store_plan')} 
               />
             </div>
@@ -134,18 +147,21 @@ export function Sidebar({
                 icon={<ShieldCheck />} label="Bảo Hành & Đổi Trả" 
                 active={pathname.startsWith('/tracking/warranty')} 
                 isCollapsed={isCollapsed}
+                isLocked={false}
                 onClick={() => handleRouteClick('/tracking/warranty', 'tracking_warranty')} 
               />
               <SidebarItem 
                 icon={<Factory />} label="Nghiệm thu Xuất xưởng" 
                 active={pathname.startsWith('/tracking/ntxx')} 
                 isCollapsed={isCollapsed}
+                isLocked={true}
                 onClick={() => handleRouteClick('/tracking/ntxx', 'tracking_ntxx')} 
               />
               <SidebarItem 
                 icon={<ClipboardCheck />} label="Theo dõi Lắp đặt" 
                 active={pathname.startsWith('/tracking/installation')} 
                 isCollapsed={isCollapsed}
+                isLocked={true}
                 onClick={() => handleRouteClick('/tracking/installation', 'tracking_installation')} 
               />
             </div>
@@ -159,12 +175,12 @@ export function Sidebar({
                 icon={<BookUser />} label="Danh bạ Cửa hàng" 
                 active={pathname.startsWith('/contacts')} 
                 isCollapsed={isCollapsed}
+                isLocked={false}
                 onClick={() => handleRouteClick('/contacts', 'master_stores')} 
               />
             </div>
           </div>
         </nav>
-
 
         {/* Footer Action */}
         <div className="p-3 border-t border-border shrink-0">
@@ -185,41 +201,51 @@ export function Sidebar({
   );
 }
 
-function SidebarItem({ icon, label, active, isCollapsed, onClick }: { icon: React.ReactNode, label: string, active?: boolean, isCollapsed?: boolean, onClick: () => void }) {
+function SidebarItem({ icon, label, active, isCollapsed, isLocked, onClick }: { icon: React.ReactNode, label: string, active?: boolean, isCollapsed?: boolean, isLocked?: boolean, onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      title={isCollapsed ? label : undefined}
+      title={isCollapsed ? (isLocked ? `${label} (Tạm khóa)` : label) : undefined}
       className={`
-        w-full flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-all text-left
+        w-full flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-all text-left cursor-pointer
         ${active 
           ? 'bg-primary/10 text-primary font-semibold' 
-          : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+          : isLocked 
+            ? 'text-slate-400 dark:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-900/40' 
+            : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
         }
         ${isCollapsed ? 'justify-center px-0' : ''}
       `}
     >
-      <span className={`shrink-0 ${active ? 'text-primary' : 'text-muted-foreground'}`}>
+      <span className={`shrink-0 ${active ? 'text-primary' : isLocked ? 'text-slate-400 dark:text-slate-600' : 'text-muted-foreground'}`}>
         {React.cloneElement(icon as React.ReactElement<any>, { className: 'w-4 h-4' })}
       </span>
-      {!isCollapsed && <span className="truncate">{label}</span>}
+      {!isCollapsed && (
+        <div className="flex items-center justify-between w-full min-w-0">
+          <span className={`truncate ${isLocked ? 'text-slate-400 dark:text-slate-500' : ''}`}>{label}</span>
+          {isLocked && <Lock className="w-3.5 h-3.5 text-slate-400 dark:text-slate-600 shrink-0 ml-1.5" />}
+        </div>
+      )}
     </button>
   );
 }
 
-function SubSidebarItem({ label, active, onClick }: { label: string, active?: boolean, onClick: () => void }) {
+function SubSidebarItem({ label, active, isLocked, onClick }: { label: string, active?: boolean, isLocked?: boolean, onClick: () => void }) {
   return (
     <button
       onClick={onClick}
       className={`
-        w-full text-left px-3 py-1.5 rounded-md text-xs transition-colors truncate
+        w-full text-left px-3 py-1.5 rounded-md text-xs transition-colors truncate flex items-center justify-between cursor-pointer
         ${active 
           ? 'text-primary font-bold bg-primary/5' 
-          : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+          : isLocked
+            ? 'text-slate-400 dark:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-900/40'
+            : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
         }
       `}
     >
-      • {label}
+      <span>• {label}</span>
+      {isLocked && <Lock className="w-3 h-3 text-slate-400 dark:text-slate-600 shrink-0 ml-1" />}
     </button>
   );
 }

@@ -168,20 +168,39 @@ export function MasterStoreTab({
                     Điều phối hàng loạt:
                 </div>
                 
-                {/* Supplier */}
-                <select 
-                    className="text-xs font-semibold border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-900 outline-none w-36 text-slate-700 dark:text-slate-300 cursor-pointer hover:border-indigo-400 transition-colors"
-                    onChange={e => { 
-                        if (e.target.value) { 
-                            const targets = selectedIds.size > 0 ? selectedIds : new Set(storeItems.map(i => i.id));
-                            onBulkSupplier(e.target.value, targets); 
-                            e.target.value = ''; 
-                        } 
-                    }}
-                >
-                    <option value="">-- Gán Supplier --</option>
-                    {suppliers.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-                </select>
+                {/* Supplier Bulk Input & Dropdown */}
+                <div className="relative">
+                    <input
+                        type="text"
+                        list="bulk-supplier-datalist"
+                        placeholder="-- Gán/gõ Supplier hàng loạt --"
+                        onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                                const val = (e.target as HTMLInputElement).value.trim();
+                                if (val) {
+                                    const targets = selectedIds.size > 0 ? selectedIds : new Set(storeItems.map(i => i.id));
+                                    onBulkSupplier(val, targets);
+                                    (e.target as HTMLInputElement).value = '';
+                                }
+                            }
+                        }}
+                        onChange={e => {
+                            const val = e.target.value;
+                            const optionValues = suppliers ? suppliers.map(s => typeof s === 'string' ? s : s.name) : [];
+                            if (optionValues.includes(val)) {
+                                const targets = selectedIds.size > 0 ? selectedIds : new Set(storeItems.map(i => i.id));
+                                onBulkSupplier(val, targets);
+                                e.target.value = '';
+                            }
+                        }}
+                        className="text-xs font-semibold border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-900 outline-none w-48 text-slate-700 dark:text-slate-300 focus:border-indigo-500 transition-colors shadow-2xs"
+                    />
+                    <datalist id="bulk-supplier-datalist">
+                        {suppliers && suppliers.map((s, idx) => (
+                            <option key={idx} value={typeof s === 'string' ? s : s.name} />
+                        ))}
+                    </datalist>
+                </div>
 
                 {/* Removed Vis-Tech and Phase dropdowns per PM's request */}
 

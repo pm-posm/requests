@@ -15,6 +15,7 @@ export function useRawRequests() {
                 .from('raw_requests')
                 .select('*')
                 .eq('is_deleted_in_sheet', false)
+                .range(0, 4999)
                 .order('sheet_row_index', { ascending: true });
 
             if (error) throw error;

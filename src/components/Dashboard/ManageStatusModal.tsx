@@ -11,6 +11,15 @@ interface ManageStatusModalProps {
 
 export function ManageStatusModal({ isOpen, onClose, requests = [] }: ManageStatusModalProps) {
     const { statuses, addStatus, deleteStatus } = useWorkflowEngine();
+
+    React.useEffect(() => {
+        if (!isOpen) return;
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, onClose]);
     
     // Inline new status inputs for each category
     const [addingCategory, setAddingCategory] = useState<string | null>(null);

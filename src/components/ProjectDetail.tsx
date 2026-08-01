@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { StoreManagerModal } from './StoreManager/StoreManagerModal';
-import { ArrowLeft, Loader2, Mail, FileSpreadsheet, X, History as HistoryIcon, FolderUp, Store, Trash2, Layers, Scissors } from 'lucide-react';
+import { ArrowLeft, Loader2, Mail, FileSpreadsheet, X, History as HistoryIcon, FolderUp, Store, Trash2, Layers, Scissors, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ActivityRow, ProjectGroup } from '@/types';
@@ -33,13 +33,16 @@ export default function ProjectDetail() {
   const [activePhaseModal, setActivePhaseModal] = useState<PhaseType | null>(null);
   const [showExtractModal, setShowExtractModal] = useState(false);
   const [downloadFileId, setDownloadFileId] = useState<string | undefined>();
+  const [extractDefaultPhase, setExtractDefaultPhase] = useState<string | undefined>();
+  const [headerPhaseFilter, setHeaderPhaseFilter] = useState<string>('ALL');
 
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
   const [isSplitModalOpen, setIsSplitModalOpen] = useState(false);
+  const [isSyncingGmail, setIsSyncingGmail] = useState(false);
 
   const queryClient = useQueryClient();
 
-  const { data: projectGroups, isLoading: isGroupsLoading } = useQuery({
+  const { data: projectGroups, isLoading: isGroupsLoading, refetch: refetchActivities } = useQuery({
       queryKey: ['project_groups', projectCode],
       queryFn: async () => {
           const { data } = await supabase.from('project_activities').select('*, activity_attachments(*)').eq('final_project', projectCode);
@@ -48,6 +51,38 @@ export default function ProjectDetail() {
   });
 
   const activities = projectGroups || [];
+
+  const latestSyncFormatted = React.useMemo(() => {
+      if (!activities || activities.length === 0) return null;
+      const timestamps = activities.map((a: any) => a.created_at).filter(Boolean);
+      if (timestamps.length === 0) return null;
+      const latest = new Date(Math.max(...timestamps.map((t: string) => new Date(t).getTime())));
+      const hh = String(latest.getHours()).padStart(2, '0');
+      const mm = String(latest.getMinutes()).padStart(2, '0');
+      const dd = String(latest.getDate()).padStart(2, '0');
+      const month = String(latest.getMonth() + 1).padStart(2, '0');
+      return `${hh}:${mm} ${dd}/${month}`;
+  }, [activities]);
+
+  const handleManualSyncGmail = async () => {
+      try {
+          setIsSyncingGmail(true);
+          const toastId = toast.loading('Đang đồng bộ Gmail...');
+          const { error } = await supabase.functions.invoke('cron-sync-gmail');
+          await refetchActivities();
+          queryClient.invalidateQueries({ queryKey: ['project_store_items'] });
+          toast.dismiss(toastId);
+          if (error) {
+              toast.error('Đồng bộ Gmail gặp sự cố: ' + error.message);
+          } else {
+              toast.success('Đã cập nhật dữ liệu Gmail mới nhất!');
+          }
+      } catch (err: any) {
+          toast.error('Lỗi đồng bộ: ' + err.message);
+      } finally {
+          setIsSyncingGmail(false);
+      }
+  };
   
   const hasSurvey = activities.some(a => (a.phase_type || '').toUpperCase() === 'SURVEY' || (a.phase_type || '').toUpperCase() === 'KHAO_SAT');
   const hasInstall = activities.some(a => (a.phase_type || '').toUpperCase() === 'INSTALLATION' || (a.phase_type || '').toUpperCase() === 'LAP_DAT');
@@ -66,12 +101,7 @@ export default function ProjectDetail() {
 
   const projectGroupForExtract: ProjectGroup = {
       final_project: projectCode,
-      
       activities: activities as ActivityRow[],
-      
-      
-      
-      
   };
 
   if (isGroupsLoading) {
@@ -88,54 +118,92 @@ export default function ProjectDetail() {
         <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white line-clamp-2 max-w-4xl text-center mb-4">
           Không tìm thấy dự án nào khớp với: {projectCode}
         </h2>
-        <button onClick={() => navigate('/')} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">Quay lại Tổng dự án</button>
+        <button onClick={() => navigate('/projects')} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">Quay lại Tổng dự án</button>
       </div>
     );
   }
 
-  const PhaseButton = ({ label, count, onClick }: { label: string, count: number, onClick: () => void }) => (
-      <button 
-          onClick={onClick}
-          className="flex items-center gap-1.5 px-3 py-1 bg-secondary border border-border rounded-full hover:border-primary hover:text-primary transition-colors shadow-sm group whitespace-nowrap"
-      >
-          <span className="font-semibold text-muted-foreground group-hover:text-primary text-xs">{label}</span>
-          {count > 0 && (
-              <span className="bg-primary/10 text-primary text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">{count}</span>
-          )}
-      </button>
-  );
+  const PhaseButton = ({ label, count, onClick, phaseName }: { label: string, count: number, onClick: () => void, phaseName: string }) => {
+      const isActive = headerPhaseFilter === phaseName;
+      return (
+          <button 
+              onClick={() => {
+                  setHeaderPhaseFilter(prev => prev === phaseName ? 'ALL' : phaseName);
+                  onClick();
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1 border rounded-full transition-colors shadow-sm group whitespace-nowrap cursor-pointer ${
+                  isActive 
+                      ? 'bg-indigo-50 dark:bg-indigo-950/80 border-indigo-500 text-indigo-700 dark:text-indigo-300 font-bold ring-2 ring-indigo-500/20'
+                      : 'bg-secondary border-border hover:border-primary hover:text-primary'
+              }`}
+              title={`Click để lọc danh sách Cửa hàng theo giai đoạn ${label}`}
+          >
+              <span className={`text-xs ${isActive ? 'font-black text-indigo-700 dark:text-indigo-300' : 'font-semibold text-muted-foreground group-hover:text-primary'}`}>{label}</span>
+              {count > 0 && (
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center ${isActive ? 'bg-indigo-600 text-white' : 'bg-primary/10 text-primary'}`}>{count}</span>
+              )}
+          </button>
+      );
+  };
 
   return (
     <div className="absolute inset-0 flex flex-col bg-background overflow-hidden">
       {/* Header */}
       <div className="shrink-0 pt-3 px-4 md:px-6 border-b border-border bg-card/80 backdrop-blur-md relative z-20 flex flex-col gap-3">
-        <button onClick={() => navigate('/')} className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors font-semibold text-xs w-fit">
-          <ArrowLeft className="w-3.5 h-3.5" /> Quay lại Tổng dự án
-        </button>
+        {/* Navigation & Gmail Sync Status Bar */}
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <button onClick={() => navigate('/projects')} className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors font-semibold text-xs w-fit cursor-pointer">
+            <ArrowLeft className="w-3.5 h-3.5" /> Quay lại Tổng dự án
+          </button>
+
+          {/* Gmail Sync Indicator */}
+          <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1 rounded-full text-[11px] font-medium text-slate-600 dark:text-slate-300">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Gmail Sync đang hoạt động" />
+              <span>Gmail Sync: {latestSyncFormatted ? `Lần cuối ${latestSyncFormatted}` : 'Sẵn sàng'}</span>
+              <button
+                  onClick={handleManualSyncGmail}
+                  disabled={isSyncingGmail}
+                  className="ml-1 hover:text-indigo-600 dark:hover:text-indigo-400 font-bold transition-colors cursor-pointer flex items-center gap-1 text-[10px] text-indigo-600 dark:text-indigo-400"
+                  title="Kích hoạt đồng bộ Gmail ngay lập tức"
+              >
+                  <RefreshCw className={`w-3 h-3 ${isSyncingGmail ? 'animate-spin' : ''}`} />
+                  {isSyncingGmail ? 'Đang sync...' : 'Sync ngay'}
+              </button>
+          </div>
+        </div>
         
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
           <h1 className="text-base sm:text-lg font-bold text-foreground line-clamp-1 max-w-2xl leading-tight" title={projectCode}>
             {projectCode}
           </h1>
           
-          <div className="flex items-center gap-2 shrink-0">
-            <button 
-              onClick={() => handleAdminAction(() => setIsMergeModalOpen(true))}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-bold text-xs shadow-sm transition-all cursor-pointer"
-            >
-              <Layers className="w-3.5 h-3.5" /> 🔗 Gộp Dự Án
-            </button>
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            {isAdmin && (
+              <>
+                <button 
+                  onClick={() => setIsMergeModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-bold text-xs shadow-sm transition-all cursor-pointer"
+                  title="Gộp dự án này vào dự án khác (Admin)"
+                >
+                  <Layers className="w-3.5 h-3.5" /> Gộp Dự Án
+                </button>
+
+                <button 
+                  onClick={() => setIsSplitModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold text-xs shadow-sm transition-all cursor-pointer"
+                  title="Tách hoạt động email sang dự án mới (Admin)"
+                >
+                  <Scissors className="w-3.5 h-3.5" /> Tách Dự Án
+                </button>
+              </>
+            )}
 
             <button 
-              onClick={() => handleAdminAction(() => setIsSplitModalOpen(true))}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold text-xs shadow-sm transition-all cursor-pointer"
-            >
-              <Scissors className="w-3.5 h-3.5" /> ✂️ Tách Dự Án
-            </button>
-
-            <button 
-              onClick={() => handleAdminAction(() => setShowExtractModal(true))}
-              className="flex items-center gap-2 px-3 py-1.5 bg-primary hover:opacity-90 text-primary-foreground rounded-lg font-semibold text-xs shadow-sm transition-opacity"
+              onClick={() => {
+                  setExtractDefaultPhase(undefined);
+                  setShowExtractModal(true);
+              }}
+              className="flex items-center gap-2 px-3 py-1.5 bg-primary hover:opacity-90 text-primary-foreground rounded-lg font-semibold text-xs shadow-sm transition-opacity cursor-pointer"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" /> Trung tâm Xử lý Dữ liệu
             </button>
@@ -144,10 +212,10 @@ export default function ProjectDetail() {
 
         {/* Phase Action Buttons */}
         <div className="flex items-center gap-2 pb-3 overflow-x-auto custom-scrollbar">
-           <PhaseButton label="Brief" count={getPhaseCount('BRIEF')} onClick={() => handleAdminAction(() => setActivePhaseModal('BRIEF'))} />
-           <PhaseButton label="NTXX" count={getPhaseCount('NTXX')} onClick={() => handleAdminAction(() => setActivePhaseModal('NTXX'))} />
-           <PhaseButton label="Khảo sát" count={getPhaseCount('SURVEY')} onClick={() => handleAdminAction(() => setActivePhaseModal('SURVEY'))} />
-           <PhaseButton label="Lắp đặt" count={getPhaseCount('INSTALLATION')} onClick={() => handleAdminAction(() => setActivePhaseModal('INSTALLATION'))} />
+           <PhaseButton label="Brief" phaseName="Brief" count={getPhaseCount('BRIEF')} onClick={() => setActivePhaseModal('BRIEF')} />
+           <PhaseButton label="NTXX" phaseName="NTXX" count={getPhaseCount('NTXX')} onClick={() => setActivePhaseModal('NTXX')} />
+           <PhaseButton label="Khảo sát" phaseName="Khảo sát" count={getPhaseCount('SURVEY')} onClick={() => setActivePhaseModal('SURVEY')} />
+           <PhaseButton label="Lắp đặt" phaseName="Lắp đặt" count={getPhaseCount('INSTALLATION')} onClick={() => setActivePhaseModal('INSTALLATION')} />
         </div>
       </div>
 
@@ -161,6 +229,7 @@ export default function ProjectDetail() {
                 hasAccept={hasAccept} 
                 activities={activities as ActivityRow[]} 
                 onlyPublished={true} 
+                externalPhaseFilter={headerPhaseFilter}
             />
         </div>
       </div>
@@ -170,9 +239,11 @@ export default function ProjectDetail() {
             projectGroup={projectGroupForExtract}
             downloadFileId={downloadFileId}
             setDownloadFileId={setDownloadFileId}
+            defaultPhase={extractDefaultPhase}
             onClose={() => {
                 setShowExtractModal(false);
                 setDownloadFileId(undefined);
+                setExtractDefaultPhase(undefined);
             }}
         />
       )}
@@ -184,8 +255,12 @@ export default function ProjectDetail() {
           group={projectGroupForExtract} 
           onClose={() => setActivePhaseModal(null)} 
           onProcessData={(fileId) => {
+            const defaultP = activePhaseModal === 'SURVEY' ? 'Khảo sát' : 
+                            activePhaseModal === 'INSTALLATION' ? 'Lắp đặt' : 
+                            activePhaseModal === 'NTXX' ? 'NTXX' : 'Brief';
             setActivePhaseModal(null);
             setDownloadFileId(fileId);
+            setExtractDefaultPhase(defaultP);
             setShowExtractModal(true);
           }}
         />
@@ -220,6 +295,14 @@ function PhaseModal({ phase, group, onClose, onProcessData }: { phase: PhaseType
   const [activeTab, setActiveTab] = useState<'emails' | 'history' | 'manual'>('emails');
   const [confirmDeleteFile, setConfirmDeleteFile] = useState<{groupData: any, linkToRemove: string} | null>(null);
   const queryClient = useQueryClient();
+
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const { data: logs = [] } = useQuery({
       queryKey: ['project_store_logs_phase', group.final_project, phase],

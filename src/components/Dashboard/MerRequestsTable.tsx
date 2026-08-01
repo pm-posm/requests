@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { RawRequestRecord } from '@/services/sheetSyncService';
-import { normalizeDataResponser, getLiveMasterContactMap } from '@/services/sheetSyncService';
+import { normalizeDataResponser, getLiveMasterContactMap, SHEET_TIEN_DO_OPTIONS } from '@/services/sheetSyncService';
 import { PHUONG_AN_OPTIONS, useWorkflowEngine } from '@/hooks/useWorkflowEngine';
 import { useDashboardStore } from '@/stores/useDashboardStore';
 import { 
@@ -15,6 +15,7 @@ import { ImageLightboxModal, type LightboxImage } from '@/components/ui/ImageLig
 import { BulkActionBar } from './BulkActionBar';
 import { ColumnVisibilityModal, DEFAULT_VISIBLE_KEYS } from './ColumnVisibilityModal';
 import { CommandCenterHeader } from './CommandCenterHeader';
+import { RequestAnalyticsView } from './RequestAnalyticsView';
 import { RequestTableRow } from './RequestTableRow';
 import { Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -151,7 +152,7 @@ export function MerRequestsTable({ requests, onUpdateRequest, isUpdating }: MerR
     }, [isAdmin, onUpdateRequest]);
 
     const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
-    const [activeQuickFilter, setActiveQuickFilter] = useState<'ALL' | 'OVERDUE' | 'DUE_TODAY' | 'NO_SUPPLIER'>('ALL');
+    const [activeQuickFilter, setActiveQuickFilter] = useState<'ALL' | 'OVERDUE' | 'DUE_TODAY' | 'NO_SUPPLIER' | 'NEW_PHASE'>('ALL');
     const [isColumnVisibilityOpen, setIsColumnVisibilityOpen] = useState(false);
     const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
         try {
@@ -185,10 +186,18 @@ export function MerRequestsTable({ requests, onUpdateRequest, isUpdating }: MerR
         setSelectedRowIds([]);
     }, [selectedRowIds, onUpdateRequest]);
 
-    const [searchTerm, setSearchTerm] = useState('');
+    const globalSearchTerm = useDashboardStore(s => s.searchTerm);
+    const [searchTerm, setSearchTerm] = useState(globalSearchTerm);
+
+    React.useEffect(() => {
+        setSearchTerm(globalSearchTerm);
+    }, [globalSearchTerm]);
     const [filterPhuongAn, setFilterPhuongAn] = useState('ALL');
     const [filterStatus, setFilterStatus] = useState('ALL');
     const [filterTienDo, setFilterTienDo] = useState('ALL');
+    const [filterMer, setFilterMer] = useState('ALL');
+    const [filterSupplier, setFilterSupplier] = useState('ALL');
+    const [filterYear, setFilterYear] = useState('2026');
     const [activeStatusCategory, setActiveStatusCategory] = useState<'ALL' | 'to_do' | 'in_progress' | 'review' | 'done'>('ALL');
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [isWrapText, setIsWrapText] = useState(false);
@@ -210,7 +219,7 @@ export function MerRequestsTable({ requests, onUpdateRequest, isUpdating }: MerR
     // Reset page to 1 whenever search or filters change
     React.useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, filterPhuongAn, filterStatus, filterTienDo, activeStatusCategory, activeQuickFilter]);
+    }, [searchTerm, filterPhuongAn, filterStatus, filterTienDo, filterMer, filterYear, activeStatusCategory, activeQuickFilter]);
 
     // Fetch Live Master Store Contact map to get SR phone numbers
     const { data: contactMap } = useQuery({
@@ -223,21 +232,27 @@ export function MerRequestsTable({ requests, onUpdateRequest, isUpdating }: MerR
         const tienDoVal = (r.tien_do || '').trim().toLowerCase();
         const statusVal = (r.status || '').trim().toLowerCase();
 
-        // 1. Check match with Supabase workflow_statuses
-        const matched = statuses.find(s => 
-            s.name.trim().toLowerCase() === tienDoVal || 
-            s.name.trim().toLowerCase() === statusVal
-        );
-
-        if (matched) {
-            return matched.category;
+        // 1. Prioritize matching r.tien_do (Tiến độ configured in workflow_statuses modal)
+        if (tienDoVal) {
+            const matchedTienDo = statuses.find(s => s.name.trim().toLowerCase() === tienDoVal);
+            if (matchedTienDo) {
+                return matchedTienDo.category;
+            }
         }
 
-        // 2. Direct Fallbacks
-        if (statusVal.includes('cancel') || statusVal.includes('reject') || tienDoVal.includes('cancel') || tienDoVal.includes('hoàn thành') || statusVal.includes('approve')) {
+        // 2. Secondary check matching r.status
+        if (statusVal) {
+            const matchedStatus = statuses.find(s => s.name.trim().toLowerCase() === statusVal);
+            if (matchedStatus) {
+                return matchedStatus.category;
+            }
+        }
+
+        // 3. Fallbacks
+        if (tienDoVal.includes('hoàn thành') || tienDoVal.includes('cancel') || tienDoVal.includes('done') || statusVal.includes('cancel') || statusVal.includes('reject')) {
             return 'done';
         }
-        if (tienDoVal.includes('vis') || tienDoVal.includes('supplier') || tienDoVal.includes('quick fix') || statusVal.includes('bảo hành')) {
+        if (tienDoVal.includes('vis') || tienDoVal.includes('supplier') || tienDoVal.includes('quick fix') || statusVal.includes('bảo hành') || statusVal.includes('approve')) {
             return 'in_progress';
         }
         if (statusVal.includes('review') || statusVal.includes('sent') || r.phuong_an?.includes('RQ')) {
@@ -267,20 +282,8 @@ export function MerRequestsTable({ requests, onUpdateRequest, isUpdating }: MerR
     // Memoized base unique list for Tiến độ (computed ONCE per requests/statuses update)
     const baseDynamicProgressList = useMemo(() => {
         const set = new Set<string>();
+        SHEET_TIEN_DO_OPTIONS.forEach(s => set.add(s));
         statuses.forEach(s => set.add(s.name));
-        set.add('Not started');
-        set.add('Mới tiếp nhận');
-        set.add('Vis - Đã gửi RQ tới Agency');
-        set.add('Agency - Bidding');
-        set.add('Supplier - Đã Trả KQKS');
-        set.add('Supplier đã gửi lịch');
-        set.add('Tiếp nhận Quick Fix');
-        set.add('Mer quick fix');
-        set.add('Under CSP Review');
-        set.add('Approved');
-        set.add('Rejected');
-        set.add('Hoàn Thành');
-        set.add('Cancelled');
 
         requests.forEach(r => {
             if (r.tien_do?.trim()) set.add(r.tien_do.trim());
@@ -313,31 +316,107 @@ export function MerRequestsTable({ requests, onUpdateRequest, isUpdating }: MerR
     const reviewCount = categoryCounts.review;
     const doneCount = categoryCounts.done;
 
+    // Helper to extract 4-digit year strictly from request date strings (date_of_rq, ngay_quick_fix, deadline)
+    const getYearFromStr = (str?: string): string | null => {
+        if (!str) return null;
+        const s = str.trim();
+        if (!s) return null;
+        const match = s.match(/\b(202[0-9]|201[0-9])\b/);
+        return match ? match[1] : null;
+    };
+
+    // Unique list of Mer / VIS-Tech values
+    const uniqueMerList = useMemo(() => {
+        const set = new Set<string>();
+        requests.forEach(r => {
+            if (r.mer?.trim()) set.add(r.mer.trim());
+        });
+        return Array.from(set).sort();
+    }, [requests]);
+
+    // Unique list of Supplier values
+    const uniqueSupplierList = useMemo(() => {
+        const set = new Set<string>();
+        requests.forEach(r => {
+            if (r.supplier?.trim()) set.add(r.supplier.trim());
+        });
+        return Array.from(set).sort();
+    }, [requests]);
+
+    // Unique list of Years extracted from date_of_rq / deadline
+    const uniqueYearList = useMemo(() => {
+        const set = new Set<string>();
+        requests.forEach(r => {
+            const y1 = getYearFromStr(r.date_of_rq);
+            const y2 = getYearFromStr(r.ngay_quick_fix || r.deadline);
+            if (y1) set.add(y1);
+            if (y2) set.add(y2);
+        });
+        if (set.size === 0) set.add('2026');
+        return Array.from(set).sort().reverse();
+    }, [requests]);
+
     // Memoized filtered requests (re-computes ONLY when filter state actually changes)
     const filteredRequests = useMemo(() => {
+        const cleanSearch = searchTerm.trim().toLowerCase().replace(/\s+/g, '');
+        const rawLower = searchTerm.trim().toLowerCase();
+
         return requests.filter(r => {
             const reqId = (r.request_id || '').toLowerCase();
             const rowIdx = (r.sheet_row_index ? `row ${r.sheet_row_index}` : '').toLowerCase();
+            const supplierLower = (r.supplier || '').toLowerCase();
+            const supplierClean = supplierLower.replace(/\s+/g, '');
 
             const matchesSearch = !searchTerm.trim() || 
-                r.store_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                r.ess_store_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                r.sr?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                r.posm?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                r.brand?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                reqId.includes(searchTerm.toLowerCase()) ||
-                rowIdx.includes(searchTerm.toLowerCase());
+                (r.store_name || '').toLowerCase().includes(rawLower) ||
+                (r.ess_store_code || '').toLowerCase().includes(rawLower) ||
+                (r.sr || '').toLowerCase().includes(rawLower) ||
+                (r.posm || '').toLowerCase().includes(rawLower) ||
+                (r.brand || '').toLowerCase().includes(rawLower) ||
+                (r.mer || '').toLowerCase().includes(rawLower) ||
+                supplierLower.includes(rawLower) ||
+                supplierClean.includes(cleanSearch) ||
+                reqId.includes(rawLower) ||
+                rowIdx.includes(rawLower);
             
-            const matchesPhuongAn = filterPhuongAn === 'ALL' || 
-                (r.phuong_an || '').toLowerCase().trim() === filterPhuongAn.toLowerCase().trim();
+            const matchesPhuongAn = filterPhuongAn === 'ALL' || (
+                filterPhuongAn === 'UNASSIGNED' 
+                    ? !r.phuong_an?.trim() 
+                    : (r.phuong_an || '').toLowerCase().trim() === filterPhuongAn.toLowerCase().trim()
+            );
             const matchesStatus = filterStatus === 'ALL' || (r.status || '').toLowerCase().trim() === filterStatus.toLowerCase().trim();
             const matchesTienDo = filterTienDo === 'ALL' || (r.tien_do || '').toLowerCase().trim() === filterTienDo.toLowerCase().trim();
+            const matchesMer = filterMer === 'ALL' || (r.mer || '').toLowerCase().trim() === filterMer.toLowerCase().trim();
+            const matchesSupplier = filterSupplier === 'ALL' || (
+                filterSupplier === 'NO_SUPPLIER' || filterSupplier === 'UNASSIGNED'
+                    ? !r.supplier?.trim() 
+                    : (r.supplier || '').toLowerCase().trim() === filterSupplier.toLowerCase().trim()
+            );
+            
+            // Year filter matching strictly date_of_rq or deadline (ignoring created_at insertion metadata)
+            const matchesYear = filterYear === 'ALL' || (() => {
+                const reqYear = getYearFromStr(r.date_of_rq) || getYearFromStr(r.ngay_quick_fix) || getYearFromStr(r.deadline);
+                return reqYear === filterYear;
+            })();
             const matchesStatusTab = activeStatusCategory === 'ALL' || getRequestCategory(r) === activeStatusCategory;
 
             const matchesQuickFilter = (() => {
                 if (activeQuickFilter === 'ALL') return true;
-                const isDone = (r.status || '').toLowerCase().includes('done') || (r.tien_do || '').toLowerCase().includes('hoàn thành');
+                const statusLower = (r.status || '').toLowerCase();
+                const tienDoLower = (r.tien_do || '').toLowerCase();
+                const titleLower = (r.title_email_request || '').toLowerCase();
+                const isDone = statusLower.includes('done') || tienDoLower.includes('hoàn thành');
                 const dl = (r.deadline || '').trim();
+
+                if (activeQuickFilter === 'NEW_PHASE') {
+                    return !isDone && (
+                        tienDoLower.includes('lắp đặt') || 
+                        tienDoLower.includes('gửi lịch') || 
+                        tienDoLower.includes('ntxx') || 
+                        titleLower.includes('lắp đặt') || 
+                        titleLower.includes('nghiệm thu')
+                    );
+                }
 
                 if (activeQuickFilter === 'NO_SUPPLIER') {
                     return !r.supplier?.trim() && !isDone;
@@ -353,7 +432,7 @@ export function MerRequestsTable({ requests, onUpdateRequest, isUpdating }: MerR
                     }
 
                     if (dDate && !isNaN(dDate.getTime())) {
-                        const todayDate = new Date('2026-07-26');
+                        const todayDate = new Date();
                         const dOnly = new Date(dDate.getFullYear(), dDate.getMonth(), dDate.getDate());
                         const tOnly = new Date(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate());
 
@@ -364,9 +443,9 @@ export function MerRequestsTable({ requests, onUpdateRequest, isUpdating }: MerR
                 return false;
             })();
 
-            return matchesSearch && matchesPhuongAn && matchesStatus && matchesTienDo && matchesStatusTab && matchesQuickFilter;
+            return matchesSearch && matchesPhuongAn && matchesStatus && matchesTienDo && matchesMer && matchesSupplier && matchesYear && matchesStatusTab && matchesQuickFilter;
         });
-    }, [requests, searchTerm, filterPhuongAn, filterStatus, filterTienDo, activeStatusCategory, activeQuickFilter]);
+    }, [requests, searchTerm, filterPhuongAn, filterStatus, filterTienDo, filterMer, filterSupplier, filterYear, activeStatusCategory, activeQuickFilter]);
 
     // Calculate total pages & paginated items slice
     const totalPages = Math.ceil(filteredRequests.length / pageSize) || 1;
@@ -375,47 +454,8 @@ export function MerRequestsTable({ requests, onUpdateRequest, isUpdating }: MerR
         return filteredRequests.slice(start, start + pageSize);
     }, [filteredRequests, currentPage, pageSize]);
 
-    const getSlaOverdueBadge = (deadlineStr?: string, statusStr?: string, tienDoStr?: string) => {
-        const isDone = (statusStr || '').toLowerCase().includes('done') || (tienDoStr || '').toLowerCase().includes('hoàn thành');
-        if (isDone || !deadlineStr?.trim()) return null;
-
-        const dl = deadlineStr.trim();
-        let dDate: Date | null = null;
-        if (dl.includes('/')) {
-            const parts = dl.split('/');
-            if (parts.length === 3) dDate = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
-        } else if (dl.includes('-')) {
-            dDate = new Date(dl);
-        }
-
-        if (!dDate || isNaN(dDate.getTime())) return null;
-
-        const todayDate = new Date('2026-07-26');
-        const dOnly = new Date(dDate.getFullYear(), dDate.getMonth(), dDate.getDate());
-        const tOnly = new Date(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate());
-
-        const diffTime = dOnly.getTime() - tOnly.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-        if (diffDays < 0) {
-            return {
-                type: 'overdue',
-                label: `🚨 Trễ ${Math.abs(diffDays)} ngày`,
-                bgClass: 'bg-red-100 dark:bg-red-950/80 text-red-700 dark:text-red-300 border-red-300 dark:border-red-800 font-bold'
-            };
-        } else if (diffDays === 0) {
-            return {
-                type: 'today',
-                label: `⏳ Hạn hôm nay`,
-                bgClass: 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800 font-bold'
-            };
-        } else if (diffDays <= 2) {
-            return {
-                type: 'soon',
-                label: `🗓️ Hạn ${diffDays} ngày tới`,
-                bgClass: 'bg-sky-100 dark:bg-sky-950/80 text-sky-700 dark:text-sky-300 border-sky-300 dark:border-sky-800 font-medium'
-            };
-        }
+    const getSlaOverdueBadge = (_deadlineStr?: string, _statusStr?: string, _tienDoStr?: string) => {
+        // Tạm thời tắt logic báo trễ hạn bao nhiêu ngày theo yêu cầu của user
         return null;
     };
 
@@ -431,6 +471,38 @@ export function MerRequestsTable({ requests, onUpdateRequest, isUpdating }: MerR
 
     const handleToggleSelectRow = useCallback((id: string) => {
         setSelectedRowIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    }, []);
+
+    const handleFilterAndNavigate = useCallback((params: {
+        category?: 'ALL' | 'to_do' | 'in_progress' | 'review' | 'done';
+        quickFilter?: 'ALL' | 'OVERDUE' | 'DUE_TODAY' | 'NO_SUPPLIER' | 'NEW_PHASE';
+        tienDo?: string;
+        phuongAn?: string;
+        mer?: string;
+        supplier?: string;
+        searchTerm?: string;
+    }) => {
+        if (params.category !== undefined) setActiveStatusCategory(params.category);
+
+        if (params.quickFilter !== undefined) {
+            setActiveQuickFilter(params.quickFilter);
+            if (params.quickFilter === 'NO_SUPPLIER') {
+                setFilterSupplier('NO_SUPPLIER');
+            }
+        } else {
+            if (params.supplier || params.phuongAn || params.tienDo || params.mer) {
+                setActiveQuickFilter('ALL');
+                if (params.searchTerm === undefined) setSearchTerm('');
+            }
+        }
+
+        if (params.tienDo !== undefined) setFilterTienDo(params.tienDo);
+        if (params.phuongAn !== undefined) setFilterPhuongAn(params.phuongAn);
+        if (params.mer !== undefined) setFilterMer(params.mer);
+        if (params.supplier !== undefined) setFilterSupplier(params.supplier);
+        if (params.searchTerm !== undefined) setSearchTerm(params.searchTerm);
+
+        setActiveModuleTab('DATA_LIST');
     }, []);
 
     return (
@@ -467,13 +539,13 @@ export function MerRequestsTable({ requests, onUpdateRequest, isUpdating }: MerR
 
             {/* TAB 1: DEDICATED ANALYST / REPORTS WORKSPACE */}
             {activeModuleTab === 'ANALYST' && (
-                <div className="space-y-4 animate-in fade-in duration-200">
-                    <CommandCenterHeader
-                        requests={requests}
-                        activeQuickFilter={activeQuickFilter}
-                        onSelectQuickFilter={setActiveQuickFilter}
-                    />
-                </div>
+                <RequestAnalyticsView
+                    requests={filteredRequests}
+                    activeQuickFilter={activeQuickFilter}
+                    onSelectQuickFilter={setActiveQuickFilter}
+                    getRequestCategory={getRequestCategory}
+                    onFilterAndNavigate={handleFilterAndNavigate}
+                />
             )}
 
             {/* TAB 2: CLEAN OPERATIONAL DATA LIST WORKSPACE */}
@@ -481,7 +553,7 @@ export function MerRequestsTable({ requests, onUpdateRequest, isUpdating }: MerR
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden">
                 
                 {/* 🎯 4 Big Status Category Tabs Bar */}
-                <div className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/40 px-4 pt-3 pb-0 flex items-center gap-2 overflow-x-auto custom-scrollbar">
+                    <div className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/40 px-4 pt-3 pb-0 flex items-center gap-2 overflow-x-auto custom-scrollbar">
                     <button
                         onClick={() => setActiveStatusCategory('ALL')}
                         className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg font-bold text-xs border-t-2 transition-colors duration-150 ${
@@ -606,6 +678,7 @@ export function MerRequestsTable({ requests, onUpdateRequest, isUpdating }: MerR
                             className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 font-medium cursor-pointer"
                         >
                             <option value="ALL">Tất cả phương án</option>
+                            <option value="UNASSIGNED">⚪ Chưa phân loại phương án</option>
                             {Array.from(new Set([
                                 ...PHUONG_AN_OPTIONS,
                                 ...requests.map(r => {
@@ -635,6 +708,37 @@ export function MerRequestsTable({ requests, onUpdateRequest, isUpdating }: MerR
                         </select>
                     </div>
 
+                    {/* Filter Mer / VIS-Tech */}
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Mer/VIS-Tech:</span>
+                        <select
+                            value={filterMer}
+                            onChange={e => setFilterMer(e.target.value)}
+                            className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 font-medium cursor-pointer max-w-[160px] truncate"
+                        >
+                            <option value="ALL">Tất cả Mer / VIS-Tech</option>
+                            {uniqueMerList.map(opt => (
+                                <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Filter Nhà thầu / Supplier */}
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Nhà thầu:</span>
+                        <select
+                            value={filterSupplier}
+                            onChange={e => setFilterSupplier(e.target.value)}
+                            className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 font-medium cursor-pointer max-w-[160px] truncate"
+                        >
+                            <option value="ALL">Tất cả nhà thầu</option>
+                            <option value="NO_SUPPLIER">⚠️ Chưa gán nhà thầu</option>
+                            {uniqueSupplierList.filter(x => x !== 'NO_SUPPLIER').map(opt => (
+                                <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                        </select>
+                    </div>
+
                     {/* Filter Tiến độ */}
                     <div className="flex items-center gap-1.5">
                         <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Tiến độ:</span>
@@ -649,13 +753,47 @@ export function MerRequestsTable({ requests, onUpdateRequest, isUpdating }: MerR
                             ))}
                         </select>
                     </div>
+
+                    {/* Filter Năm */}
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Năm:</span>
+                        <select
+                            value={filterYear}
+                            onChange={e => setFilterYear(e.target.value)}
+                            className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 font-bold cursor-pointer"
+                        >
+                            <option value="ALL">Tất cả các năm</option>
+                            {uniqueYearList.map(y => (
+                                <option key={y} value={y}>Năm {y}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Reset Filters Button */}
+                    {(filterPhuongAn !== 'ALL' || filterStatus !== 'ALL' || filterTienDo !== 'ALL' || filterMer !== 'ALL' || filterSupplier !== 'ALL' || filterYear !== 'ALL' || searchTerm.trim() !== '') && (
+                        <button
+                            onClick={() => {
+                                setFilterPhuongAn('ALL');
+                                setFilterStatus('ALL');
+                                setFilterTienDo('ALL');
+                                setFilterMer('ALL');
+                                setFilterSupplier('ALL');
+                                setFilterYear('ALL');
+                                setSearchTerm('');
+                            }}
+                            className="px-2.5 py-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 hover:text-rose-800 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 rounded-lg border border-rose-200 dark:border-rose-800 transition-colors cursor-pointer"
+                            title="Xóa tất cả các bộ lọc đang chọn"
+                        >
+                            ✕ Xóa lọc
+                        </button>
+                    )}
                 </div>
             </div>
 
             {/* Table with Clean Minimalist Unilever Blue Style */}
-            <div className="overflow-x-auto custom-scrollbar">
+            <div className="w-full max-h-[calc(100vh-220px)] overflow-auto custom-scrollbar rounded-xl border border-slate-200 dark:border-slate-800">
                 <table className={`w-full text-left text-xs ${isWrapText ? 'align-top' : 'whitespace-nowrap'}`}>
-                    <thead className="bg-slate-100 dark:bg-slate-800/90 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold uppercase tracking-wider sticky top-0 z-10">
+                    <thead className="bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold uppercase tracking-wider sticky top-0 z-20 shadow-2xs">
                         <tr>
                             <th className="p-3 w-10 text-center">
                                 <input
@@ -687,8 +825,64 @@ export function MerRequestsTable({ requests, onUpdateRequest, isUpdating }: MerR
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
                         {filteredRequests.length === 0 ? (
                             <tr>
-                                <td colSpan={16} className="p-8 text-center text-slate-400 font-medium">
-                                    Không tìm thấy Request nào trong danh mục này
+                                <td colSpan={16} className="p-12 text-center text-slate-400">
+                                    <div className="flex flex-col items-center justify-center gap-3 max-w-md mx-auto">
+                                        <div className="w-12 h-12 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xl font-bold">
+                                            🔍
+                                        </div>
+                                        <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">Không tìm thấy Request nào phù hợp với các bộ lọc đang chọn</h4>
+                                        
+                                        {/* Active Filters Diagnostic Badges */}
+                                        <div className="flex flex-wrap items-center justify-center gap-1.5 py-1">
+                                            {activeQuickFilter !== 'ALL' && (
+                                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300">
+                                                    Quick Filter: {activeQuickFilter}
+                                                </span>
+                                            )}
+                                            {filterSupplier !== 'ALL' && (
+                                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300">
+                                                    Nhà thầu: {filterSupplier === 'NO_SUPPLIER' ? 'Chưa gán nhà thầu' : filterSupplier}
+                                                </span>
+                                            )}
+                                            {filterPhuongAn !== 'ALL' && (
+                                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300">
+                                                    Phương án: {filterPhuongAn === 'UNASSIGNED' ? 'Chưa phân loại' : filterPhuongAn}
+                                                </span>
+                                            )}
+                                            {filterMer !== 'ALL' && (
+                                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
+                                                    Mer: {filterMer}
+                                                </span>
+                                            )}
+                                            {filterTienDo !== 'ALL' && (
+                                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                                                    Tiến độ: {filterTienDo}
+                                                </span>
+                                            )}
+                                            {searchTerm.trim() !== '' && (
+                                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                                                    Từ khóa: "{searchTerm}"
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <button
+                                            onClick={() => {
+                                                setSearchTerm('');
+                                                setFilterPhuongAn('ALL');
+                                                setFilterStatus('ALL');
+                                                setFilterTienDo('ALL');
+                                                setFilterMer('ALL');
+                                                setFilterSupplier('ALL');
+                                                setFilterYear('ALL');
+                                                setActiveStatusCategory('ALL');
+                                                setActiveQuickFilter('ALL');
+                                            }}
+                                            className="mt-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-sm flex items-center gap-1.5"
+                                        >
+                                            <span>🔄 Xóa Tất Cả Bộ Lọc Để Xem Lại Toàn Bộ {requests.length} Requests</span>
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         ) : (
@@ -786,7 +980,7 @@ export function MerRequestsTable({ requests, onUpdateRequest, isUpdating }: MerR
                         </button>
                     </div>
                 </div>
-            )}
+                )}
             </div>
             )}
 

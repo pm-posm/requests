@@ -59,7 +59,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ErrorBoundary>
         <BrowserRouter>
-          <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
+          <Toaster position="bottom-right" toastOptions={{ duration: 4000 }} />
           <div className="min-h-screen w-full bg-background text-foreground relative overflow-hidden flex font-sans antialiased">
             <Dashboard />
           </div>

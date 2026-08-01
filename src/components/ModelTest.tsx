@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useProjects, type Project } from '@/hooks/useProjects';
-import { Loader2, Search, Table, BarChart3, RefreshCw, CheckCircle2, AlertTriangle, ExternalLink } from 'lucide-react';
+import { Loader2, Search, Table, BarChart3, RefreshCw, CheckCircle2, AlertTriangle, ExternalLink, X, Filter, Mail, Clock } from 'lucide-react';
 import type { ProjectGroup, ActivityRow } from '@/types';
 import { ProjectTable } from './ProjectList/ProjectTable';
 import { ProjectCommandCenterHeader } from './Dashboard/ProjectCommandCenterHeader';
@@ -17,7 +17,8 @@ export default function ModelTest() {
     const { customDataMap } = useGlobalProjectCustomData();
     const [activeModuleTab, setActiveModuleTab] = React.useState<'DATA_LIST' | 'ANALYST'>('DATA_LIST');
     const [searchTerm, setSearchTerm] = React.useState('');
-    const [activeQuickFilter, setActiveQuickFilter] = React.useState<'ALL' | 'UNPROCESSED'>('ALL');
+    const [activeQuickFilter, setActiveQuickFilter] = React.useState<'ALL' | 'UNPROCESSED' | 'OVERDUE_24H'>('ALL');
+    const [isControlDrawerOpen, setIsControlDrawerOpen] = React.useState(false);
     const [isTriggeringSync, setIsTriggeringSync] = React.useState(false);
     const [isTokenModalOpen, setIsTokenModalOpen] = React.useState(false);
     const [patTokenInput, setPatTokenInput] = React.useState(localStorage.getItem('github_pat_token') || '');
@@ -210,9 +211,11 @@ export default function ModelTest() {
                 return !isNaN(t) && (nowMs - t) < (24 * 60 * 60 * 1000);
             }).length : 0;
 
-            // Kiểm tra trạng thái Đã xử lý / Chờ xử lý
+            // Kiểm tra trạng thái Đã xử lý / Chờ xử lý dựa trên mốc mail cào về và mốc bấm Xác nhận
             const customProps = customDataMap[fp] || {};
-            const isProcessed = customProps.is_processed === true;
+            const processedAtMs = customProps.processed_at ? new Date(customProps.processed_at).getTime() : 0;
+            const hasNewIncomingMail = latestActivityMs > (processedAtMs + 5000); // 5s buffer
+            const isProcessed = customProps.is_processed === true && !hasNewIncomingMail;
             const isOverdue = !isProcessed && latestActivityMs > 0 && (nowMs - latestActivityMs) >= (24 * 60 * 60 * 1000);
 
             return {
@@ -257,6 +260,9 @@ export default function ModelTest() {
 
             if (activeQuickFilter === 'UNPROCESSED') {
                 return matchesSearch && g.stats?.isProcessed !== true && g.activities && g.activities.length > 0;
+            }
+            if (activeQuickFilter === 'OVERDUE_24H') {
+                return matchesSearch && g.stats?.isProcessed !== true && g.stats?.isOverdue === true;
             }
             return matchesSearch;
         });
@@ -323,202 +329,275 @@ export default function ModelTest() {
             )}
 
             {/* TAB 2: CLEAN OPERATIONAL DATA LIST WORKSPACE */}
-            {activeModuleTab === 'DATA_LIST' && (
-                <div className="space-y-4 animate-in fade-in duration-200">
-                    {/* LIVE GITHUB ACTION STATUS BADGE & PROGRESS BANNER */}
-                    <div className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition-all ${
-                        !latestGhRun
-                            ? 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
-                            : latestGhRun.status === 'in_progress' || latestGhRun.status === 'queued'
-                            ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 animate-pulse shadow-sm'
-                            : latestGhRun.conclusion === 'success'
-                            ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
-                            : 'bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800 text-rose-900 dark:text-rose-200'
-                    }`}>
-                        <div className="flex items-center gap-3">
-                            {!latestGhRun ? (
-                                <Loader2 className="w-4.5 h-4.5 text-indigo-500 animate-spin shrink-0" />
-                            ) : latestGhRun.status === 'in_progress' || latestGhRun.status === 'queued' ? (
-                                <RefreshCw className="w-4.5 h-4.5 text-amber-600 animate-spin shrink-0" />
-                            ) : latestGhRun.conclusion === 'success' ? (
-                                <CheckCircle2 className="w-4.5 h-4.5 text-emerald-600 shrink-0" />
-                            ) : (
-                                <AlertTriangle className="w-4.5 h-4.5 text-rose-600 shrink-0" />
-                            )}
-                            <div>
-                                <div className="flex items-center gap-2 font-bold flex-wrap">
-                                    <span>⚙️ Giám Sát Tiến Độ GitHub Action {!latestGhRun ? '' : `#${latestGhRun.run_number}`}:</span>
-                                    {!latestGhRun ? (
-                                        <span className="px-2 py-0.5 rounded text-[10px] uppercase font-mono bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold">
-                                            ĐANG KẾT NỐI GITHUB...
-                                        </span>
-                                    ) : (
-                                        <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-mono font-black ${
-                                            latestGhRun.status === 'in_progress' ? 'bg-amber-200 text-amber-900' :
-                                            latestGhRun.conclusion === 'success' ? 'bg-emerald-200 text-emerald-900' : 'bg-rose-200 text-rose-900'
-                                        }`}>
-                                            {latestGhRun.status === 'in_progress' ? '⚡ ĐANG CHẠY (IN PROGRESS)' : latestGhRun.conclusion === 'success' ? '🟢 ĐÃ HOÀN THÀNH (SUCCESS)' : '🔴 THẤT BẠI / HỦY'}
-                                        </span>
-                                    )}
+            {activeModuleTab === 'DATA_LIST' && (() => {
+                const unprocessedCount = groupedProjects.filter(g => !g.stats?.isProcessed && g.activities && g.activities.length > 0).length;
+                const overdueCount = groupedProjects.filter(g => !g.stats?.isProcessed && g.stats?.isOverdue).length;
+
+                return (
+                <div className="space-y-3 animate-in fade-in duration-200">
+                    {/* ULTRA-CLEAN SEARCH & CONTROL TRIGGER BAR */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs">
+                        <div className="flex items-center gap-3 flex-1 min-w-[280px]">
+                            <div className="relative flex-1 max-w-md">
+                                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <input 
+                                    type="text" 
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    placeholder="Tìm kiếm mã dự án, tên dự án, khách hàng, supplier..."
+                                    className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 dark:text-slate-200 font-medium"
+                                />
+                            </div>
+
+                            {/* Active Filter Badge indicator */}
+                            {activeQuickFilter !== 'ALL' && (
+                                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-800 border border-amber-300 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">
+                                    <span>Đang lọc: {activeQuickFilter === 'UNPROCESSED' ? 'Chờ xử lý' : 'Chờ quá 24h'}</span>
+                                    <button onClick={() => setActiveQuickFilter('ALL')} className="hover:text-rose-600 font-black cursor-pointer ml-1">✕</button>
                                 </div>
-                                <p className="text-[11px] opacity-80 mt-0.5">
-                                    {!latestGhRun
-                                        ? 'Đang kiểm tra dữ liệu kết lộ tới repository PM-POSM...'
-                                        : latestGhRun.status === 'in_progress' 
-                                        ? `Workflow đang cào Mail 4 giai đoạn & đẩy lên Drive (Bắt đầu lúc ${new Date(latestGhRun.created_at).toLocaleTimeString('vi-VN')})...`
-                                        : `Lần cào gần nhất: ${new Date(latestGhRun.updated_at).toLocaleString('vi-VN')}`
-                                    }
-                                </p>
+                            )}
+                        </div>
+
+                        {/* SINGLE TRIGGER BUTTON FOR RIGHT SIDEBAR DRAWER */}
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setIsControlDrawerOpen(true)}
+                                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-sm border ${
+                                    overdueCount > 0
+                                        ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-700 animate-pulse'
+                                        : 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-700'
+                                }`}
+                                title="Mở bảng Quản Lý Inbox Vận Hành & Giám Sát Tiến Độ Đồng Bộ GitHub"
+                            >
+                                <Filter className="w-4 h-4" />
+                                <span>Bộ Lọc &amp; Nhật Ký Đồng Bộ</span>
+                                {unprocessedCount > 0 && (
+                                    <span className="px-2 py-0.2 rounded-full text-[10px] bg-white/25 text-white font-mono font-black">
+                                        {unprocessedCount} chờ
+                                    </span>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Table */}
+                    <ProjectTable 
+                        groups={filteredGroups}
+                        findMatchedProject={findMatchedProject}
+                        onRowClick={handleRowClick}
+                        requestsMap={requestsMap}
+                        onRefresh={() => {
+                            queryClient.invalidateQueries({ queryKey: ['project_activities_with_attachments_all'] });
+                            queryClient.invalidateQueries({ queryKey: ['projects'] });
+                            queryClient.invalidateQueries({ queryKey: ['raw_requests'] });
+                        }}
+                    />
+
+                    {/* RIGHT SIDEBAR CONTROL DRAWER */}
+                    {isControlDrawerOpen && (
+                        <div 
+                            className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex justify-end"
+                            onClick={() => setIsControlDrawerOpen(false)}
+                        >
+                            <div 
+                                className="bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 w-full max-w-md h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-200"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                {/* Drawer Header */}
+                                <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
+                                    <div className="flex items-center gap-2">
+                                        <div className="p-2 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 rounded-lg">
+                                            <Filter className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                                                Bộ Lọc &amp; Quản Lý Inbox Sync
+                                            </h3>
+                                            <p className="text-[11px] text-slate-500">Giám sát cào mail &amp; lọc dự án nhanh</p>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={() => setIsControlDrawerOpen(false)}
+                                        className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg cursor-pointer transition-colors"
+                                    >
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </div>
+
+                                {/* Drawer Content */}
+                                <div className="flex-1 overflow-y-auto p-4 space-y-5 custom-scrollbar">
+                                    {/* Section 1: GitHub Action Live Monitor */}
+                                    <div className="space-y-2">
+                                        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                                            🤖 Giám Sát Tiến Độ GitHub Action (Cào Mail)
+                                        </span>
+                                        <div className={`p-3.5 rounded-xl border text-xs space-y-2.5 transition-all ${
+                                            !latestGhRun
+                                                ? 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                                                : latestGhRun.status === 'in_progress' || latestGhRun.status === 'queued'
+                                                ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 animate-pulse'
+                                                : latestGhRun.conclusion === 'success'
+                                                ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
+                                                : 'bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800 text-rose-900 dark:text-rose-200'
+                                        }`}>
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2 font-bold">
+                                                    <span>GitHub Action {!latestGhRun ? '' : `#${latestGhRun.run_number}`}</span>
+                                                    {!latestGhRun ? (
+                                                        <span className="px-2 py-0.5 rounded text-[10px] uppercase font-mono bg-slate-200 text-slate-700 font-bold">ĐANG KẾT NỐI...</span>
+                                                    ) : (
+                                                        <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-mono font-black ${
+                                                            latestGhRun.status === 'in_progress' ? 'bg-amber-200 text-amber-900' :
+                                                            latestGhRun.conclusion === 'success' ? 'bg-emerald-200 text-emerald-900' : 'bg-rose-200 text-rose-900'
+                                                        }`}>
+                                                            {latestGhRun.status === 'in_progress' ? '⚡ IN PROGRESS' : latestGhRun.conclusion === 'success' ? '🟢 SUCCESS' : '🔴 FAILED'}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {latestGhRun && (
+                                                    <a href={latestGhRun.html_url} target="_blank" rel="noreferrer" className="text-[11px] font-bold text-indigo-600 underline flex items-center gap-0.5">
+                                                        GitHub <ExternalLink className="w-3 h-3" />
+                                                    </a>
+                                                )}
+                                            </div>
+
+                                            <p className="text-[11px] opacity-85">
+                                                {!latestGhRun
+                                                    ? 'Đang kết nối repository PM-POSM...'
+                                                    : latestGhRun.status === 'in_progress'
+                                                    ? `Workflow đang cào Mail 4 giai đoạn... (Bắt đầu ${new Date(latestGhRun.created_at).toLocaleTimeString('vi-VN')})`
+                                                    : `Lần cào gần nhất: ${new Date(latestGhRun.updated_at).toLocaleString('vi-VN')}`
+                                                }
+                                            </p>
+
+                                            <div className="flex items-center gap-2 pt-1">
+                                                <button
+                                                    onClick={async () => {
+                                                        try {
+                                                            setIsTriggeringSync(true);
+                                                            toast.loading('🚀 Đang gửi lệnh kích hoạt đồng bộ Mail tự động...', { id: 'sync_mail_toast' });
+                                                            const ghRepo = import.meta.env.VITE_GITHUB_REPO || 'thanglh9-maker/PM-POSM';
+                                                            const ghToken = await getSharedGithubToken();
+                                                            let dispatched = false;
+                                                            if (ghToken && ghToken.trim()) {
+                                                                try {
+                                                                    const ghRes = await fetch(`https://api.github.com/repos/${ghRepo}/actions/workflows/manual-sync.yml/dispatches`, {
+                                                                        method: 'POST',
+                                                                        headers: {
+                                                                            'Authorization': `Bearer ${ghToken.trim()}`,
+                                                                            'Accept': 'application/vnd.github.v3+json',
+                                                                            'Content-Type': 'application/json'
+                                                                        },
+                                                                        body: JSON.stringify({ ref: 'main' })
+                                                                    });
+                                                                    if (ghRes.ok || ghRes.status === 204) {
+                                                                        dispatched = true;
+                                                                        toast.success('🚀 Đã gửi lệnh kích hoạt GitHub Action thành công!', { id: 'sync_mail_toast' });
+                                                                        setTimeout(() => refetchGhRun(), 1000);
+                                                                    }
+                                                                } catch (ghErr) {}
+                                                            }
+                                                            try { await supabase.functions.invoke('cron-sync-gmail'); } catch (_ef) {}
+                                                            if (!dispatched) toast.success('🚀 Đã gửi lệnh đồng bộ Mail!', { id: 'sync_mail_toast' });
+                                                            queryClient.invalidateQueries({ queryKey: ['project_activities_with_attachments_all'] });
+                                                            queryClient.invalidateQueries({ queryKey: ['projects'] });
+                                                        } catch (e: any) {
+                                                            toast.error('Lỗi đồng bộ: ' + e.message, { id: 'sync_mail_toast' });
+                                                        } finally {
+                                                            setIsTriggeringSync(false);
+                                                        }
+                                                    }}
+                                                    disabled={isTriggeringSync}
+                                                    className="flex-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                                                >
+                                                    <RefreshCw className={`w-3.5 h-3.5 ${isTriggeringSync ? 'animate-spin' : ''}`} />
+                                                    <span>{isTriggeringSync ? 'Đang gửi...' : '⚡ Đồng bộ Mail Dự Án'}</span>
+                                                </button>
+
+                                                <button
+                                                    onClick={() => setIsTokenModalOpen(true)}
+                                                    className="p-1.5 text-slate-500 hover:text-indigo-600 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer"
+                                                    title="Token Settings"
+                                                >
+                                                    🔑
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Section 2: Inbox Filter Options */}
+                                    <div className="space-y-2">
+                                        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                                            📥 Tình Trạng Inbox Vận Hành &amp; Bộ Lọc
+                                        </span>
+                                        <div className="space-y-2">
+                                            <button
+                                                onClick={() => {
+                                                    setActiveQuickFilter('ALL');
+                                                    setIsControlDrawerOpen(false);
+                                                }}
+                                                className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                                                    activeQuickFilter === 'ALL'
+                                                        ? 'bg-indigo-50 border-indigo-300 dark:bg-indigo-950/60 dark:border-indigo-800 text-indigo-900 dark:text-indigo-200 font-bold'
+                                                        : 'bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                                                }`}
+                                            >
+                                                <span className="text-xs">✨ Tất cả dự án</span>
+                                                <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700">
+                                                    {groupedProjects.length}
+                                                </span>
+                                            </button>
+
+                                            <button
+                                                onClick={() => {
+                                                    setActiveQuickFilter('UNPROCESSED');
+                                                    setIsControlDrawerOpen(false);
+                                                }}
+                                                className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                                                    activeQuickFilter === 'UNPROCESSED'
+                                                        ? 'bg-amber-100 border-amber-400 text-amber-900 font-bold'
+                                                        : 'bg-amber-50/50 hover:bg-amber-100/60 border-amber-200 text-amber-900'
+                                                }`}
+                                            >
+                                                <div>
+                                                    <span className="text-xs font-bold block">🧲 Lọc Chờ Xử Lý</span>
+                                                    <span className="text-[10px] opacity-75">Dự án có mail mới chưa bấm Xác nhận</span>
+                                                </div>
+                                                <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-amber-200 text-amber-950">
+                                                    {unprocessedCount}
+                                                </span>
+                                            </button>
+
+                                            {overdueCount > 0 && (
+                                                <button
+                                                    onClick={() => {
+                                                        setActiveQuickFilter('OVERDUE_24H');
+                                                        setIsControlDrawerOpen(false);
+                                                    }}
+                                                    className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                                                        activeQuickFilter === 'OVERDUE_24H'
+                                                            ? 'bg-rose-100 border-rose-400 text-rose-900 font-bold'
+                                                            : 'bg-rose-50/50 hover:bg-rose-100/60 border-rose-200 text-rose-900'
+                                                    }`}
+                                                >
+                                                    <div>
+                                                        <span className="text-xs font-bold block text-rose-700">⚠️ Lọc Chờ Quá 24h</span>
+                                                        <span className="text-[10px] text-rose-600">Cần xử lý khẩn cấp</span>
+                                                    </div>
+                                                    <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-rose-200 text-rose-950">
+                                                        {overdueCount}
+                                                    </span>
+                                                </button>
+                                            )}
+                                </div>
                             </div>
                         </div>
-                        {latestGhRun && (
-                            <a
-                                href={latestGhRun.html_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-slate-100 border border-slate-200 dark:border-slate-700 rounded-lg font-bold text-[11px] shrink-0 transition-colors flex items-center justify-center gap-1 cursor-pointer text-slate-800 dark:text-slate-200 shadow-2xs"
-                            >
-                                <span>Xem tiến độ trên GitHub</span>
-                                <ExternalLink className="w-3 h-3" />
-                            </a>
-                        )}
-                    </div>
-
-                    {/* Header & Search + Trigger Đồng bộ Mail */}
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                        <div className="relative flex-1 max-w-md">
-                            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                            <input 
-                                type="text" 
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                placeholder="Tìm kiếm mã dự án, tên dự án, khách hàng, supplier..."
-                                className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                            />
-                        </div>
-
-                    {/* Trigger Đồng bộ Mail 4 Giai Đoạn */}
-                    <div className="flex items-center gap-1.5">
-                        <button
-                            id="trigger-sync-mail-btn"
-                            onClick={async () => {
-                                try {
-                                    setIsTriggeringSync(true);
-                                    toast.loading('🚀 Đang gửi lệnh kích hoạt đồng bộ Mail tự động...', { id: 'sync_mail_toast' });
-
-                                    const ghRepo = import.meta.env.VITE_GITHUB_REPO || 'thanglh9-maker/PM-POSM';
-                                    const ghToken = await getSharedGithubToken();
-
-                                    let dispatched = false;
-
-                                    if (ghToken && ghToken.trim()) {
-                                        try {
-                                            const ghRes = await fetch(`https://api.github.com/repos/${ghRepo}/actions/workflows/manual-sync.yml/dispatches`, {
-                                                method: 'POST',
-                                                headers: {
-                                                    'Authorization': `Bearer ${ghToken.trim()}`,
-                                                    'Accept': 'application/vnd.github.v3+json',
-                                                    'Content-Type': 'application/json'
-                                                },
-                                                body: JSON.stringify({ ref: 'main' })
-                                            });
-
-                                            if (ghRes.ok || ghRes.status === 204) {
-                                                dispatched = true;
-                                                toast.success('🚀 Đã gửi lệnh kích hoạt GitHub Action thành công! Hãy xem bảng tiến độ bên dưới.', { id: 'sync_mail_toast' });
-                                                setTimeout(() => refetchGhRun(), 1000);
-                                            }
-                                        } catch (ghErr) {
-                                            console.warn('Lỗi Dispatch GitHub:', ghErr);
-                                        }
-                                    }
-
-                                    // Kích hoạt thêm Supabase Edge Function song song
-                                    try {
-                                        await supabase.functions.invoke('cron-sync-gmail');
-                                    } catch (_ef) {}
-
-                                    if (!dispatched) {
-                                        toast.success('🚀 Đã gửi lệnh đồng bộ Mail 4 giai đoạn!', { id: 'sync_mail_toast' });
-                                    }
-
-                                    queryClient.invalidateQueries({ queryKey: ['project_activities_with_attachments_all'] });
-                                    queryClient.invalidateQueries({ queryKey: ['projects'] });
-                                    queryClient.invalidateQueries({ queryKey: ['project_overviews_rpc'] });
-                                } catch (e: any) {
-                                    toast.error('Lỗi đồng bộ: ' + (e.message || 'Thất bại'), { id: 'sync_mail_toast' });
-                                } finally {
-                                    setIsTriggeringSync(false);
-                                }
-                            }}
-                            disabled={isTriggeringSync}
-                            className="flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-50"
-                            title="Kích hoạt quét Mail tự động 4 giai đoạn (1-click cho tất cả người dùng)"
-                        >
-                            <RefreshCw className={`w-3.5 h-3.5 ${isTriggeringSync ? 'animate-spin' : ''}`} />
-                            <span>{isTriggeringSync ? 'Đang gửi lệnh...' : '⚡ Đồng bộ Mail Dự Án'}</span>
-                        </button>
-
-                        <button
-                            onClick={() => setIsTokenModalOpen(true)}
-                            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-800 rounded-lg transition-colors border border-slate-200 dark:border-slate-800 cursor-pointer"
-                            title="Cấu hình Token GitHub (Chỉ dùng nếu muốn cập nhật Token hệ thống)"
-                        >
-                            🔑
-                        </button>
                     </div>
                 </div>
-
-                {/* QUICK FILTER STATUS TABS */}
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar text-xs">
-                    <button
-                        onClick={() => setActiveQuickFilter('ALL')}
-                        className={`px-3.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                            activeQuickFilter === 'ALL'
-                                ? 'bg-indigo-600 text-white shadow-sm'
-                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
-                        }`}
-                    >
-                        <span>📌 Tất cả</span>
-                        <span className="px-2 py-0.2 rounded-full text-[10px] bg-white/20 font-mono font-bold">
-                            {groupedProjects.length}
-                        </span>
-                    </button>
-
-                    <button
-                        onClick={() => setActiveQuickFilter('UNPROCESSED')}
-                        className={`px-3.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                            activeQuickFilter === 'UNPROCESSED'
-                                ? 'bg-amber-600 text-white shadow-sm'
-                                : 'bg-amber-50 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800 hover:bg-amber-100'
-                        }`}
-                    >
-                        <span>📥 Chờ xử lý</span>
-                        <span className="px-2 py-0.2 rounded-full text-[10px] bg-amber-200 dark:bg-amber-900 text-amber-950 dark:text-amber-100 font-mono font-black">
-                            {groupedProjects.filter(g => !g.stats?.isProcessed && g.activities && g.activities.length > 0).length}
-                        </span>
-                        {groupedProjects.some(g => g.stats?.isOverdue) && (
-                            <span className="px-1.5 py-0.2 rounded text-[9px] bg-rose-600 text-white font-mono font-black animate-pulse">
-                                ⚠️ CÓ CA QUÁ 24H
-                            </span>
-                        )}
-                    </button>
-                </div>
-
-                {/* Table */}
-                <ProjectTable 
-                    groups={filteredGroups}
-                    findMatchedProject={findMatchedProject}
-                    onRowClick={handleRowClick}
-                    requestsMap={requestsMap}
-                    onRefresh={() => {
-                        queryClient.invalidateQueries({ queryKey: ['project_activities_with_attachments_all'] });
-                        queryClient.invalidateQueries({ queryKey: ['projects'] });
-                        queryClient.invalidateQueries({ queryKey: ['raw_requests'] });
-                    }}
-                />
-            </div>
-        )}
+            )}
+        </div>
+    );
+})()}
 
         {/* GITHUB PAT TOKEN MODAL */}
         {isTokenModalOpen && (

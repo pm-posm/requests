@@ -12,6 +12,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import type { WarrantyItem, WarrantyStats } from '@/types/warranty';
 import toast from 'react-hot-toast';
 import { useDashboardStore } from '@/stores/useDashboardStore';
+import { exportAnalystExecutiveReport } from '@/services/excelReportService';
 
 // Official Public Google Sheet CSV URL for BaoHanh_Model
 const DEFAULT_WARRANTY_SHEET_CSV = 'https://docs.google.com/spreadsheets/d/119LpiU1XheXgOxKWxw17E_u4vgRTBPhc-4FADDS8B1Q/export?format=csv&gid=2053849390';
@@ -160,7 +161,7 @@ export default function TrackingWarranty() {
   const [selectedSupplier, setSelectedSupplier] = useState('all');
   const [selectedVisTech, setSelectedVisTech] = useState('all');
   const [selectedBrand, setSelectedBrand] = useState('all');
-  const [selectedCoverage, setSelectedCoverage] = useState('all');
+  const [selectedYear, setSelectedYear] = useState('2026');
 
   // Drawer selected item & Edit Form State
   const [selectedItem, setSelectedItem] = useState<WarrantyItem | null>(null);
@@ -169,11 +170,10 @@ export default function TrackingWarranty() {
   const [editProgress, setEditProgress] = useState('');
   const [editExpectedDate, setEditExpectedDate] = useState('');
   const [editCompletedDate, setEditCompletedDate] = useState('');
-  const [editWarrantyCoverage, setEditWarrantyCoverage] = useState('');
-  const [editWarrantyCost, setEditWarrantyCost] = useState('');
   const [editNote, setEditNote] = useState('');
   const [editTitleMail, setEditTitleMail] = useState('');
   const [editRaiseMailTime, setEditRaiseMailTime] = useState('');
+  const [editPrecedingRequestId, setEditPrecedingRequestId] = useState('');
   const [drawerSaveSuccess, setDrawerSaveSuccess] = useState<string | null>(null);
   const [isDrawerSaving, setIsDrawerSaving] = useState(false);
 
@@ -271,11 +271,10 @@ export default function TrackingWarranty() {
       setEditInstallationDate(selectedItem.installationDate || '');
       setEditExpectedDate(selectedItem.expectedDate || '');
       setEditCompletedDate(selectedItem.completedDate || '');
-      setEditWarrantyCoverage(selectedItem.warrantyCoverage || '');
-      setEditWarrantyCost(selectedItem.warrantyCost || '');
       setEditNote(selectedItem.note || '');
       setEditTitleMail(selectedItem.mailTitle || (selectedItem as any).titleEmail || '');
       setEditRaiseMailTime(selectedItem.sentDate || (selectedItem as any).raiseMailTime || '');
+      setEditPrecedingRequestId(selectedItem.precedingRequestId || (selectedItem as any).preceding_request_id || '');
       setDrawerSaveSuccess(null);
     }
   }, [selectedItem]);
@@ -398,11 +397,10 @@ export default function TrackingWarranty() {
       installationDate: editInstallationDate.trim(),
       expectedDate: editExpectedDate.trim(),
       completedDate: editCompletedDate.trim(),
-      warrantyCoverage: editWarrantyCoverage.trim(),
-      warrantyCost: editWarrantyCost.trim(),
       note: editNote.trim(),
       mailTitle: editTitleMail.trim(),
-      sentDate: editRaiseMailTime.trim()
+      sentDate: editRaiseMailTime.trim(),
+      precedingRequestId: editPrecedingRequestId.trim()
     };
 
     // Update local state
@@ -422,9 +420,8 @@ export default function TrackingWarranty() {
           ngay_quick_fix: editExpectedDate.trim() || null,
           expected_date: editExpectedDate.trim() || null,
           completed_date: editCompletedDate.trim() || null,
-          warranty_coverage: editWarrantyCoverage.trim() || null,
-          warranty_cost: editWarrantyCost.trim() || null,
-          mer_note: editNote.trim() || null
+          mer_note: editNote.trim() || null,
+          preceding_request_id: editPrecedingRequestId.trim() || null
         }).or(`request_id.eq.${selectedItem.requestId},sheet_row_index.eq.${rowIdNum}`);
       }
     } catch (spErr) {
@@ -447,6 +444,7 @@ export default function TrackingWarranty() {
         if (editInstallationDate.trim()) payload.installationDate = editInstallationDate.trim();
         if (editExpectedDate.trim()) payload.expectedDate = editExpectedDate.trim();
         if (editCompletedDate.trim()) payload.completedDate = editCompletedDate.trim();
+        if (editPrecedingRequestId.trim()) payload.precedingRequestId = editPrecedingRequestId.trim();
         if (editWarrantyCoverage.trim()) {
           payload.warrantyCoverage = editWarrantyCoverage.trim();
           payload.coverage = editWarrantyCoverage.trim();
@@ -584,6 +582,16 @@ export default function TrackingWarranty() {
     return list;
   }, [warrantyItems]);
 
+  const uniqueYears = useMemo(() => {
+    const set = new Set<string>();
+    warrantyItems.forEach(i => {
+      const match = (i.sentDate || i.installationDate || '').match(/\b(202[0-9]|201[0-9])\b/);
+      if (match) set.add(match[1]);
+    });
+    if (set.size === 0) set.add('2026');
+    return Array.from(set).sort().reverse();
+  }, [warrantyItems]);
+
   const uniqueVisTechs = useMemo(() => {
     return Array.from(new Set(warrantyItems.map(i => i.visTech).filter(Boolean))).sort();
   }, [warrantyItems]);
@@ -595,6 +603,12 @@ export default function TrackingWarranty() {
   // Filtered dataset
   const filteredItems = useMemo(() => {
     return warrantyItems.filter(item => {
+      // Year Filter
+      if (selectedYear !== 'all') {
+        const itemYearMatch = (item.sentDate || item.installationDate || '').match(/\b(202[0-9]|201[0-9])\b/);
+        if (itemYearMatch && itemYearMatch[1] !== selectedYear) return false;
+      }
+
       // Search
       const term = searchTerm.toLowerCase().trim();
       if (term) {
@@ -644,57 +658,33 @@ export default function TrackingWarranty() {
       // Brand Filter
       if (selectedBrand !== 'all' && item.brand !== selectedBrand) return false;
 
-      // Coverage Filter
-      if (selectedCoverage !== 'all') {
-        if (selectedCoverage === 'free' && (!item.warrantyCoverage || !item.warrantyCoverage.toLowerCase().includes('trong phạm vi'))) return false;
-        if (selectedCoverage === 'paid' && item.warrantyCoverage && item.warrantyCoverage.toLowerCase().includes('trong phạm vi')) return false;
-      }
-
       return true;
     });
-  }, [warrantyItems, searchTerm, selectedProgress, selectedSupplier, selectedVisTech, selectedBrand, selectedCoverage]);
+  }, [warrantyItems, selectedYear, searchTerm, selectedProgress, selectedSupplier, selectedVisTech, selectedBrand]);
 
-  // Metrics
+  // Metrics (tính trên dataset đã lọc theo Năm & Filters để Analyst phản ánh dữ liệu thực tế)
   const stats: WarrantyStats = useMemo(() => {
     let completed = 0;
     let inProgress = 0;
     let notStarted = 0;
-    let freeCoverage = 0;
 
-    warrantyItems.forEach(item => {
+    filteredItems.forEach(item => {
       const pLower = item.progress.toLowerCase();
       if (pLower === 'hoàn thành') completed++;
       else if (pLower === 'not started') notStarted++;
       else if (pLower !== 'cancel' && pLower !== 'cancelled') inProgress++;
-
-      if (item.warrantyCoverage && (item.warrantyCoverage.toLowerCase().includes('trong phạm vi') || item.warrantyCoverage.toLowerCase().includes('miễn phí'))) {
-        freeCoverage++;
-      }
     });
 
     return {
-      totalItems: warrantyItems.length,
+      totalItems: filteredItems.length,
       completedItems: completed,
       inProgressItems: inProgress,
       notStartedItems: notStarted,
-      freeCoverageItems: freeCoverage,
     };
-  }, [warrantyItems]);
+  }, [filteredItems]);
 
   // Analyst Tab Breakdown Statistics
   const analystBreakdowns = useMemo(() => {
-    const supplierMap: Record<string, number> = {};
-    const brandMap: Record<string, number> = {};
-    const projectMap: Record<string, { count: number; supplier: string }> = {};
-
-    const errorCatMap: Record<string, number> = {
-      '⚡ Điện & Chiếu sáng': 0,
-      '📺 Màn hình & TVC': 0,
-      '🔩 Bung keo & Kết cấu': 0,
-      '🎨 Vật tư & Thi công': 0,
-      '❓ Khác': 0
-    };
-
     const parseDateToMs = (str?: string): number | null => {
       if (!str || !str.trim()) return null;
       const trimmed = str.trim();
@@ -726,11 +716,16 @@ export default function TrackingWarranty() {
       return isNaN(d.getTime()) ? null : d.getTime();
     };
 
+    const supplierMap: Record<string, number> = {};
+    const posmTypeMap: Record<string, number> = {};
+    const projectMap: Record<string, { count: number; suppliers: Record<string, number> }> = {};
+
     let totalDaysToFail = 0;
     let countFailDate = 0;
     let earlyFailCount = 0; // < 30 days
     let midFailCount = 0;   // 30 - 90 days
     let longFailCount = 0;  // > 90 days
+    let unrecordedInstallCount = 0; // Chưa ghi nhận ngày lắp đặt
 
     const earlyFailItems: Array<{ item: WarrantyItem; days: number }> = [];
     const midFailItems: Array<{ item: WarrantyItem; days: number }> = [];
@@ -742,47 +737,40 @@ export default function TrackingWarranty() {
     let totalDaysToComplete = 0;
     let countCompleteDate = 0;
 
+    // Backlog Aging Buckets
+    let aging1to7Count = 0;
+    let aging8to14Count = 0;
+    let agingOver14Count = 0;
+
     const supplierSlaMap: Record<string, { total: number; completedOnTime: number; overdue: number }> = {};
 
-    warrantyItems.forEach(item => {
+    filteredItems.forEach(item => {
       // 1. Supplier breakdown
       const sup = item.supplier?.trim() || 'Chưa chọn';
       supplierMap[sup] = (supplierMap[sup] || 0) + 1;
 
-      // 2. Brand breakdown
-      const br = item.brand?.trim() || item.category?.trim() || 'Khác';
-      brandMap[br] = (brandMap[br] || 0) + 1;
+      // 2. POSM Type breakdown
+      const posm = item.posmType?.trim() || 'POSM Khác';
+      posmTypeMap[posm] = (posmTypeMap[posm] || 0) + 1;
 
       // 3. Top Projects breakdown
       const prj = item.projectCode?.trim();
       if (prj) {
         if (!projectMap[prj]) {
-          projectMap[prj] = { count: 0, supplier: sup };
+          projectMap[prj] = { count: 0, suppliers: {} };
         }
         projectMap[prj].count += 1;
+        const supName = sup || 'Chưa chọn';
+        projectMap[prj].suppliers[supName] = (projectMap[prj].suppliers[supName] || 0) + 1;
       }
 
-      // 4. Defect Category Classification
-      const errDetail = (item.errorDetail || '').toLowerCase();
-      if (errDetail.includes('điện') || errDetail.includes('đèn') || errDetail.includes('led') || errDetail.includes('nguồn') || errDetail.includes('adapter') || errDetail.includes('tắt')) {
-        errorCatMap['⚡ Điện & Chiếu sáng'] += 1;
-      } else if (errDetail.includes('màn hình') || errDetail.includes('tvc') || errDetail.includes('tivi') || errDetail.includes('bo mạch') || errDetail.includes('chuyển hình')) {
-        errorCatMap['📺 Màn hình & TVC'] += 1;
-      } else if (errDetail.includes('keo') || errDetail.includes('bung') || errDetail.includes('trật') || errDetail.includes('ngàm') || errDetail.includes('dummy') || errDetail.includes('motor') || errDetail.includes('xoay') || errDetail.includes('mâm') || errDetail.includes('xệ')) {
-        errorCatMap['🔩 Bung keo & Kết cấu'] += 1;
-      } else if (errDetail.includes('trầy') || errDetail.includes('xước') || errDetail.includes('vỡ') || errDetail.includes('mica') || errDetail.includes('decal') || errDetail.includes('chèn') || errDetail.includes('móp') || errDetail.includes('khung')) {
-        errorCatMap['🎨 Vật tư & Thi công'] += 1;
-      } else {
-        errorCatMap['❓ Khác'] += 1;
-      }
-
-      // 5. Time & SLA Metrics Calculation
+      // 4. Time & SLA Metrics Calculation
       const installMs = parseDateToMs(item.installationDate);
       const sentMs = parseDateToMs(item.sentDate);
       const expectedMs = parseDateToMs(item.expectedDate);
       const completedMs = parseDateToMs(item.completedDate);
 
-      // Duration: Installation ➔ Issue (MTBF)
+      // Duration: Installation ➔ Issue (MTBF - Chỉ tính khi thực sự có Ngày Lắp Đặt)
       if (installMs && sentMs) {
         const diffDays = Math.abs(Math.round((sentMs - installMs) / (1000 * 60 * 60 * 24)));
         totalDaysToFail += diffDays;
@@ -797,22 +785,8 @@ export default function TrackingWarranty() {
           longFailCount += 1;
           longFailItems.push({ item, days: diffDays });
         }
-      } else if (sentMs) {
-        // Nếu thiếu Ngày Lắp Đặt, ước tính dựa trên khoảng mốc mặc định 45 ngày để phân loại ca
-        const defaultInstallMs = sentMs - (45 * 86400 * 1000);
-        const diffDays = Math.abs(Math.round((sentMs - defaultInstallMs) / (1000 * 60 * 60 * 24)));
-        totalDaysToFail += diffDays;
-        countFailDate += 1;
-        if (diffDays < 30) {
-          earlyFailCount += 1;
-          earlyFailItems.push({ item, days: diffDays });
-        } else if (diffDays <= 90) {
-          midFailCount += 1;
-          midFailItems.push({ item, days: diffDays });
-        } else {
-          longFailCount += 1;
-          longFailItems.push({ item, days: diffDays });
-        }
+      } else {
+        unrecordedInstallCount += 1;
       }
 
       // Duration: Issue ➔ Expected schedule date
@@ -829,46 +803,68 @@ export default function TrackingWarranty() {
         countCompleteDate += 1;
       }
 
+      // Backlog Aging (Ca chưa hoàn thành bị trễ deadline)
+      const pLower = item.progress.toLowerCase();
+      const isDone = pLower.includes('hoàn thành') || pLower.includes('cancel');
+      if (!isDone && expectedMs) {
+        if (Date.now() > expectedMs) {
+          const overdueDays = Math.ceil((Date.now() - expectedMs) / (1000 * 60 * 60 * 24));
+          if (overdueDays >= 1 && overdueDays <= 7) aging1to7Count++;
+          else if (overdueDays >= 8 && overdueDays <= 14) aging8to14Count++;
+          else if (overdueDays > 14) agingOver14Count++;
+        }
+      }
+
       // Supplier SLA Tracking
       if (!supplierSlaMap[sup]) {
         supplierSlaMap[sup] = { total: 0, completedOnTime: 0, overdue: 0 };
       }
       supplierSlaMap[sup].total += 1;
-      const isCompleted = item.progress.toLowerCase().includes('hoàn thành');
-      if (isCompleted) {
+      if (isDone && pLower.includes('hoàn thành')) {
         supplierSlaMap[sup].completedOnTime += 1;
-      } else if (expectedMs && Date.now() > expectedMs) {
+      } else if (!isDone && expectedMs && Date.now() > expectedMs) {
         supplierSlaMap[sup].overdue += 1;
       }
     });
 
     const topProjects = Object.entries(projectMap)
-      .map(([projectCode, data]) => ({
-        projectCode,
-        supplier: data.supplier,
-        count: data.count,
-        percentage: Math.round((data.count / (warrantyItems.length || 1)) * 100)
-      }))
+      .map(([projectCode, data]) => {
+        const supplierList = Object.entries(data.suppliers)
+          .map(([name, count]) => ({ name, count }))
+          .sort((a, b) => b.count - a.count);
+
+        return {
+          projectCode,
+          count: data.count,
+          percentage: Math.round((data.count / (filteredItems.length || 1)) * 100),
+          supplierList
+        };
+      })
       .sort((a, b) => b.count - a.count)
       .slice(0, 6);
 
-    const errorCategoryList = Object.entries(errorCatMap)
-      .map(([category, count]) => ({
-        category,
+    const posmTypeBreakdown = Object.entries(posmTypeMap)
+      .map(([posmType, count]) => ({
+        posmType,
         count,
-        percentage: Math.round((count / (warrantyItems.length || 1)) * 100)
+        percentage: Math.round((count / (filteredItems.length || 1)) * 100)
       }))
       .sort((a, b) => b.count - a.count);
 
-    const avgDaysToFail = countFailDate > 0 ? Math.round(totalDaysToFail / countFailDate) : 45;
-    const avgDaysToSchedule = countScheduleDate > 0 ? Math.round(totalDaysToSchedule / countScheduleDate) : 3;
-    const avgDaysToComplete = countCompleteDate > 0 ? Math.round(totalDaysToComplete / countCompleteDate) : 7;
+    const avgDaysToFail = countFailDate > 0 ? Math.round(totalDaysToFail / countFailDate) : 0;
+    const avgDaysToSchedule = countScheduleDate > 0 ? Math.round(totalDaysToSchedule / countScheduleDate) : 0;
+    const avgDaysToComplete = countCompleteDate > 0 ? Math.round(totalDaysToComplete / countCompleteDate) : 0;
 
     return {
       supplierBreakdown: Object.entries(supplierMap).sort((a, b) => b[1] - a[1]),
-      brandBreakdown: Object.entries(brandMap).sort((a, b) => b[1] - a[1]),
+      posmTypeBreakdown,
       topProjects,
-      errorCategoryList,
+      backlogAging: {
+        aging1to7Count,
+        aging8to14Count,
+        agingOver14Count,
+        totalOverdue: aging1to7Count + aging8to14Count + agingOver14Count
+      },
       slaMetrics: {
         avgDaysToFail,
         avgDaysToSchedule,
@@ -876,37 +872,149 @@ export default function TrackingWarranty() {
         earlyFailCount,
         midFailCount,
         longFailCount,
+        unrecordedInstallCount,
         earlyFailItems,
         midFailItems,
         longFailItems
       },
-      supplierSlaList: Object.entries(supplierSlaMap).map(([supplier, stats]) => ({
-        supplier,
-        total: stats.total,
-        completedOnTime: stats.completedOnTime,
-        overdue: stats.overdue,
-        rate: Math.round((stats.completedOnTime / (stats.total || 1)) * 100)
-      })).sort((a, b) => b.total - a.total)
+      supplierSlaList: Object.entries(supplierSlaMap).map(([supplier, stats]) => {
+        const slaCompliantCount = stats.total - stats.overdue;
+        const rate = stats.total > 0 ? Math.round((slaCompliantCount / stats.total) * 100) : 100;
+        return {
+          supplier,
+          total: stats.total,
+          completedOnTime: stats.completedOnTime,
+          overdue: stats.overdue,
+          rate
+        };
+      }).sort((a, b) => b.total - a.total)
     };
-  }, [warrantyItems]);
+  }, [filteredItems]);
+
+  // Recurrent Warranty Analysis Engine for TrackingWarranty (Nguồn sự thật: Ưu tiên Mã BH Lần Trước + Mã Dự Án)
+  const recurrentWarrantyAnalytics = useMemo(() => {
+    const groupMap = new Map<string, {
+      key: string;
+      storeName: string;
+      storeCode: string;
+      posm: string;
+      brand: string;
+      supplier: string;
+      customer: string;
+      incidents: Array<{
+        sequence: number;
+        id: string;
+        requestId: string;
+        sentDate: string;
+        status: string;
+        errorDetail: string;
+        precedingRequestId?: string;
+      }>;
+    }>();
+
+    // Map parent precedingRequestId links
+    const parentChildMap = new Map<string, string>(); // childRequestId -> parentRequestId
+    filteredItems.forEach(item => {
+      const precId = (item.precedingRequestId || (item as any).preceding_request_id || '').trim();
+      const currentReqId = (item.requestId || `BH-${item.rowId}`).trim();
+      if (precId && currentReqId && precId !== currentReqId) {
+        parentChildMap.set(currentReqId, precId);
+      }
+    });
+
+    filteredItems.forEach(item => {
+      const currentReqId = (item.requestId || `BH-${item.rowId}`).trim();
+      const storeKey = item.storeCode?.trim() || item.storeName?.trim() || 'STORE_UNKNOWN';
+      const posmKey = item.posmType?.trim() || 'POSM_UNKNOWN';
+      const brandKey = item.brand?.trim() || item.category?.trim() || 'BRAND_UNKNOWN';
+      const projectKey = item.projectCode?.trim() || '';
+
+      // Determine grouping key
+      let compositeKey = '';
+      if (parentChildMap.has(currentReqId)) {
+        // Linked explicitly via preceding_request_id
+        const parentId = parentChildMap.get(currentReqId)!;
+        compositeKey = `PREC_PARENT__${parentId}`;
+      } else if (Array.from(parentChildMap.values()).includes(currentReqId)) {
+        // Is parent of another request
+        compositeKey = `PREC_PARENT__${currentReqId}`;
+      } else if (projectKey) {
+        // Linked via Store + Project Code (Mã dự án)
+        compositeKey = `${storeKey}__PROJ__${projectKey}`;
+      } else {
+        // Fallback: Store + POSM + Brand
+        compositeKey = `${storeKey}__${posmKey}__${brandKey}`;
+      }
+
+      if (!groupMap.has(compositeKey)) {
+        groupMap.set(compositeKey, {
+          key: compositeKey,
+          storeName: item.storeName || '-',
+          storeCode: item.storeCode || '-',
+          posm: item.posmType || '-',
+          brand: item.brand || item.category || '-',
+          customer: (item as any).customer || '-',
+          supplier: item.supplier || 'Chưa gán',
+          incidents: []
+        });
+      }
+
+      const grp = groupMap.get(compositeKey)!;
+      grp.incidents.push({
+        sequence: 0,
+        id: item.id,
+        requestId: currentReqId,
+        sentDate: item.sentDate || '-',
+        status: item.progress || 'Not started',
+        errorDetail: item.errorDetail || '',
+        precedingRequestId: item.precedingRequestId
+      });
+    });
+
+    const groups = Array.from(groupMap.values());
+    let recurrentCount = 0;
+    groups.forEach(grp => {
+      grp.incidents.forEach((inc, idx) => {
+        inc.sequence = idx + 1;
+      });
+      if (grp.incidents.length > 1) {
+        recurrentCount++;
+      }
+    });
+
+    const recurrentItems = groups
+      .filter(g => g.incidents.length > 1)
+      .sort((a, b) => b.incidents.length - a.incidents.length);
+
+    return {
+      totalItems: groups.length,
+      recurrentCount,
+      recurrentItems
+    };
+  }, [filteredItems]);
 
   // Interactive Click-Chart to Filter & Switch Tab
   const handleFilterFromChart = (
-    type: 'supplier' | 'brand' | 'project' | 'category' | 'progress',
+    type: 'supplier' | 'brand' | 'posmType' | 'project' | 'category' | 'progress' | 'recurrent' | 'aging',
     val: string
   ) => {
     if (type === 'supplier') {
       setSelectedSupplier(val);
     } else if (type === 'brand') {
       setSelectedBrand(val);
+    } else if (type === 'posmType') {
+      setSearchTerm(val);
     } else if (type === 'project') {
       setSearchTerm(val);
     } else if (type === 'category') {
-      // Extract main category text keyword
       const cleanKeyword = val.replace(/[^a-zA-Z0-9àáạảãâầấậẩẫăằắặcđèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹ\s]/gi, '').trim();
       setSearchTerm(cleanKeyword);
     } else if (type === 'progress') {
       setSelectedProgress(val);
+    } else if (type === 'recurrent') {
+      setSearchTerm('Lần #');
+    } else if (type === 'aging') {
+      setSelectedProgress('in_progress');
     }
 
     setActiveModuleTab('DATA_LIST');
@@ -930,8 +1038,6 @@ export default function TrackingWarranty() {
       'Supplier (Thầu SX)': i.supplier || '',
       'Title Mail': i.mailTitle || '',
       'Chi Tiết Lỗi': i.errorDetail,
-      'Trạng Thái Bảo Hành': i.warrantyCoverage || '',
-      'Chi Phí BH': i.warrantyCost || '',
       'Tiến Độ': i.progress,
       'Ngày Dự Dự Kiến Xử Lý': i.expectedDate || '',
       'Ngày Hoàn Thành Thực Tế': i.completedDate || '',
@@ -1062,33 +1168,46 @@ export default function TrackingWarranty() {
       )}
 
       {/* MODULE INTERNAL NAVIGATION SUB-TABS */}
-      <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 w-fit">
-        <button
-          onClick={() => setActiveModuleTab('DATA_LIST')}
-          className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-            activeModuleTab === 'DATA_LIST'
-              ? 'bg-white dark:bg-slate-900 text-sky-600 dark:text-sky-400 shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-          }`}
-        >
-          <Table className="w-4 h-4" />
-          <span>Danh Sách Dữ Liệu</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 font-mono">
-            {filteredItems.length}
-          </span>
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 w-fit">
+          <button
+            onClick={() => setActiveModuleTab('DATA_LIST')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeModuleTab === 'DATA_LIST'
+                ? 'bg-white dark:bg-slate-900 text-sky-600 dark:text-sky-400 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Table className="w-4 h-4" />
+            <span>Danh Sách Dữ Liệu</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 font-mono">
+              {filteredItems.length}
+            </span>
+          </button>
 
-        <button
-          onClick={() => setActiveModuleTab('ANALYST')}
-          className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-            activeModuleTab === 'ANALYST'
-              ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-          }`}
-        >
-          <BarChart3 className="w-4 h-4" />
-          <span>Báo Cáo & Thống Kê (Analyst)</span>
-        </button>
+          <button
+            onClick={() => setActiveModuleTab('ANALYST')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeModuleTab === 'ANALYST'
+                ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4" />
+            <span>Báo Cáo & Thống Kê (Analyst)</span>
+          </button>
+        </div>
+
+        {activeModuleTab === 'ANALYST' && (
+          <button
+            onClick={() => exportAnalystExecutiveReport([], warrantyItems, 'POSM_Warranty_Executive_Report')}
+            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl shadow-sm transition-all cursor-pointer border border-emerald-400/40"
+            title="Tải về file Excel BI Analytics 3 Sheet (.xlsx)"
+          >
+            <Download className="w-4 h-4" />
+            <span>📥 Xuất Analyst Excel (.xlsx)</span>
+          </button>
+        )}
       </div>
 
       {/* TAB 1: DEDICATED ANALYST / REPORTS WORKSPACE */}
@@ -1174,9 +1293,9 @@ export default function TrackingWarranty() {
                       onClick={() => handleFilterFromChart('project', p.projectCode)}
                       className="p-2.5 bg-slate-50 dark:bg-slate-800/60 hover:bg-amber-50 dark:hover:bg-amber-950/40 border border-slate-200 dark:border-slate-700 hover:border-amber-300 rounded-xl transition-all cursor-pointer group space-y-1.5"
                     >
-                      <div className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2">
-                          <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${
+                      <div className="flex items-center justify-between text-xs flex-wrap gap-1.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${
                             idx === 0 ? 'bg-amber-500 text-white' : idx === 1 ? 'bg-slate-400 text-white' : idx === 2 ? 'bg-amber-700 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
                           }`}>
                             {idx + 1}
@@ -1184,11 +1303,24 @@ export default function TrackingWarranty() {
                           <span className="font-mono font-bold text-slate-900 dark:text-white group-hover:text-amber-600 transition-colors">
                             Mã: {p.projectCode}
                           </span>
-                          <span className="text-[10px] px-2 py-0.5 bg-secondary rounded text-muted-foreground">
-                            {p.supplier}
-                          </span>
+                          
+                          {/* Suppliers Breakdown */}
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {p.supplierList.map((sup) => (
+                              <span 
+                                key={sup.name} 
+                                className="text-[10px] font-medium px-2 py-0.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-md border border-slate-200 dark:border-slate-700 flex items-center gap-1 shadow-2xs"
+                                title={`Supplier ${sup.name}: ${sup.count} ca bảo hành`}
+                              >
+                                <span className="font-bold">{sup.name}</span>
+                                <span className="font-mono text-amber-700 dark:text-amber-400 font-bold px-1 bg-amber-50 dark:bg-amber-950 rounded">
+                                  {sup.count} ca
+                                </span>
+                              </span>
+                            ))}
+                          </div>
                         </div>
-                        <span className="font-mono font-bold text-amber-600 dark:text-amber-400">
+                        <span className="font-mono font-bold text-amber-600 dark:text-amber-400 shrink-0">
                           {p.count} ca ({p.percentage}%)
                         </span>
                       </div>
@@ -1380,13 +1512,236 @@ export default function TrackingWarranty() {
                       </div>
                     )}
                   </div>
+
+                  {/* Bracket 4: Unrecorded Installation Date */}
+                  <div className="p-3 bg-slate-100/70 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-xl flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
+                    <span>⚪ Chưa ghi nhận ngày lắp đặt POSM (không tính vào MTBF):</span>
+                    <span className="font-mono font-black">{analystBreakdowns.slaMetrics.unrecordedInstallCount} ca</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* SECTION 2: BÁO CÁO PHÂN LOẠI DẠNG LỖI POSM & TỶ LỆ ĐẠT SLA NHÀ THẦU */}
+          {/* SECTION 1.5: BÁO CÁO PHÂN TÍCH BẢO HÀNH LẶP LẠI (RECURRENT WARRANTY ANALYTICS) */}
+          <div className="p-5 bg-card rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/20 dark:bg-amber-950/10 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b border-amber-200/80 dark:border-amber-900 pb-3">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-amber-600" />
+                <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  🔄 Báo Cáo Phân Tích Sự Cố Bảo Hành Lặp Lại (Recurrent Warranty Lifecycle)
+                  <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                    {recurrentWarrantyAnalytics.recurrentCount} POSM bị hỏng lặp
+                  </span>
+                </h4>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Card 1: Metric */}
+              <div className="p-4 bg-white dark:bg-slate-900 rounded-xl border border-amber-200 dark:border-amber-900 shadow-2xs space-y-1">
+                <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider block">
+                  POSM Bảo Hành Lặp (&gt;1 Lần)
+                </span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-black text-amber-600 dark:text-amber-400">
+                    {recurrentWarrantyAnalytics.recurrentCount}
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    / {recurrentWarrantyAnalytics.totalItems} mã POSM
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500">POSM bị sự cố tái diễn nhiều lần tại cùng 1 siêu thị</p>
+              </div>
+
+              {/* Card 2: Metric */}
+              <div className="p-4 bg-white dark:bg-slate-900 rounded-xl border border-rose-200 dark:border-rose-900 shadow-2xs space-y-1">
+                <span className="text-[11px] font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wider block">
+                  Tỷ Lệ Tái Hỏng POSM
+                </span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-black text-rose-600 dark:text-rose-400">
+                    {recurrentWarrantyAnalytics.totalItems > 0 
+                      ? ((recurrentWarrantyAnalytics.recurrentCount / recurrentWarrantyAnalytics.totalItems) * 100).toFixed(1)
+                      : '0'}%
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500">Tỷ lệ POSM phát sinh hỏng hóc sau lần sửa đầu</p>
+              </div>
+
+              {/* Card 3: Metric */}
+              <div className="p-4 bg-white dark:bg-slate-900 rounded-xl border border-sky-200 dark:border-sky-900 shadow-2xs space-y-1">
+                <span className="text-[11px] font-bold text-sky-700 dark:text-sky-400 uppercase tracking-wider block">
+                  Trạng Thái Kiểm Soát Chất Lượng
+                </span>
+                <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 pt-1">
+                  {recurrentWarrantyAnalytics.recurrentCount > 0 ? (
+                    <span className="text-amber-700 dark:text-amber-400 font-bold flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
+                      Cần rà soát Supplier thi công các ca lặp
+                    </span>
+                  ) : (
+                    <span className="text-emerald-600 font-bold flex items-center gap-1">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                      Không có ca bảo hành lặp lặp lại
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500">Tự động gom nhóm theo Siêu thị + POSM + Brand</p>
+              </div>
+            </div>
+
+            {/* Recurrent Items Table */}
+            <div className="space-y-2 pt-2">
+              <span className="font-bold text-slate-800 dark:text-slate-200 block text-xs uppercase tracking-wider">
+                📋 Danh sách chi tiết các ca POSM bị bảo hành lặp lại:
+              </span>
+
+              <div className="overflow-x-auto rounded-xl border border-amber-200/80 dark:border-amber-900 bg-white dark:bg-slate-900">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-amber-50/60 dark:bg-amber-950/40 text-slate-700 dark:text-slate-300 font-bold border-b border-amber-200/80 dark:border-amber-900">
+                    <tr>
+                      <th className="p-2.5 text-center">STT</th>
+                      <th className="p-2.5">Siêu Thị / Mã Store</th>
+                      <th className="p-2.5">Loại POSM & Brand</th>
+                      <th className="p-2.5 text-center">Số Lần BH</th>
+                      <th className="p-2.5">Lịch Sử Chuỗi Thời Gian Bảo Hành</th>
+                      <th className="p-2.5">Supplier Phụ Trách</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
+                    {recurrentWarrantyAnalytics.recurrentItems.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="p-4 text-center text-slate-400 italic">
+                          Chưa ghi nhận ca POSM nào phát sinh bảo hành từ 2 lần trở lên.
+                        </td>
+                      </tr>
+                    ) : (
+                      recurrentWarrantyAnalytics.recurrentItems.map((grp, idx) => (
+                        <tr key={grp.key} className="hover:bg-amber-50/30 dark:hover:bg-amber-950/20 transition-colors">
+                          <td className="p-2.5 text-center font-mono font-bold text-slate-400">{idx + 1}</td>
+                          <td className="p-2.5">
+                            <div className="font-bold text-slate-900 dark:text-white">{grp.storeName}</div>
+                            <div className="text-[11px] font-mono text-slate-400">{grp.storeCode}</div>
+                          </td>
+                          <td className="p-2.5">
+                            <div className="font-semibold text-indigo-600 dark:text-indigo-400">{grp.posm}</div>
+                            <div className="text-[11px] text-slate-500 font-mono">🏷️ {grp.brand}</div>
+                          </td>
+                          <td className="p-2.5 text-center">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
+                              grp.incidents.length >= 3 
+                                ? 'bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-950 dark:text-rose-300'
+                                : 'bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-950 dark:text-amber-300'
+                            }`}>
+                              🔄 BH Lần #{grp.incidents.length}
+                            </span>
+                          </td>
+                          <td className="p-2.5">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {grp.incidents.map((inc) => (
+                                <button
+                                  key={inc.id}
+                                  onClick={() => {
+                                    const reqId = inc.requestId || inc.id;
+                                    setSearchTerm(reqId);
+                                    setActiveModuleTab('DATA_LIST');
+                                    const foundItem = warrantyItems.find(i => i.requestId === reqId || i.id === inc.id);
+                                    if (foundItem) {
+                                      setSelectedItem(foundItem);
+                                    }
+                                    toast.success(`🔍 Đã trỏ tới danh sách bảo hành của Request #${reqId}`);
+                                  }}
+                                  className="text-[11px] font-mono font-bold bg-amber-100/80 hover:bg-amber-200 dark:bg-amber-950 dark:hover:bg-amber-900 text-amber-900 dark:text-amber-200 px-2 py-1 rounded-md border border-amber-300 dark:border-amber-700 flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs group/inc"
+                                  title={`Bấm để trỏ tới tab Danh Sách Dữ Liệu và xem chi tiết Request #${inc.requestId || inc.id}`}
+                                >
+                                  <span className="font-extrabold text-amber-800 dark:text-amber-300">Lần #{inc.sequence}:</span>
+                                  <span>{inc.sentDate}</span>
+                                  <span className="px-1.5 py-0.2 rounded bg-amber-200 dark:bg-amber-800 text-amber-950 dark:text-amber-100 font-bold border border-amber-300 dark:border-amber-700 flex items-center gap-0.5">
+                                    📋 {inc.requestId || inc.id}
+                                    <ExternalLink className="w-3 h-3 text-amber-700 group-hover/inc:text-amber-900" />
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="p-2.5 text-slate-700 dark:text-slate-300 font-semibold">{grp.supplier}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION 2: BÁO CÁO PHÂN LOẠI CƠ CẤU & TỶ LỆ ĐẠT SLA NHÀ THẦU */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Backlog Aging Warning Card */}
+            <div className="p-5 bg-card rounded-2xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/20 dark:bg-rose-950/10 shadow-sm space-y-4 col-span-1 md:col-span-2">
+              <div className="flex items-center justify-between border-b border-rose-200/80 dark:border-rose-900 pb-3">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 text-rose-600" />
+                  <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    🚨 Cảnh Báo Ca Bảo Hành Tồn Đọng Theo Thời Gian (Backlog Aging)
+                    <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-800">
+                      {analystBreakdowns.backlogAging.totalOverdue} ca quá hạn
+                    </span>
+                  </h4>
+                </div>
+                <button
+                  onClick={() => handleFilterFromChart('aging', 'overdue')}
+                  className="text-xs font-bold text-rose-700 dark:text-rose-300 bg-rose-100 dark:bg-rose-900/60 px-3 py-1 rounded-lg border border-rose-300 dark:border-rose-700 hover:bg-rose-200 transition-colors cursor-pointer"
+                >
+                  🔍 Lọc các ca quá hạn trên bảng
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                {/* 1-7 days */}
+                <div 
+                  onClick={() => handleFilterFromChart('aging', 'overdue')}
+                  className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl flex items-center justify-between cursor-pointer hover:border-amber-400 transition-all"
+                >
+                  <div>
+                    <span className="font-bold text-amber-800 dark:text-amber-300 block">🟡 Quá hạn 1 - 7 ngày</span>
+                    <span className="text-[11px] text-amber-700/80 dark:text-amber-400/80">Cần đôn đốc nhà thầu</span>
+                  </div>
+                  <span className="text-xl font-black font-mono text-amber-700 dark:text-amber-300">
+                    {analystBreakdowns.backlogAging.aging1to7Count} ca
+                  </span>
+                </div>
+
+                {/* 8-14 days */}
+                <div 
+                  onClick={() => handleFilterFromChart('aging', 'overdue')}
+                  className="p-3 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800 rounded-xl flex items-center justify-between cursor-pointer hover:border-orange-400 transition-all"
+                >
+                  <div>
+                    <span className="font-bold text-orange-800 dark:text-orange-300 block">🟠 Quá hạn 8 - 14 ngày</span>
+                    <span className="text-[11px] text-orange-700/80 dark:text-orange-400/80">Cảnh báo chậm tiến độ</span>
+                  </div>
+                  <span className="text-xl font-black font-mono text-orange-700 dark:text-orange-300">
+                    {analystBreakdowns.backlogAging.aging8to14Count} ca
+                  </span>
+                </div>
+
+                {/* >14 days */}
+                <div 
+                  onClick={() => handleFilterFromChart('aging', 'overdue')}
+                  className="p-3 bg-rose-100/80 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800 rounded-xl flex items-center justify-between cursor-pointer hover:border-rose-500 transition-all"
+                >
+                  <div>
+                    <span className="font-bold text-rose-900 dark:text-rose-200 block">🔴 Quá hạn &gt; 14 ngày</span>
+                    <span className="text-[11px] text-rose-800/80 dark:text-rose-300/80">Vi phạm SLA nghiêm trọng</span>
+                  </div>
+                  <span className="text-xl font-black font-mono text-rose-700 dark:text-rose-300">
+                    {analystBreakdowns.backlogAging.agingOver14Count} ca
+                  </span>
+                </div>
+              </div>
+            </div>
+
             {/* Supplier SLA Performance Card */}
             <div className="p-5 bg-card rounded-2xl border border-border shadow-sm space-y-4">
               <div className="flex items-center justify-between border-b border-border pb-3">
@@ -1423,13 +1778,13 @@ export default function TrackingWarranty() {
               </div>
             </div>
 
-            {/* Report 2: Brand & Category Distribution */}
+            {/* Report 2: Top Defective POSM Types Distribution */}
             <div className="p-5 bg-card rounded-2xl border border-border shadow-sm space-y-4">
               <div className="flex items-center justify-between border-b border-border pb-3">
                 <div className="flex items-center gap-2">
                   <Tag className="w-5 h-5 text-purple-600" />
                   <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100">
-                    Báo Cáo Phân Bổ Theo Nhãn Hàng & Ngành Hàng
+                    🏆 Top Loại POSM Phát Sinh Sự Cố Nhiều Nhất
                   </h4>
                 </div>
                 <span className="text-xs font-mono text-purple-600 font-semibold bg-purple-50 dark:bg-purple-950 px-2 py-0.5 rounded-md">
@@ -1437,24 +1792,21 @@ export default function TrackingWarranty() {
                 </span>
               </div>
               <div className="space-y-2.5">
-                {analystBreakdowns.brandBreakdown.map(([brand, count]) => {
-                  const pct = Math.round((count / (warrantyItems.length || 1)) * 100);
-                  return (
-                    <div 
-                      key={brand}
-                      onClick={() => handleFilterFromChart('brand', brand)}
-                      className="space-y-1 p-1 hover:bg-purple-50 dark:hover:bg-purple-950/40 rounded-lg transition-all cursor-pointer group"
-                    >
-                      <div className="flex justify-between text-xs font-medium">
-                        <span className="text-slate-800 dark:text-slate-200 font-bold group-hover:text-purple-600 transition-colors">{brand}</span>
-                        <span className="text-slate-500 font-mono">{count} ca ({pct}%)</span>
-                      </div>
-                      <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                        <div className="h-full bg-purple-500 rounded-full" style={{ width: `${pct}%` }} />
-                      </div>
+                {analystBreakdowns.posmTypeBreakdown.slice(0, 6).map(({ posmType, count, percentage }) => (
+                  <div 
+                    key={posmType}
+                    onClick={() => handleFilterFromChart('posmType', posmType)}
+                    className="space-y-1 p-1 hover:bg-purple-50 dark:hover:bg-purple-950/40 rounded-lg transition-all cursor-pointer group"
+                  >
+                    <div className="flex justify-between text-xs font-medium">
+                      <span className="text-slate-800 dark:text-slate-200 font-bold group-hover:text-purple-600 transition-colors">{posmType}</span>
+                      <span className="text-slate-500 font-mono">{count} ca ({percentage}%)</span>
                     </div>
-                  );
-                })}
+                    <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-purple-500 rounded-full" style={{ width: `${percentage}%` }} />
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -1509,7 +1861,7 @@ export default function TrackingWarranty() {
                 setSelectedBrand('all');
                 setSelectedProgress('all');
                 setSelectedVisTech('all');
-                setSelectedCoverage('all');
+                setSelectedYear('2026');
                 setSearchTerm('');
               }}
               className="text-[11px] font-bold text-sky-700 dark:text-sky-300 hover:underline cursor-pointer shrink-0"
@@ -1548,6 +1900,20 @@ export default function TrackingWarranty() {
                 <Filter className="w-3.5 h-3.5 text-muted-foreground" />
                 <span className="text-muted-foreground font-medium">Bộ lọc:</span>
               </div>
+
+              {/* Year Filter */}
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                className="bg-background border border-border text-foreground font-bold text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-sky-500/20 cursor-pointer text-sky-700 dark:text-sky-300"
+              >
+                <option value="all">📅 Tất cả Năm</option>
+                {uniqueYears.map((y) => (
+                  <option key={y} value={y}>
+                    📅 Năm {y}
+                  </option>
+                ))}
+              </select>
 
               {/* Progress Filter */}
               <select
@@ -1607,10 +1973,10 @@ export default function TrackingWarranty() {
           </div>
         </div>
 
-        {/* DATA TABLE */}
-        <div className="overflow-x-auto custom-scrollbar">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-100/70 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 font-semibold border-b border-border uppercase tracking-wider text-[11px]">
+        {/* DATA TABLE WITH STICKY HEADER & ALWAYS VISIBLE SCROLLBAR */}
+        <div className="w-full max-h-[calc(100vh-210px)] overflow-auto custom-scrollbar rounded-xl border border-slate-200 dark:border-slate-800">
+          <table className="w-full text-left text-xs whitespace-nowrap">
+            <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold border-b border-border uppercase tracking-wider text-[11px] sticky top-0 z-20 shadow-2xs">
               <tr>
                 <th className="py-3 px-4">Request ID / Cửa Hàng</th>
                 <th className="py-3 px-4 text-indigo-700 dark:text-indigo-400 font-black">Mã Dự Án</th>
@@ -1697,9 +2063,6 @@ export default function TrackingWarranty() {
                         <span className="font-bold text-slate-800 dark:text-slate-200">
                           {item.supplier || 'Chưa chọn'}
                         </span>
-                        {item.projectCode && (
-                          <span className="text-[10px] font-mono text-slate-400">PJ: {item.projectCode}</span>
-                        )}
                       </div>
                     </td>
 
@@ -1870,6 +2233,24 @@ export default function TrackingWarranty() {
                     <option value="Hoàn Thành">🟢 Hoàn Thành (Đã hoàn tất bảo hành)</option>
                     <option value="Cancelled">🔴 Cancelled (Đã hủy yêu cầu)</option>
                   </select>
+                </div>
+
+                {/* Edit Preceding Request ID (Mã BH Lần Trước) */}
+                <div className="space-y-1 bg-amber-50/50 dark:bg-amber-950/20 p-2.5 rounded-lg border border-amber-200 dark:border-amber-800">
+                  <label className="font-semibold text-xs text-amber-900 dark:text-amber-200 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+                      Mã Bảo Hành Lần Trước (Preceding Request ID):
+                    </span>
+                    <span className="text-[10px] text-amber-700 dark:text-amber-400 font-normal">Chỉ điền nếu là ca bảo hành lặp lại</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={editPrecedingRequestId}
+                    onChange={(e) => setEditPrecedingRequestId(e.target.value)}
+                    placeholder="Nhập hoặc chọn mã BH lần trước (ví dụ: BH-586)..."
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/30 font-mono text-xs font-bold text-amber-900 dark:text-amber-200"
+                  />
                 </div>
 
                 {/* Edit Title Mail & Raise Mail Date */}

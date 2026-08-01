@@ -16,13 +16,12 @@ export interface WarrantyItem {
   supplier: string;           // Supplier (Nhà cung cấp / Thầu sản xuất POSM)
   mailTitle?: string;         // Title mail
   errorDetail: string;        // Chi tiết lỗi
-  warrantyCoverage?: string;  // Trạng thái bảo hành (Không dùng)
-  warrantyCost?: string;      // Chi phí bảo hành (Không dùng)
   progress: 'Hoàn Thành' | 'Tiếp nhận' | 'Đang xử lý' | 'Not Started' | string; // Tiến độ
   expectedDate?: string;      // Ngày xử lý dự kiến
   completedDate?: string;     // Ngày hoàn thành thực tế
   proofImage?: string;        // Link ảnh nghiệm thu
   note?: string;              // Ghi chú
+  precedingRequestId?: string;// Mã bảo hành lần trước (Cột V BaoHanh_Model)
 }
 
 export interface WarrantyStats {
@@ -30,7 +29,6 @@ export interface WarrantyStats {
   completedItems: number;
   inProgressItems: number;
   notStartedItems: number;
-  freeCoverageItems?: number;
 }
 
 export interface ProjectDefectStat {
@@ -54,4 +52,5 @@ export interface WarrantySlaMetrics {
   earlyFailCount: number;       // < 30 ngày
   midFailCount: number;         // 1 - 3 tháng
   longFailCount: number;        // > 3 tháng
+  unrecordedInstallCount: number; // Chưa ghi nhận ngày lắp đặt
 }

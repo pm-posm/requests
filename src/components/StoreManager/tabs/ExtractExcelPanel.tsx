@@ -1,6 +1,10 @@
-import React from 'react';
-import { Loader2, CheckCircle2, Info, ChevronDown, ChevronUp, Layers } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Loader2, CheckCircle2, Info, ChevronDown, ChevronUp, Layers, Search, Sparkles } from 'lucide-react';
 import type { ColumnMapping } from '@/hooks/useExcelImport';
+import { supabase } from '@/lib/supabase';
+
+import { saveMappingMemory } from '@/hooks/useExcelImport';
+import toast from 'react-hot-toast';
 
 export const MAPPING_FIELDS: { key: keyof ColumnMapping; label: string }[] = [
     { key: 'store_code', label: 'Mã Cửa Hàng *' },
@@ -13,6 +17,96 @@ export const MAPPING_FIELDS: { key: keyof ColumnMapping; label: string }[] = [
     { key: 'supplier_name', label: 'Nhà thầu' },
     { key: 'vis_tech', label: 'Vis-Tech' },
 ];
+
+function MasterStoreRowSearch({ 
+    value, 
+    placeholder, 
+    onSelectStore,
+    onChangeText 
+}: { 
+    value: string; 
+    placeholder: string; 
+    onSelectStore: (store: any) => void;
+    onChangeText?: (txt: string) => void;
+}) {
+    const [query, setQuery] = useState(value || '');
+    const [isOpen, setIsOpen] = useState(false);
+    const [results, setResults] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        setQuery(value || '');
+    }, [value]);
+
+    useEffect(() => {
+        if (!query || query.length < 2 || !isOpen) {
+            setResults([]);
+            return;
+        }
+        const timer = setTimeout(async () => {
+            setLoading(true);
+            try {
+                const norm = encodeURIComponent(query.trim());
+                const { data } = await supabase
+                    .from('master_stores_directory')
+                    .select('store_code, store_name, region, customer, ka, sr, mer_name')
+                    .or(`store_code.ilike.%${norm}%,store_name.ilike.%${norm}%`)
+                    .limit(8);
+                setResults(data || []);
+            } catch (err) {
+                console.error(err);
+            } finally {
+                setLoading(false);
+            }
+        }, 200);
+        return () => clearTimeout(timer);
+    }, [query, isOpen]);
+
+    return (
+        <div className="relative w-full">
+            <div className="relative flex items-center">
+                <input
+                    type="text"
+                    value={query}
+                    placeholder={placeholder}
+                    onFocus={() => setIsOpen(true)}
+                    onBlur={() => setTimeout(() => setIsOpen(false), 200)}
+                    onChange={(e) => {
+                        const txt = e.target.value;
+                        setQuery(txt);
+                        if (onChangeText) onChangeText(txt);
+                        setIsOpen(true);
+                    }}
+                    className="w-full text-xs px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded focus:border-indigo-500 outline-none text-slate-800 dark:text-slate-200 font-medium pr-5"
+                />
+                <Search className="w-3 h-3 text-slate-400 absolute right-1.5 pointer-events-none" />
+            </div>
+
+            {isOpen && (results.length > 0 || loading) && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto custom-scrollbar">
+                    {loading && <div className="p-2 text-[10px] text-slate-400 italic flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Đang tìm trong Danh Bạ Store...</div>}
+                    {results.map((item) => (
+                        <div
+                            key={item.store_code}
+                            onMouseDown={() => {
+                                onSelectStore(item);
+                                setQuery(item.store_name);
+                                setIsOpen(false);
+                            }}
+                            className="p-2 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 cursor-pointer border-b border-slate-100 dark:border-slate-800/60 text-xs flex flex-col gap-0.5"
+                        >
+                            <div className="flex items-center justify-between">
+                                <span className="font-bold text-indigo-600 dark:text-indigo-400">{item.store_code}</span>
+                                <span className="text-[10px] text-slate-400 font-semibold">{item.region || ''} • {item.customer || ''}</span>
+                            </div>
+                            <span className="text-slate-700 dark:text-slate-300 font-medium truncate">{item.store_name}</span>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
 
 interface ExtractExcelPanelProps {
     downloading: boolean;
@@ -29,6 +123,9 @@ interface ExtractExcelPanelProps {
     setShowAdvancedMapping: (v: boolean) => void;
     mapping: ColumnMapping;
     setMapping: (m: ColumnMapping | ((prev: ColumnMapping) => ColumnMapping)) => void;
+    rowOverrides?: Record<number, any>;
+    setRowOverrides?: React.Dispatch<React.SetStateAction<Record<number, any>>>;
+    finalProject?: string;
 }
 
 export function ExtractExcelPanel({
@@ -45,7 +142,10 @@ export function ExtractExcelPanel({
     showAdvancedMapping,
     setShowAdvancedMapping,
     mapping,
-    setMapping
+    setMapping,
+    rowOverrides = {},
+    setRowOverrides,
+    finalProject
 }: ExtractExcelPanelProps) {
     if (downloading) {
         return (
@@ -56,26 +156,44 @@ export function ExtractExcelPanel({
         );
     }
 
+    const handleUpdateRowOverride = (originalIdx: number, patch: any) => {
+        if (setRowOverrides) {
+            setRowOverrides(prev => ({
+                ...prev,
+                [originalIdx]: { ...prev[originalIdx], ...patch }
+            }));
+        }
+    };
+
     const renderRow = ({ row, originalIdx, enrichedData }: { row: any[]; originalIdx: number; enrichedData?: any }, isExisting: boolean) => {
         const isChecked = selectedRows.has(originalIdx);
+        const override = rowOverrides[originalIdx] || {};
+
         const get = (key: keyof ColumnMapping) => {
+            if (override[key] !== undefined) return { value: String(override[key]), auto: false };
             const idx = mapping[key];
             const rawVal = idx !== -1 && row[idx] !== undefined && row[idx] !== null ? String(row[idx]).trim() : '';
             if (rawVal) return { value: rawVal, auto: false };
             if (enrichedData && enrichedData[key]) return { value: String(enrichedData[key]), auto: true };
-            return { value: '—', auto: false };
+            return { value: '', auto: false };
         };
-        const renderCell = (data: { value: string; auto: boolean }) => (
-            <span className={data.auto ? 'text-emerald-600 dark:text-emerald-400 font-medium' : ''}>
-                {data.value}
-            </span>
-        );
+
+        const storeCodeData = get('store_code');
+        const storeNameData = get('store_name');
+        const regionData = get('region');
+        const customerData = get('customer');
+        const kaData = get('ka');
+        const srData = get('sr');
+        const categoryData = get('category');
+        const visTechData = get('vis_tech');
+
+        const isAutoMapped = !!enrichedData || !!override.masterData;
+
         return (
             <tr
                 key={originalIdx}
-                onClick={() => { if (!isExisting) toggleRow(originalIdx); }}
-                className={`border-b border-slate-100 dark:border-slate-800 transition-colors cursor-pointer
-                    ${isExisting ? 'opacity-50 bg-amber-50/30' : isChecked ? 'bg-indigo-50/50 dark:bg-indigo-950/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/30'}`}
+                className={`border-b border-slate-100 dark:border-slate-800 transition-colors
+                    ${isExisting ? 'opacity-70 bg-amber-50/30' : isChecked ? 'bg-indigo-50/50 dark:bg-indigo-950/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/30'}`}
             >
                 <td className="p-2 w-8 text-center" onClick={e => e.stopPropagation()}>
                     <input
@@ -86,14 +204,122 @@ export function ExtractExcelPanel({
                         className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                     />
                 </td>
-                <td className="p-2 text-xs font-black font-mono text-slate-700 dark:text-slate-200">{get('store_code').value}</td>
-                <td className="p-2 text-xs text-slate-600 dark:text-slate-300 max-w-[160px] truncate">{renderCell(get('store_name'))}</td>
-                <td className="p-2 text-xs text-slate-500">{renderCell(get('region'))}</td>
-                <td className="p-2 text-xs text-slate-500">{renderCell(get('customer'))}</td>
-                <td className="p-2 text-xs text-slate-500">{renderCell(get('ka'))}</td>
-                <td className="p-2 text-xs text-slate-500">{renderCell(get('sr'))}</td>
-                <td className="p-2 text-xs text-slate-500">{renderCell(get('category'))}</td>
-                <td className="p-2 text-xs text-slate-500">{renderCell(get('vis_tech'))}</td>
+
+                {/* MÃ CH with Typeahead Auto-Search */}
+                <td className="p-1.5 min-w-[140px]">
+                    <div className="flex flex-col gap-1">
+                        <MasterStoreRowSearch
+                            value={storeCodeData.value}
+                            placeholder="Mã CH (Gõ/Tìm)..."
+                            onSelectStore={(st) => {
+                                handleUpdateRowOverride(originalIdx, {
+                                    store_code: st.store_code,
+                                    store_name: st.store_name,
+                                    region: st.region,
+                                    customer: st.customer,
+                                    ka: st.ka,
+                                    sr: st.sr,
+                                    vis_tech: st.mer_name || st.sr,
+                                    masterData: st
+                                });
+                            }}
+                            onChangeText={(txt) => handleUpdateRowOverride(originalIdx, { store_code: txt })}
+                        />
+                        {isAutoMapped && (
+                            <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1 py-0.2 rounded w-fit border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
+                                <Sparkles className="w-2.5 h-2.5" /> ⚡ Đã map từ Danh bạ
+                            </span>
+                        )}
+                    </div>
+                </td>
+
+                {/* TÊN CH with Typeahead Auto-Search */}
+                <td className="p-1.5 min-w-[160px]">
+                    <MasterStoreRowSearch
+                        value={storeNameData.value}
+                        placeholder="Tên CH (Gõ/Tìm)..."
+                        onSelectStore={(st) => {
+                            handleUpdateRowOverride(originalIdx, {
+                                store_code: st.store_code,
+                                store_name: st.store_name,
+                                region: st.region,
+                                customer: st.customer,
+                                ka: st.ka,
+                                sr: st.sr,
+                                vis_tech: st.mer_name || st.sr,
+                                masterData: st
+                            });
+                        }}
+                        onChangeText={(txt) => handleUpdateRowOverride(originalIdx, { store_name: txt })}
+                    />
+                </td>
+
+                {/* REGION Input */}
+                <td className="p-1.5 min-w-[90px]">
+                    <input
+                        type="text"
+                        value={regionData.value}
+                        placeholder="Region..."
+                        onChange={(e) => handleUpdateRowOverride(originalIdx, { region: e.target.value })}
+                        className={`w-full text-xs px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded focus:border-indigo-500 outline-none font-medium ${regionData.auto ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-700 dark:text-slate-300'}`}
+                    />
+                </td>
+
+                {/* CUSTOMER Input */}
+                <td className="p-1.5 min-w-[100px]">
+                    <input
+                        type="text"
+                        value={customerData.value}
+                        placeholder="Customer..."
+                        onChange={(e) => handleUpdateRowOverride(originalIdx, { customer: e.target.value })}
+                        className={`w-full text-xs px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded focus:border-indigo-500 outline-none font-medium ${customerData.auto ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-700 dark:text-slate-300'}`}
+                    />
+                </td>
+
+                {/* KA Input */}
+                <td className="p-1.5 min-w-[80px]">
+                    <input
+                        type="text"
+                        value={kaData.value}
+                        placeholder="KA..."
+                        onChange={(e) => handleUpdateRowOverride(originalIdx, { ka: e.target.value })}
+                        className={`w-full text-xs px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded focus:border-indigo-500 outline-none font-medium ${kaData.auto ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-700 dark:text-slate-300'}`}
+                    />
+                </td>
+
+                {/* SR Input */}
+                <td className="p-1.5 min-w-[120px]">
+                    <input
+                        type="text"
+                        value={srData.value}
+                        placeholder="SR..."
+                        onChange={(e) => handleUpdateRowOverride(originalIdx, { sr: e.target.value })}
+                        className={`w-full text-xs px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded focus:border-indigo-500 outline-none font-medium ${srData.auto ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-700 dark:text-slate-300'}`}
+                    />
+                </td>
+
+                {/* CATEGORY Input */}
+                <td className="p-1.5 min-w-[110px]">
+                    <input
+                        type="text"
+                        value={categoryData.value}
+                        placeholder="Hạng mục..."
+                        onChange={(e) => handleUpdateRowOverride(originalIdx, { category: e.target.value })}
+                        className="w-full text-xs px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded focus:border-indigo-500 outline-none font-medium text-slate-700 dark:text-slate-300"
+                    />
+                </td>
+
+                {/* VIS-TECH Input */}
+                <td className="p-1.5 min-w-[110px]">
+                    <input
+                        type="text"
+                        value={visTechData.value}
+                        placeholder="Vis-Tech..."
+                        onChange={(e) => handleUpdateRowOverride(originalIdx, { vis_tech: e.target.value })}
+                        className={`w-full text-xs px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded focus:border-indigo-500 outline-none font-medium ${visTechData.auto ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-700 dark:text-slate-300'}`}
+                    />
+                </td>
+
                 {isExisting && (
                     <td className="p-2">
                         <span className="text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Đã có</span>
@@ -108,112 +334,124 @@ export function ExtractExcelPanel({
             {/* Toolbar */}
             <div className="p-3 flex items-center justify-between shrink-0 bg-slate-50 dark:bg-slate-950/50 border-b border-slate-200 dark:border-slate-800">
                 <span className="text-xs text-slate-500 font-medium">
-                    <span className="font-bold text-indigo-600">{selectedRows.size}</span>/{allValidRows.length} đã chọn
+                    Đã chọn <span className="font-bold text-indigo-600 dark:text-indigo-400">{selectedRows.size}</span> / {allValidRows.length} cửa hàng
                 </span>
+                <div className="flex items-center gap-3">
+                    <button
+                        type="button"
+                        onClick={() => setShowAdvancedMapping(!showAdvancedMapping)}
+                        className="text-xs text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-1 font-medium transition-colors cursor-pointer"
+                    >
+                        <Layers className="w-3.5 h-3.5" />
+                        {showAdvancedMapping ? 'Ẩn cấu hình ánh xạ' : 'Cấu hình ánh xạ cột Excel'}
+                        {showAdvancedMapping ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const next = new Set(selectedRows);
+                            const allSelected = newRows.every(r => selectedRows.has(r.originalIdx));
+                            newRows.forEach(r => {
+                                if (allSelected) next.delete(r.originalIdx); else next.add(r.originalIdx);
+                            });
+                            setSelectedRows(next);
+                        }}
+                        className="text-xs font-bold text-indigo-600 hover:underline cursor-pointer"
+                    >
+                        {newRows.length > 0 && newRows.every(r => selectedRows.has(r.originalIdx)) ? 'Bỏ chọn tất cả' : 'Chọn tất cả mới'}
+                    </button>
+                </div>
             </div>
-            
-            {success && (
-                <div className="mx-4 mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2 shrink-0">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span className="text-sm font-bold text-emerald-700">Đã lưu thành công!</span>
+
+            {/* Advanced Mapping Controls */}
+            {showAdvancedMapping && (
+                <div className="p-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 grid grid-cols-3 md:grid-cols-5 gap-2 shrink-0 animate-in fade-in duration-150">
+                    {MAPPING_FIELDS.map(f => (
+                        <div key={f.key} className="flex flex-col gap-1">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase">{f.label}</label>
+                            <select
+                                value={mapping[f.key]}
+                                onChange={e => {
+                                    const val = Number(e.target.value);
+                                    setMapping(prev => ({ ...prev, [f.key]: val }));
+                                }}
+                                className="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-1 outline-none font-medium cursor-pointer"
+                            >
+                                <option value={-1}>-- Bỏ qua --</option>
+                                {headers.map((h, idx) => (
+                                    <option key={idx} value={idx}>{h || `Cột ${idx + 1}`}</option>
+                                ))}
+                            </select>
+                        </div>
+                    ))}
+                    <div className="col-span-full pt-1 flex justify-end">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                saveMappingMemory(finalProject || 'default', mapping);
+                                toast.success('💾 Đã lưu cấu hình ánh xạ mẫu cho dự án này!');
+                            }}
+                            className="px-3 py-1 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-lg text-xs font-bold border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 transition-colors cursor-pointer flex items-center gap-1.5"
+                        >
+                            <Sparkles className="w-3.5 h-3.5" /> Lưu cấu hình mẫu cho các lần sau
+                        </button>
+                    </div>
                 </div>
             )}
 
-            {/* Tables */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-5 custom-scrollbar">
-                {/* New rows */}
-                <section>
-                    <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-xs font-black text-indigo-600 dark:text-indigo-400 flex items-center gap-2">
-                            <span className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 px-2 py-0.5 rounded-full">{newRows.length}</span>
-                            Cửa hàng chờ thêm mới
-                        </h4>
-                        {newRows.length > 0 && (
-                            <button
-                                onClick={() => {
-                                    const allSelected = newRows.every(r => selectedRows.has(r.originalIdx));
-                                    const next = new Set(selectedRows);
-                                    newRows.forEach(r => allSelected ? next.delete(r.originalIdx) : next.add(r.originalIdx));
-                                    setSelectedRows(next);
-                                }}
-                                className="text-[10px] font-bold text-slate-500 hover:text-indigo-600 cursor-pointer"
-                            >
-                                {newRows.every(r => selectedRows.has(r.originalIdx)) ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
-                            </button>
-                        )}
-                    </div>
-                    <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
-                        <table className="w-full text-left border-collapse whitespace-nowrap">
-                            <thead className="bg-slate-50 dark:bg-slate-800/60 text-[10px] text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
-                                <tr>
-                                    <th className="p-2 w-8">
-                                        <input
-                                            type="checkbox"
-                                            checked={newRows.length > 0 && newRows.every(r => selectedRows.has(r.originalIdx))}
-                                            onChange={(e) => {
-                                                const allSelected = newRows.every(r => selectedRows.has(r.originalIdx));
-                                                const next = new Set(selectedRows);
-                                                newRows.forEach(r => allSelected ? next.delete(r.originalIdx) : next.add(r.originalIdx));
-                                                setSelectedRows(next);
-                                            }}
-                                            className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                                        />
-                                    </th>
-                                    <th className="p-2 font-bold">Mã CH</th>
-                                    <th className="p-2 font-bold">Tên CH</th>
-                                    <th className="p-2 font-bold">Region</th>
-                                    <th className="p-2 font-bold">Customer</th>
-                                    <th className="p-2 font-bold">KA</th>
-                                    <th className="p-2 font-bold">SR</th>
-                                    <th className="p-2 font-bold">Hạng mục</th>
-                                    <th className="p-2 font-bold">Vis-Tech</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {newRows.length === 0 ? (
-                                    <tr><td colSpan={9} className="p-4 text-center text-slate-400 italic text-xs">Không có cửa hàng mới</td></tr>
-                                ) : newRows.map(item => renderRow(item, false))}
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
-
-                {/* Existing rows */}
-                {existingRows.length > 0 && (
-                    <section>
-                        <div className="flex items-center gap-2 mb-2">
-                            <Info className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                            <h4 className="text-xs font-black text-amber-600 flex items-center gap-2">
-                                <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{existingRows.length}</span>
-                                Đã tồn tại trong Master
-                            </h4>
+            {/* Checklist Table */}
+            <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
+                {newRows.length > 0 && (
+                    <div className="mb-4">
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
+                                Cửa hàng chờ thêm mới ({newRows.length})
+                            </span>
                         </div>
-                        <div className="overflow-x-auto rounded-xl border border-amber-200 dark:border-amber-900/40 opacity-75 bg-white dark:bg-slate-900 shadow-sm">
-                            <table className="w-full text-left border-collapse whitespace-nowrap">
-                                <thead className="bg-amber-50 dark:bg-amber-950/30 text-[10px] text-slate-500 uppercase tracking-wider border-b border-amber-200 dark:border-amber-900/40">
+                        <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs">
+                            <table className="w-full text-left border-collapse min-w-[950px]">
+                                <thead className="bg-slate-50 dark:bg-slate-800/80 text-[11px] text-slate-500 font-bold uppercase border-b border-slate-200 dark:border-slate-800">
                                     <tr>
-                                        <th className="p-2 w-8">
-                                            <input
-                                                type="checkbox"
-                                                checked={existingRows.length > 0 && existingRows.every(r => selectedRows.has(r.originalIdx))}
-                                                onChange={(e) => {
-                                                    const allSelected = existingRows.every(r => selectedRows.has(r.originalIdx));
-                                                    const next = new Set(selectedRows);
-                                                    existingRows.forEach(r => allSelected ? next.delete(r.originalIdx) : next.add(r.originalIdx));
-                                                    setSelectedRows(next);
-                                                }}
-                                                className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                                            />
-                                        </th>
-                                        <th className="p-2 font-bold">Mã CH</th>
-                                        <th className="p-2 font-bold">Tên CH</th>
-                                        <th className="p-2 font-bold">Region</th>
-                                        <th className="p-2 font-bold">Customer</th>
-                                        <th className="p-2 font-bold">KA</th>
-                                        <th className="p-2 font-bold">SR</th>
-                                        <th className="p-2 font-bold">Hạng mục</th>
-                                        <th className="p-2 font-bold">Vis-Tech</th>
-                                        <th className="p-2 font-bold">Trạng thái</th>
+                                        <th className="p-2 w-8 text-center"><input type="checkbox" onChange={() => {}} className="rounded" /></th>
+                                        <th className="p-2 min-w-[140px]">Mã CH (Gõ/Tìm)</th>
+                                        <th className="p-2 min-w-[160px]">Tên CH (Gõ/Tìm)</th>
+                                        <th className="p-2 min-w-[90px]">Region</th>
+                                        <th className="p-2 min-w-[100px]">Customer</th>
+                                        <th className="p-2 min-w-[80px]">KA</th>
+                                        <th className="p-2 min-w-[120px]">SR</th>
+                                        <th className="p-2 min-w-[110px]">Hạng mục</th>
+                                        <th className="p-2 min-w-[110px]">Vis-Tech</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {newRows.map(item => renderRow(item, false))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                {existingRows.length > 0 && (
+                    <div>
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
+                                Cửa hàng đã tồn tại ({existingRows.length})
+                            </span>
+                        </div>
+                        <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 opacity-80">
+                            <table className="w-full text-left border-collapse min-w-[950px]">
+                                <thead className="bg-slate-50 dark:bg-slate-800/80 text-[11px] text-slate-500 font-bold uppercase border-b border-slate-200 dark:border-slate-800">
+                                    <tr>
+                                        <th className="p-2 w-8 text-center"><input type="checkbox" disabled className="rounded" /></th>
+                                        <th className="p-2 min-w-[140px]">Mã CH</th>
+                                        <th className="p-2 min-w-[160px]">Tên CH</th>
+                                        <th className="p-2 min-w-[90px]">Region</th>
+                                        <th className="p-2 min-w-[100px]">Customer</th>
+                                        <th className="p-2 min-w-[80px]">KA</th>
+                                        <th className="p-2 min-w-[120px]">SR</th>
+                                        <th className="p-2 min-w-[110px]">Hạng mục</th>
+                                        <th className="p-2 min-w-[110px]">Vis-Tech</th>
+                                        <th className="p-2">Trạng thái</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -221,45 +459,12 @@ export function ExtractExcelPanel({
                                 </tbody>
                             </table>
                         </div>
-                    </section>
-                )}
-
-                {allValidRows.length === 0 && !downloading && (
-                    <div className="py-12 text-center text-slate-400 italic text-sm">
-                        Không đọc được dữ liệu. Kiểm tra lại file hoặc điều chỉnh cấu hình ánh xạ cột.
                     </div>
                 )}
-            </div>
 
-            {/* Mapping config panel */}
-            <div className="border-t border-slate-200 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-900 shadow-[0_-2px_8px_rgba(0,0,0,0.06)] z-10">
-                <button
-                    onClick={() => setShowAdvancedMapping(!showAdvancedMapping)}
-                    className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-bold text-slate-500 hover:text-indigo-600 hover:bg-slate-50 transition-colors cursor-pointer"
-                >
-                    <span className="flex items-center gap-1.5">
-                        <Layers className="w-3.5 h-3.5 text-indigo-500" />
-                        Cấu hình Ánh xạ Cột Excel
-                    </span>
-                    {showAdvancedMapping ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-                </button>
-                {showAdvancedMapping && (
-                    <div className="px-4 pb-4 max-h-[300px] overflow-y-auto">
-                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
-                            {MAPPING_FIELDS.map(f => (
-                                <div key={f.key} className="space-y-1">
-                                    <label className="text-[9px] font-bold text-slate-500 uppercase">{f.label}</label>
-                                    <select
-                                        value={mapping[f.key]}
-                                        onChange={e => setMapping(prev => ({ ...prev, [f.key]: Number(e.target.value) }))}
-                                        className="w-full text-[10px] p-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg outline-none text-slate-700 dark:text-slate-200 cursor-pointer"
-                                    >
-                                        <option value={-1}>-- Bỏ qua --</option>
-                                        {headers.map((h, i) => <option key={i} value={i}>{h}</option>)}
-                                    </select>
-                                </div>
-                            ))}
-                        </div>
+                {allValidRows.length === 0 && (
+                    <div className="py-12 text-center text-slate-400 italic text-sm">
+                        Chưa có dữ liệu trích xuất từ file Excel này.
                     </div>
                 )}
             </div>

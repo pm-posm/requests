@@ -2,7 +2,7 @@ import React from 'react';
 import type { RawRequestRecord } from '@/services/sheetSyncService';
 import { normalizeDataResponser } from '@/services/sheetSyncService';
 import { PHUONG_AN_OPTIONS } from '@/hooks/useWorkflowEngine';
-import { Hash, Check, Copy, Eye, MessageSquare, Image as ImageIcon } from 'lucide-react';
+import { Hash, Check, Copy, MessageSquare, Image as ImageIcon, Zap } from 'lucide-react';
 import type { LightboxImage } from '@/components/ui/ImageLightboxModal';
 
 interface RequestTableRowProps {
@@ -58,9 +58,25 @@ export const RequestTableRow = React.memo(function RequestTableRow({
     const storeContact = r.ess_store_code ? contactMap?.get(r.ess_store_code.toUpperCase().trim()) : null;
     const srPhone = storeContact?.sr_phone || storeContact?.sr_phone_2 || '';
 
+    // Check if this request has a Phase Transition Alert (email received with next phase like Lắp đặt / NTXX / Gửi lịch)
+    const tienDoLower = (r.tien_do || '').toLowerCase();
+    const titleLower = (r.title_email_request || '').toLowerCase();
+    const statusLower = (r.status || '').toLowerCase();
+    const isDone = statusLower.includes('done') || tienDoLower.includes('hoàn thành');
+    
+    const isNewPhaseAlert = !isDone && (
+        tienDoLower.includes('lắp đặt') || 
+        tienDoLower.includes('gửi lịch') || 
+        tienDoLower.includes('ntxx') || 
+        titleLower.includes('lắp đặt') || 
+        titleLower.includes('nghiệm thu')
+    );
+
     let rowBgClass = 'transition-colors duration-150 hover:bg-slate-50 dark:hover:bg-slate-800/50';
-    if (slaBadge?.type === 'overdue') rowBgClass = 'bg-red-50/70 dark:bg-red-950/30 transition-colors duration-150 hover:bg-red-100/70';
-    if (slaBadge?.type === 'today') rowBgClass = 'bg-amber-50/70 dark:bg-amber-950/30 transition-colors duration-150 hover:bg-amber-100/70';
+    if (slaBadge?.type === 'overdue') rowBgClass = 'bg-rose-50/70 dark:bg-rose-950/30 transition-colors duration-150 hover:bg-rose-100/70 border-l-4 border-l-rose-500';
+    else if (isNewPhaseAlert) rowBgClass = 'bg-indigo-50/60 dark:bg-indigo-950/30 transition-colors duration-150 hover:bg-indigo-100/60 border-l-4 border-l-indigo-500';
+    else if (slaBadge?.type === 'today') rowBgClass = 'bg-amber-50/70 dark:bg-amber-950/30 transition-colors duration-150 hover:bg-amber-100/70 border-l-4 border-l-amber-500';
+    
     if (isRowSelected) rowBgClass = 'bg-sky-50 dark:bg-sky-950/60 transition-colors duration-150 hover:bg-sky-100/70 border-l-4 border-l-sky-500';
 
     return (
@@ -83,70 +99,78 @@ export const RequestTableRow = React.memo(function RequestTableRow({
                 </span>
             </td>
 
-            {/* Request ID & Subtask Badge */}
+            {/* Request ID & Subtask Badge + Phase Transition Alert Badge */}
             {visibleColumns.includes('request_id') && (
                 <td className="p-3">
-                    {(() => {
-                        const isWarrantyReq = (r.phuong_an || '').toLowerCase().includes('bảo hành') || 
-                                             (r.status || '').toLowerCase().includes('bảo hành') || 
-                                             (r.request_id || '').toLowerCase().startsWith('bh-');
-                        
-                        if (isWarrantyReq) {
-                            const bhIdDisplay = r.request_id || `BH-${r.sheet_row_index || idx + 2}`;
-                            return (
+                    <div className="flex flex-col gap-1 items-start">
+                        {isNewPhaseAlert && (
+                            <span className="text-[9px] font-black text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-950 px-1.5 py-0.5 rounded border border-indigo-300 dark:border-indigo-800 flex items-center gap-0.5 animate-pulse">
+                                <Zap className="w-2.5 h-2.5 text-indigo-600 fill-indigo-600" /> ⚡ Phase Mới!
+                            </span>
+                        )}
+
+                        {(() => {
+                            const isWarrantyReq = (r.phuong_an || '').toLowerCase().includes('bảo hành') || 
+                                                 (r.status || '').toLowerCase().includes('bảo hành') || 
+                                                 (r.request_id || '').toLowerCase().startsWith('bh-');
+                            
+                            if (isWarrantyReq) {
+                                const bhIdDisplay = r.request_id || `BH-${r.sheet_row_index || idx + 2}`;
+                                return (
+                                    <div className="flex items-center gap-1.5">
+                                        <button
+                                            onClick={() => setWarrantySubtaskRecord(r)}
+                                            className="font-mono text-xs font-bold text-sky-800 dark:text-sky-200 bg-sky-100 dark:bg-sky-950/80 hover:bg-sky-200 px-2 py-0.5 rounded-md border border-sky-300 dark:border-sky-800 flex items-center gap-1 cursor-pointer transition-colors duration-150"
+                                            title="Mở Subtask Bảo Hành & Đổi Trả"
+                                        >
+                                            🛡️ {bhIdDisplay}
+                                        </button>
+                                        <button
+                                            onClick={() => handleCopy(bhIdDisplay)}
+                                            className="p-1 hover:bg-sky-100 dark:hover:bg-sky-900/50 rounded text-sky-600 transition-colors duration-150 cursor-pointer"
+                                            title="Copy Subtask ID"
+                                        >
+                                            {copiedId === bhIdDisplay ? (
+                                                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                            ) : (
+                                                <Copy className="w-3.5 h-3.5" />
+                                            )}
+                                        </button>
+                                    </div>
+                                );
+                            }
+
+                            return hasRequestId ? (
                                 <div className="flex items-center gap-1.5">
                                     <button
-                                        onClick={() => setWarrantySubtaskRecord(r)}
-                                        className="font-mono text-xs font-bold text-sky-800 dark:text-sky-200 bg-sky-100 dark:bg-sky-950/80 hover:bg-sky-200 px-2 py-0.5 rounded-md border border-sky-300 dark:border-sky-800 flex items-center gap-1 cursor-pointer transition-colors duration-150"
-                                        title="Mở Subtask Bảo Hành & Đổi Trả"
+                                        onClick={() => setSubtaskModalRecord(r)}
+                                        className="font-mono text-xs font-bold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950 hover:bg-sky-100 px-2 py-0.5 rounded border border-sky-200 dark:border-sky-800 transition-colors duration-150 flex items-center gap-1 cursor-pointer"
+                                        title="Sửa Subtask Request ID"
                                     >
-                                        🛡️ {bhIdDisplay}
+                                        📋 {r.request_id}
                                     </button>
                                     <button
-                                        onClick={() => handleCopy(bhIdDisplay)}
+                                        onClick={() => handleCopy(r.request_id)}
                                         className="p-1 hover:bg-sky-100 dark:hover:bg-sky-900/50 rounded text-sky-600 transition-colors duration-150 cursor-pointer"
-                                        title="Copy Subtask ID"
+                                        title="Copy Request ID"
                                     >
-                                        {copiedId === bhIdDisplay ? (
+                                        {copiedId === r.request_id ? (
                                             <Check className="w-3.5 h-3.5 text-emerald-600" />
                                         ) : (
                                             <Copy className="w-3.5 h-3.5" />
                                         )}
                                     </button>
                                 </div>
-                            );
-                        }
-
-                        return hasRequestId ? (
-                            <div className="flex items-center gap-1.5">
+                            ) : (
                                 <button
                                     onClick={() => setSubtaskModalRecord(r)}
-                                    className="font-mono text-xs font-bold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950 hover:bg-sky-100 px-2 py-0.5 rounded border border-sky-200 dark:border-sky-800 transition-colors duration-150 flex items-center gap-1 cursor-pointer"
-                                    title="Sửa Subtask Request ID"
+                                    className="text-[11px] font-bold text-sky-600 hover:text-sky-800 bg-sky-50 dark:bg-sky-950 hover:bg-sky-100 px-2 py-1 rounded-md border border-sky-200 dark:border-sky-800 transition-colors duration-150 flex items-center gap-1 cursor-pointer"
                                 >
-                                    📋 {r.request_id}
+                                    + Subtask
                                 </button>
-                                <button
-                                    onClick={() => handleCopy(r.request_id)}
-                                    className="p-1 hover:bg-sky-100 dark:hover:bg-sky-900/50 rounded text-sky-600 transition-colors duration-150 cursor-pointer"
-                                    title="Copy Request ID"
-                                >
-                                    {copiedId === r.request_id ? (
-                                        <Check className="w-3.5 h-3.5 text-emerald-600" />
-                                    ) : (
-                                        <Copy className="w-3.5 h-3.5" />
-                                    )}
-                                </button>
-                            </div>
-                        ) : (
-                            <button
-                                onClick={() => setSubtaskModalRecord(r)}
-                                className="text-[11px] font-bold text-sky-600 hover:text-sky-800 bg-sky-50 dark:bg-sky-950 hover:bg-sky-100 px-2 py-1 rounded-md border border-sky-200 dark:border-sky-800 transition-colors duration-150 flex items-center gap-1 cursor-pointer"
-                            >
-                                + Subtask
-                            </button>
-                        );
-                    })()}
+                            );
+                        })()}
+                    </div>
                 </td>
             )}
 
@@ -321,7 +345,6 @@ export const RequestTableRow = React.memo(function RequestTableRow({
                             <span className={!isWrapText ? 'truncate' : ''}>
                                 {formattedResponser || r.data_responser}
                             </span>
-                            <Eye className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
                         </button>
                     ) : (
                         <span className="text-slate-400 text-[11px] italic">-</span>

@@ -36,7 +36,7 @@ export interface RawRequestRecord {
     data_responser: string;
     mer_note: string;
     sent_mail_sr: string;
-    sheet_row_index: number;
+    preceding_request_id?: string;
     is_mer_modified?: boolean;
     is_deleted_in_sheet?: boolean;
     created_at?: string;
@@ -78,6 +78,24 @@ export const SHEET_COLUMNS = {
     MER_NOTE: 32,
     SENT_MAIL_SR: 33,
 } as const;
+
+export const SHEET_TIEN_DO_OPTIONS = [
+    'Not started',
+    'CSP - Gửi thiết kế , AW',
+    'Vis - Đã gửi RQ tới Agency',
+    'Vis - Gửi lịch khảo sát',
+    'Supplier - Đã Trả KQKS',
+    'Agency - Bidding',
+    'CSP - Raise PO KS',
+    'CSP - Raise PO sửa chữa',
+    'CSP - CF Sửa chữa / Cancel',
+    'REJECTED By CSP',
+    'Supplier - Sản Xuất',
+    'Supplier - Lắp Đặt',
+    'Vis - Gửi lịch thu hồi',
+    'Hoàn Thành',
+    'Cancelled'
+] as const;
 
 const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1sbp9fgrkywkns0q-o1iiAIPo2dJp22uQ8w39L7U4jIU/gviz/tq?tqx=out:csv&sheet=Mer%20View%202026';
 
@@ -255,11 +273,11 @@ export async function fetchAndSyncSheetData(): Promise<{ totalSynced: number; me
 
             const sheetRowIndex = idx + 2;
 
-            // ANCHOR COMPOSITE KEY ALGORITHM: Unique content-based key + Fallback row_X
-            // Guarantees 100% row-drift immunity when rows are inserted or deleted in Google Sheet
+            // 1-to-1 Google Sheet Row Index Mapping Key
+            // Guarantees 100% 1-to-1 fidelity with Google Sheet rows, eliminating row loss from key collision
             const anchorRaw = `${essStoreCode || storeName}_${posm}_${dateOfRq}_${sr}`;
             const cleanAnchorKey = anchorRaw.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_');
-            const requestKey = cleanAnchorKey.length > 6 ? cleanAnchorKey : `row_${sheetRowIndex}`;
+            const requestKey = `row_${sheetRowIndex}_${cleanAnchorKey}`;
 
             payload.push({
                 request_key: requestKey,

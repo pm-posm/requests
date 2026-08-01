@@ -148,3 +148,50 @@
     font-family: inherit !important;
   }
 }
+
+/* Always Visible Horizontal & Vertical Custom Scrollbars */
+.custom-scrollbar::-webkit-scrollbar,
+.overflow-x-auto::-webkit-scrollbar {
+  width: 8px;
+  height: 10px; /* Thicker horizontal scrollbar for easy desktop dragging */
+}
+
+.custom-scrollbar::-webkit-scrollbar-track,
+.overflow-x-auto::-webkit-scrollbar-track {
+  background: rgba(226, 232, 240, 0.9);
+  border-radius: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb,
+.overflow-x-auto::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.8);
+  border-radius: 6px;
+  border: 2px solid transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover,
+.overflow-x-auto::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.95);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-track,
+.dark .overflow-x-auto::-webkit-scrollbar-track {
+  background: rgba(30, 41, 59, 0.9);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb,
+.dark .overflow-x-auto::-webkit-scrollbar-thumb {
+  background: rgba(71, 85, 105, 0.8);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover,
+.dark .overflow-x-auto::-webkit-scrollbar-thumb:hover {
+  background: rgba(129, 140, 248, 0.95);
+}
+
+/* Firefox scrollbar support */
+.custom-scrollbar,
+.overflow-x-auto {
+  scrollbar-width: auto;
+  scrollbar-color: rgba(148, 163, 184, 0.8) rgba(226, 232, 240, 0.9);
+}

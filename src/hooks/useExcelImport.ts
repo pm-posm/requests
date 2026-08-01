@@ -43,20 +43,34 @@ function detectHeaderRow(rows: any[][]): number {
     return maxScore > 0 ? bestRow : 0;
 }
 
-function autoDetectMapping(headers: string[]): ColumnMapping {
+function autoDetectMapping(headers: string[], projectKey?: string): ColumnMapping {
+    if (projectKey) {
+        try {
+            const saved = localStorage.getItem(`posm_mapping_memory_${projectKey}`);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (parsed && typeof parsed === 'object') {
+                    return { ...defaultMapping, ...parsed };
+                }
+            }
+        } catch (e) {
+            console.warn('Mapping memory read error:', e);
+        }
+    }
+
     const m = { ...defaultMapping };
     headers.forEach((h, idx) => {
         if (!h) return;
         const n = String(h).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-        if (n.includes('store code') || n === 'ma ch' || n.includes('ma cua hang')) m.store_code = idx;
-        else if (n.includes('ten sieu thi') || n.includes('ten ch') || n.includes('store name') || n.includes('ten cua hang')) m.store_name = idx;
-        else if (n === 'region' || n.includes('vung') || n.includes('mien')) m.region = idx;
-        else if (n === 'customer' || n.includes('khach hang')) m.customer = idx;
-        else if (n === 'ka') m.ka = idx;
-        else if (n === 'sr' || n === 'nhan vien kd' || n === 'nvkd') m.sr = idx;
-        else if (n.includes('hang muc') || n === 'category') m.category = idx;
-        else if (n.includes('nha thau') || n.includes('supplier')) m.supplier_name = idx;
-        else if (n === 'mer' || n.includes('vis-tech') || n.includes('vis tech')) m.vis_tech = idx;
+        if (m.store_code === -1 && (n.includes('store code') || n === 'ma ch' || n.includes('ma cua hang') || n.includes('ma diem ban') || n === 'code')) m.store_code = idx;
+        else if (m.store_name === -1 && (n.includes('ten sieu thi') || n.includes('ten ch') || n.includes('store name') || n.includes('ten cua hang') || n.includes('ten diem ban'))) m.store_name = idx;
+        else if (m.region === -1 && (n === 'region' || n.includes('vung') || n.includes('mien') || n === 'kv')) m.region = idx;
+        else if (m.customer === -1 && (n === 'customer' || n.includes('khach hang'))) m.customer = idx;
+        else if (m.ka === -1 && (n === 'ka' || n.includes('kenh ka'))) m.ka = idx;
+        else if (m.sr === -1 && (n === 'sr' || n.includes('nhan vien kd') || n.includes('nvkd') || n.includes('sales'))) m.sr = idx;
+        else if (m.category === -1 && (n.includes('hang muc') || n === 'category' || n.includes('vat tu'))) m.category = idx;
+        else if (m.supplier_name === -1 && (n.includes('nha thau') || n.includes('supplier'))) m.supplier_name = idx;
+        else if (m.vis_tech === -1 && (n === 'mer' || n.includes('vis-tech') || n.includes('vis tech') || n.includes('ky thuat'))) m.vis_tech = idx;
     });
     // Fallback for store_code
     if (m.store_code === -1) {
@@ -64,6 +78,10 @@ function autoDetectMapping(headers: string[]): ColumnMapping {
         m.store_code = fb !== -1 ? fb : (headers.length > 0 ? 0 : -1);
     }
     return m;
+}
+
+export function saveMappingMemory(projectKey: string, mapping: ColumnMapping) {
+    localStorage.setItem(`posm_mapping_memory_${projectKey}`, JSON.stringify(mapping));
 }
 
 export function useExcelImport(
@@ -176,38 +194,66 @@ export function useExcelImport(
             : [];
         setHeaders(headersList);
         setExcelRows(rawExcelRows.slice(headerRowIdx + 1));
-        setMapping(autoDetectMapping(headersList));
-    }, [rawExcelRows, headerRowIdx]);
+        setMapping(autoDetectMapping(headersList, projectGroup.final_project));
+    }, [rawExcelRows, headerRowIdx, projectGroup.final_project]);
 
     // Fetch master store data for auto-fill
     useEffect(() => {
-        if (excelRows.length === 0 || mapping.store_code === -1) return;
+        if (excelRows.length === 0) return;
         
         const fetchMasterData = async () => {
             const codes = new Set<string>();
+            const names = new Set<string>();
             excelRows.forEach(row => {
-                const code = row[mapping.store_code] ? String(row[mapping.store_code]).trim() : '';
-                if (code) codes.add(code);
+                const code = mapping.store_code !== -1 && row[mapping.store_code] ? String(row[mapping.store_code]).trim() : '';
+                const name = mapping.store_name !== -1 && row[mapping.store_name] ? String(row[mapping.store_name]).trim() : '';
+                if (code && isNaN(Number(code))) codes.add(code.toUpperCase());
+                if (name && name.length >= 2) names.add(name.trim());
             });
-            const uniqueCodes = Array.from(codes);
-            if (uniqueCodes.length === 0) return;
 
             const map = new Map<string, any>();
-            const chunkSize = 200;
-            for (let i = 0; i < uniqueCodes.length; i += chunkSize) {
-                const chunk = uniqueCodes.slice(i, i + chunkSize);
-                const { data } = await supabase
-                    .from('master_stores_directory')
-                    .select('*')
-                    .in('store_code', chunk);
-                if (data) {
-                    data.forEach(item => map.set(item.store_code, item));
+
+            // 1. Fetch by store_code
+            const uniqueCodes = Array.from(codes);
+            if (uniqueCodes.length > 0) {
+                const chunkSize = 200;
+                for (let i = 0; i < uniqueCodes.length; i += chunkSize) {
+                    const chunk = uniqueCodes.slice(i, i + chunkSize);
+                    const { data } = await supabase
+                        .from('master_stores_directory')
+                        .select('*')
+                        .in('store_code', chunk);
+                    if (data) {
+                        data.forEach(item => {
+                            if (item.store_code) map.set(item.store_code.toUpperCase(), item);
+                        });
+                    }
                 }
             }
+
+            // 2. Fetch by store_name
+            const validNames = Array.from(names).filter(n => !['stt', 'mã số đh', 'tên siêu thị', 'hạng mục', 'cột 1', 'cột 2'].includes(n.toLowerCase()));
+            if (validNames.length > 0) {
+                const orExpr = validNames.slice(0, 30).map(n => `store_name.ilike.%${n}%`).join(',');
+                const { data: nameData } = await supabase
+                    .from('master_stores_directory')
+                    .select('*')
+                    .or(orExpr);
+
+                if (nameData) {
+                    nameData.forEach(item => {
+                        if (!item.store_name) return;
+                        const norm = item.store_name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                        if (!map.has('NAME:' + norm)) map.set('NAME:' + norm, item);
+                        if (item.store_code && !map.has(item.store_code.toUpperCase())) map.set(item.store_code.toUpperCase(), item);
+                    });
+                }
+            }
+
             setMasterStoreMap(map);
         };
         fetchMasterData();
-    }, [excelRows, mapping.store_code]);
+    }, [excelRows, mapping.store_code, mapping.store_name]);
 
     // Derived: all valid, new, existing rows
     const allValidRows = useMemo(() => {
@@ -221,18 +267,30 @@ export function useExcelImport(
             if (lc.includes('tổng cộng') || lc.includes('total')) return false;
             return true;
         }).map(item => {
-            const code = mapping.store_code !== -1 && item.row[mapping.store_code] ? String(item.row[mapping.store_code]).trim() : '';
-            const mData = code ? masterStoreMap.get(code) : undefined;
-            const enrichedData = mData ? { ...mData, vis_tech: mData.mer_name } : undefined;
+            const rawCode = mapping.store_code !== -1 && item.row[mapping.store_code] ? String(item.row[mapping.store_code]).trim() : '';
+            const rawName = mapping.store_name !== -1 && item.row[mapping.store_name] ? String(item.row[mapping.store_name]).trim() : '';
+
+            let mData = (rawCode && isNaN(Number(rawCode))) ? masterStoreMap.get(rawCode.toUpperCase()) : undefined;
+            if (!mData && rawName) {
+                const normName = rawName.toLowerCase().replace(/[^a-z0-9]/g, '');
+                mData = masterStoreMap.get('NAME:' + normName);
+            }
+
+            const enrichedData = mData ? { ...mData, vis_tech: mData.mer_name || mData.sr } : undefined;
             return { ...item, enrichedData };
         });
     }, [excelRows, mapping.store_code, mapping.store_name, masterStoreMap]);
 
     const getEffectiveCode = (row: any[]) => {
-        const code = mapping.store_code !== -1 && row[mapping.store_code] ? String(row[mapping.store_code]).trim() : '';
-        if (code) return code;
+        const rawCode = mapping.store_code !== -1 && row[mapping.store_code] ? String(row[mapping.store_code]).trim() : '';
+        if (rawCode && isNaN(Number(rawCode))) return rawCode;
+
         const name = mapping.store_name !== -1 && row[mapping.store_name] ? String(row[mapping.store_name]).trim() : '';
         if (name) {
+            const normName = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const mData = masterStoreMap.get('NAME:' + normName);
+            if (mData?.store_code) return mData.store_code;
+
             const safe = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
             return 'CH-' + safe.substring(0, 15);
         }
@@ -265,7 +323,6 @@ export function useExcelImport(
         setSelectedRows(next);
     };
 
-    // Determine phase from file type
     const mappedPhaseFromFile = (filePhase?: string) => {
         if (filePhase === 'SURVEY') return 'Khảo sát';
         if (filePhase === 'INSTALLATION') return 'Lắp đặt';
@@ -273,54 +330,75 @@ export function useExcelImport(
         return 'Brief';
     };
 
-    const handleImportAll = async (overridePhase?: string) => {
+    const handleImportAll = async (overridePhase?: string, rowOverrides?: Record<number, any>) => {
         if (mapping.store_code === -1 && mapping.store_name === -1) {
             toast.error('Vui lòng ánh xạ ít nhất cột Mã Cửa Hàng hoặc Tên Cửa Hàng!');
             return;
         }
-        if (selectedRows.size === 0) { toast.error('Vui lòng chọn ít nhất 1 cửa hàng!'); return; }
+        if (selectedRows.size === 0) {
+            toast.error('Vui lòng chọn ít nhất 1 cửa hàng để import!');
+            return;
+        }
         setLoading(true);
         try {
-            const payloadMap = new Map<string, any>();
-            excelRows.filter((_, idx) => selectedRows.has(idx)).forEach(row => {
-                const storeCode = mapping.store_code !== -1 && row[mapping.store_code] ? String(row[mapping.store_code]).trim() : '';
-                const storeName = mapping.store_name !== -1 && row[mapping.store_name] ? String(row[mapping.store_name]).trim() : '';
-                let f_code = storeCode;
-                if (!f_code) {
-                    if (storeName) {
-                        const safe = storeName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-                        f_code = 'CH-' + safe.substring(0, 15) + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
-                    } else {
-                        f_code = 'CH-TRONG-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+            const payloadMap = new Map();
+            const targetPhase = overridePhase || mappedPhaseFromFile(selectedFile?.phase);
+
+            allValidRows.filter(r => selectedRows.has(r.originalIdx)).forEach(item => {
+                const row = item.row;
+                const override = rowOverrides?.[item.originalIdx] || {};
+
+                const rawCode = mapping.store_code !== -1 && row[mapping.store_code] ? String(row[mapping.store_code]).trim() : '';
+                const rawStoreName = mapping.store_name !== -1 && row[mapping.store_name] ? String(row[mapping.store_name]).trim() : '';
+                const enriched = item.enrichedData;
+
+                let masterData = override.masterData || enriched;
+                if (!masterData) {
+                    if (rawCode && isNaN(Number(rawCode))) {
+                        masterData = masterStoreMap.get(rawCode.toUpperCase());
+                    }
+                    if (!masterData && rawStoreName) {
+                        const normName = rawStoreName.toLowerCase().replace(/[^a-z0-9]/g, '');
+                        masterData = masterStoreMap.get('NAME:' + normName);
                     }
                 }
-                const enrichedData = storeCode ? masterStoreMap.get(storeCode) : undefined;
-                const mapRow = (item: any) => {
-                    const row = item.row;
-                    const code = getEffectiveCode(row);
-                    const mData = item.enrichedData;
-                    
-                    const excelVisTech = mapping.vis_tech !== -1 && row[mapping.vis_tech] ? String(row[mapping.vis_tech]).trim() : '';
-                    const finalVisTech = excelVisTech || (mData?.mer_name ? String(mData.mer_name) : '');
 
-                    return {
-                        id: mData?.id || crypto.randomUUID(),
-                        store_code: code,
-                        store_name: mData?.store_name || (mapping.store_name !== -1 ? String(row[mapping.store_name]).trim() : ''),
-                        region: mapping.region !== -1 && row[mapping.region] ? String(row[mapping.region]).trim() : (mData?.region || ''),
-                        customer: mapping.customer !== -1 && row[mapping.customer] ? String(row[mapping.customer]).trim() : (mData?.customer || ''),
-                        ka: mapping.ka !== -1 && row[mapping.ka] ? String(row[mapping.ka]).trim() : (mData?.ka || ''),
-                        sr: mapping.sr !== -1 && row[mapping.sr] ? String(row[mapping.sr]).trim() : (mData?.sr || ''),
-                        category: mapping.category !== -1 && row[mapping.category] ? String(row[mapping.category]).trim() : '',
-                        supplier_name: mapping.supplier_name !== -1 && row[mapping.supplier_name] ? String(row[mapping.supplier_name]).trim() : '',
-                        vis_tech: finalVisTech,
-                        current_phase: overridePhase || mappedPhaseFromFile(selectedFile?.phase),
+                const storeCode = override.store_code || (rawCode && isNaN(Number(rawCode)) ? rawCode : (masterData?.store_code || ''));
+                const storeName = override.store_name || rawStoreName || masterData?.store_name || '';
+                const region = override.region || (mapping.region !== -1 && row[mapping.region] ? String(row[mapping.region]).trim() : (masterData?.region || undefined));
+                const customer = override.customer || (mapping.customer !== -1 && row[mapping.customer] ? String(row[mapping.customer]).trim() : (masterData?.customer || undefined));
+                const ka = override.ka || (mapping.ka !== -1 && row[mapping.ka] ? String(row[mapping.ka]).trim() : (masterData?.ka || undefined));
+                const sr = override.sr || (mapping.sr !== -1 && row[mapping.sr] ? String(row[mapping.sr]).trim() : (masterData?.sr || undefined));
+                const category = override.category || (mapping.category !== -1 && row[mapping.category] ? String(row[mapping.category]).trim() : 'POSM');
+                const supplierName = override.supplier_name || (mapping.supplier_name !== -1 && row[mapping.supplier_name] ? String(row[mapping.supplier_name]).trim() : undefined);
+                const visTech = override.vis_tech || (mapping.vis_tech !== -1 && row[mapping.vis_tech] ? String(row[mapping.vis_tech]).trim() : (masterData?.mer_name || masterData?.sr || undefined));
+
+                let f_storeCode = storeCode;
+                if (!f_storeCode) {
+                    if (storeName) {
+                        const safeName = storeName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+                        f_storeCode = 'CH-' + safeName.substring(0, 15) + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+                    } else {
+                        f_storeCode = 'CH-TRONG-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+                    }
+                }
+
+                if (!payloadMap.has(f_storeCode)) {
+                    payloadMap.set(f_storeCode, {
                         final_project: projectGroup.final_project,
-                        is_published: false
-                    };
-                };
-                if (!payloadMap.has(f_code)) {
-                    payloadMap.set(f_code, mapRow({ row, enrichedData }));
+                        store_name: storeName || undefined,
+                        region,
+                        customer,
+                        ka,
+                        sr,
+                        category,
+                        supplier_name: supplierName,
+                        vis_tech: visTech,
+                        is_published: false,
+                        store_code: f_storeCode,
+                        current_phase: targetPhase,
+                        survey_data: { current_phase: targetPhase }
+                    });
                 }
             });
             const payload = Array.from(payloadMap.values());

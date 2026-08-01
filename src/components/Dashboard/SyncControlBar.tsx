@@ -72,31 +72,6 @@ export function SyncControlBar({
 
 
             <div className="flex items-center gap-2.5">
-                {/* View Switcher: Table vs Kanban */}
-                <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-lg flex items-center border border-slate-200 dark:border-slate-700">
-                    <button
-                        onClick={() => setViewMode('table')}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                            viewMode === 'table'
-                                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                        }`}
-                    >
-                        <LayoutList className="w-3.5 h-3.5" />
-                        Dạng Bảng
-                    </button>
-                    <button
-                        onClick={() => setViewMode('kanban')}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                            viewMode === 'kanban'
-                                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                        }`}
-                    >
-                        <Kanban className="w-3.5 h-3.5" />
-                        Kanban Board (Jira/ClickUp)
-                    </button>
-                </div>
 
                 {/* Manage Custom Statuses */}
                 <button

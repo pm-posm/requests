@@ -6,9 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend
 } from 'recharts';
+import { useNavigate } from 'react-router-dom';
+import { useDashboardStore } from '@/stores/useDashboardStore';
 import { 
   BarChart3, CheckCircle2, Clock, AlertTriangle, Building2, Store, 
-  Download, Filter, Factory, Rocket, FolderKanban
+  Download, Filter, Factory, Rocket, FolderKanban, ShieldCheck, RefreshCw, AlertCircle, Calendar, ExternalLink
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -27,13 +29,15 @@ export interface AnalyticsProps {
 }
 
 export default function Analytics({ projects: propsProjects, activeFilter, onFilterChange, viewMode }: AnalyticsProps = {}) {
+  const navigate = useNavigate();
+  const { setSearchTerm } = useDashboardStore();
   const { requests = [], isLoading: isLoadingRequests } = useRawRequests();
   const { data: fetchedMasterProjects = [], isLoading: isLoadingMasterProjects } = useProjects();
   
   const isLoading = isLoadingRequests || isLoadingMasterProjects;
 
   const [dataScope, setDataScope] = useState<'requests' | 'projects'>('requests');
-  const [activeTab, setActiveTab] = useState<'overview' | 'supplier' | 'heatmap'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'supplier' | 'heatmap' | 'recurrent_warranty'>('overview');
   
   // Filters
   const [selectedBrand, setSelectedBrand] = useState<string>('ALL');
@@ -365,6 +369,179 @@ export default function Analytics({ projects: propsProjects, activeFilter, onFil
       .slice(0, 10);
   }, [dataScope, filteredRequests, filteredProjects]);
 
+  // Recurrent Warranty Data Engine (Phân tích Bảo hành Lặp lại N Lần)
+  const recurrentWarrantyData = useMemo(() => {
+    const warrantyRequests = requests.filter(r => {
+      if (r.is_deleted_in_sheet) return false;
+      const pa = (r.phuong_an || '').toLowerCase();
+      const lrq = (r.loai_rq || '').toLowerCase();
+      const posm = (r.posm || '').toLowerCase();
+      const title = (r.title_email_request || '').toLowerCase();
+      return pa.includes('bảo hành') || lrq.includes('bảo hành') || lrq.includes('sửa chữa') || posm.includes('bảo hành') || title.includes('bảo hành');
+    });
+
+    const groupMap = new Map<string, {
+      key: string;
+      storeName: string;
+      storeCode: string;
+      posm: string;
+      brand: string;
+      customer: string;
+      supplier: string;
+      incidents: Array<{
+        sequence: number;
+        id: string;
+        requestId?: string;
+        dateOfRq: string;
+        parsedDate: Date | null;
+        status: string;
+        tienDo: string;
+        visNote?: string;
+      }>;
+    }>();
+
+    // Map parent preceding_request_id links
+    const parentChildMap = new Map<string, string>();
+    warrantyRequests.forEach(r => {
+      const precId = (r.preceding_request_id || '').trim();
+      const currentReqId = (r.request_id || `BH-${r.sheet_row_index}`).trim();
+      if (precId && currentReqId && precId !== currentReqId) {
+        parentChildMap.set(currentReqId, precId);
+      }
+    });
+
+    warrantyRequests.forEach(r => {
+      const currentReqId = (r.request_id || `BH-${r.sheet_row_index}`).trim();
+      const storeKey = r.ess_store_code?.trim() || r.store_name?.trim() || 'STORE_UNKNOWN';
+      const posmKey = r.posm?.trim() || 'POSM_UNKNOWN';
+      const brandKey = r.brand?.trim() || r.cat?.trim() || 'BRAND_UNKNOWN';
+      const projectKey = r.ma_du_an?.trim() || '';
+
+      // Priority grouping key logic
+      let compositeKey = '';
+      if (parentChildMap.has(currentReqId)) {
+        const parentId = parentChildMap.get(currentReqId)!;
+        compositeKey = `PREC_PARENT__${parentId}`;
+      } else if (Array.from(parentChildMap.values()).includes(currentReqId)) {
+        compositeKey = `PREC_PARENT__${currentReqId}`;
+      } else if (projectKey) {
+        compositeKey = `${storeKey}__PROJ__${projectKey}`;
+      } else {
+        compositeKey = `${storeKey}__${posmKey}__${brandKey}`;
+      }
+
+      if (!groupMap.has(compositeKey)) {
+        groupMap.set(compositeKey, {
+          key: compositeKey,
+          storeName: r.store_name || '-',
+          storeCode: r.ess_store_code || '-',
+          posm: r.posm || '-',
+          brand: r.brand || r.cat || '-',
+          customer: r.customer || '-',
+          supplier: r.supplier || 'Chưa gán',
+          incidents: []
+        });
+      }
+
+      let parsedDate: Date | null = null;
+      if (r.date_of_rq) {
+        const parts = r.date_of_rq.trim().split('/');
+        if (parts.length === 3) {
+          parsedDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        } else {
+          parsedDate = new Date(r.date_of_rq);
+        }
+      }
+
+      const grp = groupMap.get(compositeKey)!;
+      grp.incidents.push({
+        sequence: 0,
+        id: r.id!,
+        requestId: currentReqId,
+        dateOfRq: r.date_of_rq || '-',
+        parsedDate,
+        status: r.status || 'To Do',
+        tienDo: r.tien_do || 'New',
+        visNote: r.vis_note
+      });
+    });
+
+    const groups = Array.from(groupMap.values());
+    let totalRecurrentCount = 0;
+    let totalWarrantyItems = groups.length;
+    let repeat2Count = 0;
+    let repeat3PlusCount = 0;
+    let totalDaysBetween = 0;
+    let daysBetweenCount = 0;
+
+    const supplierDefectMap = new Map<string, number>();
+
+    groups.forEach(grp => {
+      grp.incidents.sort((a, b) => {
+        if (a.parsedDate && b.parsedDate) return a.parsedDate.getTime() - b.parsedDate.getTime();
+        return 0;
+      });
+
+      grp.incidents.forEach((inc, idx) => {
+        inc.sequence = idx + 1;
+      });
+
+      if (grp.incidents.length > 1) {
+        totalRecurrentCount++;
+        if (grp.incidents.length === 2) repeat2Count++;
+        else if (grp.incidents.length >= 3) repeat3PlusCount++;
+
+        if (grp.supplier && grp.supplier !== 'Chưa gán') {
+          supplierDefectMap.set(grp.supplier, (supplierDefectMap.get(grp.supplier) || 0) + (grp.incidents.length - 1));
+        }
+
+        for (let i = 1; i < grp.incidents.length; i++) {
+          const prev = grp.incidents[i - 1].parsedDate;
+          const curr = grp.incidents[i].parsedDate;
+          if (prev && curr && !isNaN(prev.getTime()) && !isNaN(curr.getTime())) {
+            const diffDays = Math.max(1, Math.round((curr.getTime() - prev.getTime()) / (1000 * 3600 * 24)));
+            totalDaysBetween += diffDays;
+            daysBetweenCount++;
+          }
+        }
+      }
+    });
+
+    const recurrentList = groups
+      .filter(g => g.incidents.length > 1)
+      .sort((a, b) => b.incidents.length - a.incidents.length);
+
+    const repeatRate = totalWarrantyItems > 0 ? ((totalRecurrentCount / totalWarrantyItems) * 100).toFixed(1) : '0';
+    const avgMTBF = daysBetweenCount > 0 ? Math.round(totalDaysBetween / daysBetweenCount) : 0;
+
+    let worstSupplier = '-';
+    let worstSupplierDefects = 0;
+    supplierDefectMap.forEach((count, supp) => {
+      if (count > worstSupplierDefects) {
+        worstSupplierDefects = count;
+        worstSupplier = supp;
+      }
+    });
+
+    const chartData = [
+      { name: 'Bảo hành 1 lần', count: totalWarrantyItems - totalRecurrentCount, fill: '#10B981' },
+      { name: 'Bảo hành 2 lần', count: repeat2Count, fill: '#F59E0B' },
+      { name: 'Bảo hành ≥3 lần', count: repeat3PlusCount, fill: '#EF4444' }
+    ];
+
+    return {
+      totalWarrantyItems,
+      totalRecurrentCount,
+      repeatRate,
+      avgMTBF,
+      worstSupplier,
+      worstSupplierDefects,
+      recurrentList,
+      chartData,
+      allWarrantyGroups: groups
+    };
+  }, [requests]);
+
   // Handle Export Excel Báo Cáo
   const handleExportExcel = () => {
     let exportRows: any[] = [];
@@ -650,6 +827,23 @@ export default function Analytics({ projects: propsProjects, activeFilter, onFil
         >
           {dataScope === 'projects' ? '🚀 Top Dự Án Master Quy Mô Lớn' : '🏪 Phân Bổ Theo Siêu Thị & Brand'}
         </button>
+
+        <button
+          onClick={() => setActiveTab('recurrent_warranty')}
+          className={`pb-3 border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+            activeTab === 'recurrent_warranty'
+              ? 'border-amber-600 text-amber-600 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <ShieldCheck className="w-4 h-4 text-amber-500" />
+          <span>🔄 Báo Cáo Bảo Hành Lặp Lại N Lần</span>
+          {recurrentWarrantyData.totalRecurrentCount > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 text-[10px] font-bold">
+              {recurrentWarrantyData.totalRecurrentCount}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* TAB 1: EXECUTIVE OVERVIEW */}
@@ -819,6 +1013,186 @@ export default function Analytics({ projects: propsProjects, activeFilter, onFil
               </div>
             </CardContent>
           </Card>
+        </div>
+      )}
+
+      {/* TAB 4: RECURRENT WARRANTY ANALYTICS */}
+      {activeTab === 'recurrent_warranty' && (
+        <div className="space-y-6">
+          {/* Recurrent KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
+              <div className="flex items-center justify-between text-slate-500">
+                <span className="text-xs font-bold uppercase tracking-wider">POSM Bảo Hành Lặp (&gt;1 Lần)</span>
+                <div className="p-2 bg-amber-50 dark:bg-amber-950 text-amber-600 rounded-lg">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-3xl font-extrabold text-amber-600 dark:text-amber-400 tracking-tight">
+                  {recurrentWarrantyData.totalRecurrentCount}
+                </span>
+                <span className="text-xs font-semibold text-slate-400">
+                  / {recurrentWarrantyData.totalWarrantyItems} mã POSM
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">Các sản phẩm từng phát sinh từ 2 lần BH trở lên</p>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
+              <div className="flex items-center justify-between text-slate-500">
+                <span className="text-xs font-bold uppercase tracking-wider">Tỷ Lệ Bảo Hành Lặp</span>
+                <div className="p-2 bg-rose-50 dark:bg-rose-950 text-rose-600 rounded-lg">
+                  <RefreshCw className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-3xl font-extrabold text-rose-600 dark:text-rose-400 tracking-tight">
+                  {recurrentWarrantyData.repeatRate}%
+                </span>
+                <span className="text-xs font-semibold text-slate-400">tỷ lệ tái hỏng</span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">Tỷ lệ POSM bị sự cố lặp lại sau lần BH đầu</p>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
+              <div className="flex items-center justify-between text-slate-500">
+                <span className="text-xs font-bold uppercase tracking-wider">Thời Gian Giữa Lần Hỏng (MTBF)</span>
+                <div className="p-2 bg-sky-50 dark:bg-sky-950 text-sky-600 rounded-lg">
+                  <Calendar className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-3xl font-extrabold text-sky-600 dark:text-sky-400 tracking-tight">
+                  {recurrentWarrantyData.avgMTBF}
+                </span>
+                <span className="text-xs font-semibold text-slate-400">ngày / lần hỏng</span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">Khoảng thời gian trung bình giữa 2 lần báo lỗi</p>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
+              <div className="flex items-center justify-between text-slate-500">
+                <span className="text-xs font-bold uppercase tracking-wider">Supplier Cần Kiểm Soát Chất Lượng</span>
+                <div className="p-2 bg-purple-50 dark:bg-purple-950 text-purple-600 rounded-lg">
+                  <Factory className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-xl font-extrabold text-purple-700 dark:text-purple-300 tracking-tight truncate max-w-[180px]" title={recurrentWarrantyData.worstSupplier}>
+                  {recurrentWarrantyData.worstSupplier}
+                </span>
+              </div>
+              <p className="text-[11px] text-purple-600 dark:text-purple-400 font-semibold mt-1">
+                Phát sinh {recurrentWarrantyData.worstSupplierDefects} lượt hỏng lặp
+              </p>
+            </div>
+          </div>
+
+          {/* Detailed Recurrent Warranty Table & Chart */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Chart: Recurrent Breakdown */}
+            <Card className="shadow-sm border-slate-200 dark:border-slate-800 lg:col-span-1">
+              <CardHeader className="py-3 px-5 border-b border-slate-100 dark:border-slate-800">
+                <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                  Phân Bổ Tần Suất Bảo Hành POSM
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="h-72 p-4">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={recurrentWarrantyData.chartData}
+                      dataKey="count"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      innerRadius={45}
+                      paddingAngle={3}
+                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                    >
+                      {recurrentWarrantyData.chartData.map((entry, index) => (
+                        <Cell key={`cell-rec-${index}`} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value: number) => [`${value} mẫu POSM`, 'Số lượng']} />
+                    <Legend wrapperStyle={{ fontSize: '11px', fontWeight: 600 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            {/* Table: Top Recurrent Warranty Items */}
+            <Card className="shadow-sm border-slate-200 dark:border-slate-800 lg:col-span-2">
+              <CardHeader className="py-3 px-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <CardTitle className="text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-500" />
+                  Danh Sách Siêu Thị & POSM Bị Bảo Hành Lặp Nhất ({recurrentWarrantyData.recurrentList.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0 overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 font-bold border-b border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <th className="p-3 text-center">STT</th>
+                      <th className="p-3">Siêu Thị / Mã Store</th>
+                      <th className="p-3">Loại POSM & Brand</th>
+                      <th className="p-3 text-center">Số Lần BH</th>
+                      <th className="p-3">Chuỗi Thời Gian Bảo Hành</th>
+                      <th className="p-3">Supplier</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
+                    {recurrentWarrantyData.recurrentList.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="p-8 text-center text-slate-400 italic">
+                          Chưa ghi nhận sản phẩm POSM nào bị hỏng lặp lại từ 2 lần trở lên.
+                        </td>
+                      </tr>
+                    ) : (
+                      recurrentWarrantyData.recurrentList.map((item, idx) => (
+                        <tr key={item.key} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                          <td className="p-3 text-center font-mono text-slate-400 font-bold">{idx + 1}</td>
+                          <td className="p-3">
+                            <div className="font-bold text-slate-900 dark:text-white">{item.storeName}</div>
+                            <div className="text-[11px] font-mono text-slate-400">{item.storeCode} • {item.customer}</div>
+                          </td>
+                          <td className="p-3">
+                            <div className="font-semibold text-indigo-600 dark:text-indigo-400">{item.posm}</div>
+                            <div className="text-[11px] text-slate-500 font-mono">🏷️ {item.brand}</div>
+                          </td>
+                          <td className="p-3 text-center">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-extrabold ${
+                              item.incidents.length >= 3 
+                                ? 'bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-950 dark:text-rose-300'
+                                : 'bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-950 dark:text-amber-300'
+                            }`}>
+                              🔄 BH Lần #{item.incidents.length}
+                            </span>
+                          </td>
+                          <td className="p-3">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {item.incidents.map((inc) => (
+                                <span
+                                  key={inc.id}
+                                  className="text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 flex items-center gap-1"
+                                  title={`BH #${inc.sequence}: Request ${inc.requestId || inc.id} (${inc.status})`}
+                                >
+                                  <span>Lần #{inc.sequence}: {inc.dateOfRq}</span>
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="p-3 text-slate-600 dark:text-slate-300 font-semibold">{item.supplier}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       )}
 

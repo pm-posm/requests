@@ -48,6 +48,12 @@ export function MasterStoreRow({
     const dateRange = formatDateRange(phaseData);
     const isDraft = !item.is_published;
 
+    const [supplierText, setSupplierText] = React.useState(item.supplier_name || '');
+
+    React.useEffect(() => {
+        setSupplierText(item.supplier_name || '');
+    }, [item.supplier_name]);
+
     return (
         <tr className={`group transition-colors ${item.is_locked ? 'opacity-60' : ''} hover:bg-secondary/50`}>
             {/* Checkbox */}
@@ -122,16 +128,41 @@ export function MasterStoreRow({
                 </select>
             </td>
 
-            {/* Supplier */}
-            <td className="p-2 min-w-[110px]">
-                <select
-                    value={item.supplier_name || ''}
-                    onChange={e => updateField(item.id, 'supplier_name', e.target.value)}
-                    className="w-full text-[11px] font-semibold text-slate-700 dark:text-slate-300 bg-transparent outline-none cursor-pointer rounded py-1 px-1 hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent focus:border-slate-300 transition-colors"
-                >
-                    <option value="">-- Trống --</option>
-                    {suppliers.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-                </select>
+            {/* Supplier - Combined Dropdown & Free Text Input */}
+            <td className="p-2 min-w-[130px]">
+                <div className="relative w-full">
+                    <input
+                        type="text"
+                        list={`supplier-datalist-${item.id}`}
+                        value={supplierText}
+                        placeholder="-- Gán / gõ Supplier --"
+                        onChange={e => {
+                            const val = e.target.value;
+                            setSupplierText(val);
+                            const options = suppliers ? suppliers.map((s: any) => typeof s === 'string' ? s : s.name) : [];
+                            if (options.includes(val)) {
+                                updateField(item.id, 'supplier_name', val);
+                            }
+                        }}
+                        onBlur={e => {
+                            const val = e.target.value.trim();
+                            if (val !== (item.supplier_name || '')) {
+                                updateField(item.id, 'supplier_name', val);
+                            }
+                        }}
+                        onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                                (e.target as HTMLInputElement).blur();
+                            }
+                        }}
+                        className="w-full text-[11px] font-semibold text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-900 outline-none rounded py-1 px-2 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 transition-colors shadow-2xs"
+                    />
+                    <datalist id={`supplier-datalist-${item.id}`}>
+                        {suppliers && suppliers.map((s, idx) => (
+                            <option key={idx} value={typeof s === 'string' ? s : s.name} />
+                        ))}
+                    </datalist>
+                </div>
             </td>
 
             {/* Tiến độ */}
@@ -141,22 +172,14 @@ export function MasterStoreRow({
                 </div>
             </td>
 
-            {/* Ngày dự kiến */}
-            <td className="p-2 min-w-[180px]">
-                <div className="flex flex-col gap-1 w-full relative">
-                    <input
-                        type="date"
-                        value={phaseData?.expected_start || ''}
-                        onChange={e => onUpdateExpectedDate(item.id, 'start', e.target.value)}
-                        className="w-full text-[10px] p-1.5 border border-slate-200 dark:border-slate-800 rounded bg-transparent focus:bg-white dark:focus:bg-slate-900 focus:ring-1 focus:ring-indigo-500 outline-none text-slate-700 dark:text-slate-300"
-                    />
-                    <input
-                        type="date"
-                        value={phaseData?.expected_end || ''}
-                        onChange={e => onUpdateExpectedDate(item.id, 'end', e.target.value)}
-                        className="w-full text-[10px] p-1.5 border border-slate-200 dark:border-slate-800 rounded bg-transparent focus:bg-white dark:focus:bg-slate-900 focus:ring-1 focus:ring-indigo-500 outline-none text-slate-700 dark:text-slate-300"
-                    />
-                </div>
+            {/* Ngày dự kiến (Hiển thị tĩnh, chỉnh sửa qua Modal Xử lý công việc) */}
+            <td className="p-2 min-w-[140px] text-[10px] font-medium text-slate-600 dark:text-slate-400">
+                {phaseData?.expected_start ? (
+                    <div className="flex flex-col gap-0.5 whitespace-nowrap" title="Cập nhật Ngày dự kiến qua Modal Xử lý công việc">
+                        <span>{phaseData.expected_start.split('-').reverse().join('/')} -</span>
+                        <span>{phaseData.expected_end ? phaseData.expected_end.split('-').reverse().join('/') : '(Chưa chốt)'}</span>
+                    </div>
+                ) : <span className="italic text-slate-400">Chưa có</span>}
             </td>
 
             {/* Ngày thực tế */}

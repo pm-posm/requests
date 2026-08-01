@@ -4,6 +4,8 @@ export interface StoreItem {
     store_name?: string;
     category?: string;
     supplier_name?: string;
+    brand?: string;
+    brand_name?: string;
     vis_tech?: string;
     region?: string;
     customer?: string;
@@ -29,15 +31,17 @@ export interface StorePhase {
     expected_start?: string | null;
     expected_end?: string | null;
     actual_date?: string | null;
-    result?: 'pass' | 'fail' | null;
+    result?: 'pass' | 'fail' | 'pending_review' | 'on_hold' | null;
     proof_links?: string[];
     notes?: string | null;
+    fail_reason?: string | null;
     vis_tech?: string | null;
+    updated_by?: string | null;
     created_at?: string;
     updated_at?: string;
 }
 
-export type PhaseStatus = 'unscheduled' | 'scheduled' | 'in_progress' | 'late' | 'completed' | 'error';
+export type PhaseStatus = 'unscheduled' | 'scheduled' | 'in_progress' | 'late' | 'completed' | 'error' | 'pending_review' | 'on_hold';
 
 export interface AttachmentRow {
     id: string;
@@ -88,6 +92,7 @@ export interface ProjectGroup {
         customer: string;
         storeCount: number;
         supplier: string;
+        brand?: string;
         phase: string;
         posmType: string;
         status?: string;
@@ -101,9 +106,7 @@ export interface ProjectGroup {
 }
 
 export interface ExcelExtractorModalProps {
-    phaseType: 'SURVEY' | 'INSTALL' | 'NTXX';
-    projectGroup: ProjectGroup;
-    downloadFileId?: string | null;
-    setDownloadFileId?: (id: string | null) => void;
+    isOpen: boolean;
     onClose: () => void;
+    onDataExtracted?: (data: any) => void;
 }

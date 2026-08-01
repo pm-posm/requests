@@ -237,11 +237,52 @@ export function ProjectActionExtract({
                     />
                 </td>
 
-                <td className="p-2 text-xs text-slate-600 dark:text-slate-300 font-semibold">{displayRegion}</td>
-                <td className="p-2 text-xs text-slate-600 dark:text-slate-300 font-semibold">{displayCustomer}</td>
-                <td className="p-2 text-xs text-slate-600 dark:text-slate-300 font-semibold">{displayKa}</td>
-                <td className="p-2 text-xs text-slate-600 dark:text-slate-300 font-semibold">{displaySr}</td>
-                <td className="p-2 text-xs text-slate-500 font-medium">{displayCategory}</td>
+                {/* Interactive editable inputs for Region, Customer, KA, SR, Category */}
+                <td className="p-2 text-xs min-w-[90px]">
+                    <input 
+                        type="text" 
+                        value={displayRegion === '-' ? '' : displayRegion} 
+                        placeholder="Region..."
+                        onChange={(e) => setRowOverrides(prev => ({ ...prev, [originalIdx]: { ...prev[originalIdx], region: e.target.value } }))}
+                        className="w-full text-xs px-1.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded focus:border-indigo-500 outline-none text-slate-700 dark:text-slate-300 font-medium"
+                    />
+                </td>
+                <td className="p-2 text-xs min-w-[90px]">
+                    <input 
+                        type="text" 
+                        value={displayCustomer === '-' ? '' : displayCustomer} 
+                        placeholder="Customer..."
+                        onChange={(e) => setRowOverrides(prev => ({ ...prev, [originalIdx]: { ...prev[originalIdx], customer: e.target.value } }))}
+                        className="w-full text-xs px-1.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded focus:border-indigo-500 outline-none text-slate-700 dark:text-slate-300 font-medium"
+                    />
+                </td>
+                <td className="p-2 text-xs min-w-[80px]">
+                    <input 
+                        type="text" 
+                        value={displayKa === '-' ? '' : displayKa} 
+                        placeholder="KA..."
+                        onChange={(e) => setRowOverrides(prev => ({ ...prev, [originalIdx]: { ...prev[originalIdx], ka: e.target.value } }))}
+                        className="w-full text-xs px-1.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded focus:border-indigo-500 outline-none text-slate-700 dark:text-slate-300 font-medium"
+                    />
+                </td>
+                <td className="p-2 text-xs min-w-[120px]">
+                    <input 
+                        type="text" 
+                        value={displaySr === '-' ? '' : displaySr} 
+                        placeholder="SR..."
+                        onChange={(e) => setRowOverrides(prev => ({ ...prev, [originalIdx]: { ...prev[originalIdx], sr: e.target.value } }))}
+                        className="w-full text-xs px-1.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded focus:border-indigo-500 outline-none text-slate-700 dark:text-slate-300 font-medium"
+                    />
+                </td>
+                <td className="p-2 text-xs min-w-[110px]">
+                    <input 
+                        type="text" 
+                        value={displayCategory === '-' ? '' : displayCategory} 
+                        placeholder="Hạng mục..."
+                        onChange={(e) => setRowOverrides(prev => ({ ...prev, [originalIdx]: { ...prev[originalIdx], category: e.target.value } }))}
+                        className="w-full text-xs px-1.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded focus:border-indigo-500 outline-none text-slate-700 dark:text-slate-300 font-medium"
+                    />
+                </td>
                 <td className="p-2 text-center">
                     <button className="text-indigo-500 hover:bg-indigo-50 p-1 rounded transition-colors" title="Thêm file tùy chỉnh">
                         <Layers className="w-4 h-4 mx-auto" />
@@ -270,7 +311,7 @@ export function ProjectActionExtract({
                             Đã chọn <span className="text-indigo-600">{selectedRows.size}</span>/{allValidRows.length} cửa hàng
                         </span>
                         <button 
-                            onClick={handleImportAll}
+                            onClick={() => handleImportAll(rowOverrides)}
                             disabled={loading || selectedRows.size === 0}
                             className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white text-xs font-bold py-2 px-5 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
                         >

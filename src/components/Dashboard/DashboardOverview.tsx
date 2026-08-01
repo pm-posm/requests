@@ -42,8 +42,8 @@ export function DashboardOverview() {
     }
 
     return (
-        <div className="absolute inset-0 flex flex-col bg-slate-50/50 dark:bg-slate-950 p-4 md:p-6 overflow-y-auto custom-scrollbar">
-            <div className="max-w-[1600px] w-full mx-auto space-y-4">
+        <div className="absolute inset-0 flex flex-col bg-slate-50/50 dark:bg-slate-950 p-2.5 sm:p-4 md:p-5 overflow-y-auto custom-scrollbar">
+            <div className="w-full max-w-[1920px] mx-auto space-y-4">
                 {/* Sync Control Bar */}
                 <SyncControlBar
                     totalRequests={requests.length}
