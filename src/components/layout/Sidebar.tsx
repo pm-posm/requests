@@ -31,7 +31,7 @@ export function Sidebar({
   const handleRouteClick = (path: string, menuKey?: string) => {
     const isAllowed = ALLOWED_PATHS.some(allowed => path.startsWith(allowed));
     if (!isAllowed) {
-      toast.error('🔒 Module đang phát triển - Tạm khóa phục vụ Báo cáo Sếp');
+      toast.error('🔒 Tính năng đang trong quá trình bảo trì & nâng cấp hệ thống');
       return;
     }
     navigate(path);
@@ -205,7 +205,7 @@ function SidebarItem({ icon, label, active, isCollapsed, isLocked, onClick }: { 
   return (
     <button
       onClick={onClick}
-      title={isCollapsed ? (isLocked ? `${label} (Tạm khóa)` : label) : undefined}
+      title={isCollapsed ? (isLocked ? `${label} (Đang bảo trì)` : label) : undefined}
       className={`
         w-full flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-all text-left cursor-pointer
         ${active 
