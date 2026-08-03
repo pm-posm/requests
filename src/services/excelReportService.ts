@@ -64,8 +64,8 @@ export const exportAnalystExecutiveReport = (
     const pSent = parseDateToMs(item.sentDate);
     const pExp = parseDateToMs(item.expectedDate || item.requestDeadline);
 
-    if (pInst && pSent && pSent >= pInst) {
-      const diff = Math.round((pSent - pInst) / (1000 * 60 * 60 * 24));
+    if (pInst) {
+      const diff = pSent ? Math.abs(Math.round((pSent - pInst) / (1000 * 60 * 60 * 24))) : 0;
       totalDaysToFail += diff;
       countFailDate++;
       if (diff < 30) earlyFail++;
@@ -233,7 +233,19 @@ export const exportAnalystExecutiveReport = (
     });
 
   warrantyAnalyticsRows.push(['']);
-  warrantyAnalyticsRows.push(['6. TOP LOẠI POSM PHÁT SINH SỰ CỐ NHIỀU NHẤT']);
+  warrantyAnalyticsRows.push(['6. BÁO CÁO TỶ LỆ ĐẠT SLA CỦA NHÀ THẦU BẢO HÀNH']);
+  warrantyAnalyticsRows.push(['Nhà Thầu (Supplier)', 'Tổng Ca Bảo Hành', 'Đã Nghiệm Thu Đúng Hạn', 'Trễ Deadline (Vi Phạm SLA)', 'Tỷ Lệ Đúng Hạn (%)']);
+
+  Object.entries(wSupplierMap)
+    .sort((a, b) => b[1].total - a[1].total)
+    .forEach(([supName, data]) => {
+      const compliant = data.total - data.overdue;
+      const rate = data.total > 0 ? `${((compliant / data.total) * 100).toFixed(1)}%` : '100%';
+      warrantyAnalyticsRows.push([supName, data.total, compliant, data.overdue, rate]);
+    });
+
+  warrantyAnalyticsRows.push(['']);
+  warrantyAnalyticsRows.push(['7. TOP LOẠI POSM PHÁT SINH SỰ CỐ NHIỀU NHẤT']);
   warrantyAnalyticsRows.push(['Loại Thiết Bị POSM', 'Số Ca Sự Cố', 'Tỷ Lệ %']);
 
   Object.entries(posmTypeMap)
@@ -297,8 +309,8 @@ export const exportAnalystExecutiveReport = (
 
     // Phân loại MTBF
     let mtbfCategory = 'Chưa ghi nhận ngày lắp';
-    if (pInst && pSent && pSent >= pInst) {
-      const diffDays = Math.round((pSent - pInst) / (1000 * 60 * 60 * 24));
+    if (pInst) {
+      const diffDays = pSent ? Math.abs(Math.round((pSent - pInst) / (1000 * 60 * 60 * 24))) : 0;
       if (diffDays < 30) mtbfCategory = `Hỏng sớm (${diffDays} ngày)`;
       else if (diffDays <= 90) mtbfCategory = `Sự cố 1-3 tháng (${diffDays} ngày)`;
       else mtbfCategory = `Độ bền tốt (${diffDays} ngày)`;

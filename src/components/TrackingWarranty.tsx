@@ -785,8 +785,8 @@ export default function TrackingWarranty() {
       const completedMs = parseDateToMs(item.completedDate);
 
       // Duration: Installation ➔ Issue (MTBF - Chỉ tính khi thực sự có Ngày Lắp Đặt)
-      if (installMs && sentMs) {
-        const diffDays = Math.abs(Math.round((sentMs - installMs) / (1000 * 60 * 60 * 24)));
+      if (installMs) {
+        const diffDays = sentMs ? Math.abs(Math.round((sentMs - installMs) / (1000 * 60 * 60 * 24))) : 0;
         totalDaysToFail += diffDays;
         countFailDate += 1;
         if (diffDays < 30) {
