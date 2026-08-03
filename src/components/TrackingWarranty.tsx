@@ -505,12 +505,19 @@ export default function TrackingWarranty() {
             const getFlexibleVal = (rowObj: any, keys: string[]): string => {
               if (!rowObj || typeof rowObj !== 'object') return '';
               const objKeys = Object.keys(rowObj);
+              const cleanNormalize = (s: string) => s.replace(/[\s\u00A0]+/g, ' ').trim().toLowerCase();
+              
               for (const targetKey of keys) {
-                const cleanTarget = targetKey.trim().toLowerCase();
-                const foundKey = objKeys.find(k => k.trim().toLowerCase() === cleanTarget);
+                const cleanTarget = cleanNormalize(targetKey);
+                const foundKey = objKeys.find(k => {
+                  const cleanK = cleanNormalize(k);
+                  return cleanK === cleanTarget || cleanK.includes(cleanTarget);
+                });
                 if (foundKey && rowObj[foundKey] !== undefined && rowObj[foundKey] !== null) {
                   const val = String(rowObj[foundKey]).trim();
-                  if (val) return val;
+                  if (val && val !== '-' && val.toLowerCase() !== 'null' && val.toLowerCase() !== 'undefined') {
+                    return val;
+                  }
                 }
               }
               return '';

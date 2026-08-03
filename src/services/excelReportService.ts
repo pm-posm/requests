@@ -395,6 +395,9 @@ export const exportAnalystExecutiveReport = (
 const parseDateToMs = (str?: string): number | null => {
   if (!str || !str.trim()) return null;
   const trimmed = str.trim();
+  if (trimmed === '-' || trimmed.toLowerCase().includes('không tìm') || trimmed.toLowerCase().includes('data 2025')) {
+    return null;
+  }
   if (/^\d{5}(\.\d+)?$/.test(trimmed)) {
     const serial = parseFloat(trimmed);
     return Math.floor(serial - 25569) * 86400 * 1000;
