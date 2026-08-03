@@ -67,13 +67,26 @@ export const exportAnalystExecutiveReport = (
       unrecordedFail++;
     }
 
-    // Overdue / Aging
-    if (!isDone && pExp && Date.now() > pExp) {
+    // Overdue / Aging & SLA Violated calculation
+    const pComp = parseDateToMs(item.completedDate);
+    let isOverdue = false;
+
+    if (isDone && pComp && pExp && pComp > pExp) {
+      // Đã hoàn thành nhưng nghiệm thu trễ deadline
+      isOverdue = true;
+    } else if (!isDone && pExp && Date.now() > pExp) {
+      // Đang xử lý nhưng đã quá deadline
+      isOverdue = true;
+    }
+
+    if (isOverdue) {
       wSupplierMap[sup].overdue++;
-      const overdueDays = Math.ceil((Date.now() - pExp) / (1000 * 60 * 60 * 24));
-      if (overdueDays >= 1 && overdueDays <= 7) aging1to7++;
-      else if (overdueDays >= 8 && overdueDays <= 14) aging8to14++;
-      else if (overdueDays > 14) agingOver14++;
+      if (!isDone && pExp) {
+        const overdueDays = Math.ceil((Date.now() - pExp) / (1000 * 60 * 60 * 24));
+        if (overdueDays >= 1 && overdueDays <= 7) aging1to7++;
+        else if (overdueDays >= 8 && overdueDays <= 14) aging8to14++;
+        else if (overdueDays > 14) agingOver14++;
+      }
     }
   });
 
@@ -86,6 +99,7 @@ export const exportAnalystExecutiveReport = (
     key: string;
     storeName: string;
     storeCode: string;
+    projectCode: string;
     posm: string;
     brand: string;
     supplier: string;
@@ -125,6 +139,7 @@ export const exportAnalystExecutiveReport = (
         key: compositeKey,
         storeName: item.storeName || '-',
         storeCode: item.storeCode || '-',
+        projectCode: item.projectCode || '-',
         posm: item.posmType || '-',
         brand: item.brand || item.category || '-',
         supplier: item.supplier || 'Chưa gán thầu',
@@ -180,7 +195,7 @@ export const exportAnalystExecutiveReport = (
     ['Tỷ Lệ Tái Hỏng POSM Theo Vị Trí', recurrentRatePct, recurrentRatePct, 'Tỷ lệ tái hỏng trên tổng vị trí'],
     [''],
     ['DANH SÁCH TOP POSM BỊ SỰ CỐ BẢO HÀNH LẶP LẠI (>= 2 LẦN)'],
-    ['Tên Siêu Thị / Store Name', 'Mã Store', 'Loại POSM', 'Brand', 'Nhà Thầu Supplier', 'Số Lần Bảo Hành Lặp', 'Danh Sách Mã Request ID Bị Lặp']
+    ['Tên Siêu Thị / Store Name', 'Mã Store', 'Mã Dự Án', 'Loại POSM', 'Brand', 'Nhà Thầu Supplier', 'Số Lần Bảo Hành Lặp', 'Danh Sách Mã Request ID Bị Lặp']
   ];
 
   recurrentGroups.forEach(grp => {
@@ -188,6 +203,7 @@ export const exportAnalystExecutiveReport = (
     warrantyAnalyticsRows.push([
       grp.storeName,
       grp.storeCode,
+      grp.projectCode,
       grp.posm,
       grp.brand,
       grp.supplier,

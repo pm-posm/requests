@@ -820,10 +820,18 @@ export default function TrackingWarranty() {
         supplierSlaMap[sup] = { total: 0, completedOnTime: 0, overdue: 0 };
       }
       supplierSlaMap[sup].total += 1;
-      if (isDone && pLower.includes('hoàn thành')) {
-        supplierSlaMap[sup].completedOnTime += 1;
+
+      let isOverdueSla = false;
+      if (isDone && completedMs && expectedMs && completedMs > expectedMs) {
+        isOverdueSla = true;
       } else if (!isDone && expectedMs && Date.now() > expectedMs) {
+        isOverdueSla = true;
+      }
+
+      if (isOverdueSla) {
         supplierSlaMap[sup].overdue += 1;
+      } else if (isDone && pLower.includes('hoàn thành')) {
+        supplierSlaMap[sup].completedOnTime += 1;
       }
     });
 
