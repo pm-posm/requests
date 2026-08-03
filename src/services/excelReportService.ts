@@ -79,6 +79,75 @@ export const exportAnalystExecutiveReport = (
 
   const avgMTBF = countFailDate > 0 ? Math.round(totalDaysToFail / countFailDate) : 0;
 
+  // ==========================================
+  // Recurrent Warranty Analysis Engine
+  // ==========================================
+  const groupMap = new Map<string, {
+    key: string;
+    storeName: string;
+    storeCode: string;
+    posm: string;
+    brand: string;
+    supplier: string;
+    incidents: Array<{ requestId: string; sentDate: string; progress: string }>;
+  }>();
+
+  const parentChildMap = new Map<string, string>();
+  warrantyItems.forEach(item => {
+    const precId = (item.precedingRequestId || (item as any).preceding_request_id || '').trim();
+    const currentReqId = (item.requestId || `BH-${item.rowId}`).trim();
+    if (precId && currentReqId && precId !== currentReqId) {
+      parentChildMap.set(currentReqId, precId);
+    }
+  });
+
+  warrantyItems.forEach(item => {
+    const currentReqId = (item.requestId || `BH-${item.rowId}`).trim();
+    const storeKey = item.storeCode?.trim() || item.storeName?.trim() || 'STORE_UNKNOWN';
+    const posmKey = item.posmType?.trim() || 'POSM_UNKNOWN';
+    const brandKey = item.brand?.trim() || item.category?.trim() || 'BRAND_UNKNOWN';
+    const projectKey = item.projectCode?.trim() || '';
+
+    let compositeKey = '';
+    if (parentChildMap.has(currentReqId)) {
+      const parentId = parentChildMap.get(currentReqId)!;
+      compositeKey = `PREC_PARENT__${parentId}`;
+    } else if (Array.from(parentChildMap.values()).includes(currentReqId)) {
+      compositeKey = `PREC_PARENT__${currentReqId}`;
+    } else if (projectKey) {
+      compositeKey = `${storeKey}__PROJ__${projectKey}`;
+    } else {
+      compositeKey = `${storeKey}__${posmKey}__${brandKey}`;
+    }
+
+    if (!groupMap.has(compositeKey)) {
+      groupMap.set(compositeKey, {
+        key: compositeKey,
+        storeName: item.storeName || '-',
+        storeCode: item.storeCode || '-',
+        posm: item.posmType || '-',
+        brand: item.brand || item.category || '-',
+        supplier: item.supplier || 'Chưa gán thầu',
+        incidents: []
+      });
+    }
+
+    const grp = groupMap.get(compositeKey)!;
+    grp.incidents.push({
+      requestId: currentReqId,
+      sentDate: item.sentDate || '-',
+      progress: item.progress || 'Not started'
+    });
+  });
+
+  const recurrentGroups = Array.from(groupMap.values())
+    .filter(g => g.incidents.length > 1)
+    .sort((a, b) => b.incidents.length - a.incidents.length);
+
+  const totalPosmLocations = groupMap.size;
+  const recurrentPosmCount = recurrentGroups.length;
+  const recurrentRatePct = totalPosmLocations > 0 ? `${((recurrentPosmCount / totalPosmLocations) * 100).toFixed(1)}%` : '0%';
+
   const warrantyAnalyticsRows: (string | number)[][] = [
     ['BÁO CÁO CHI TIẾT BẢO HÀNH & ĐỘ BỀN THIẾT BỊ (WARRANTY ANALYTICS)'],
     [`Ngày xuất báo cáo: ${new Date().toLocaleString('vi-VN')}`],
@@ -104,9 +173,32 @@ export const exportAnalystExecutiveReport = (
     ['Độ bền tốt > 90 ngày (> 3 tháng)', longFail, totalWarranty > 0 ? `${((longFail / totalWarranty) * 100).toFixed(1)}%` : '0%', 'Đạt tiêu chuẩn chất lượng'],
     ['Chưa ghi nhận ngày lắp đặt POSM', unrecordedFail, totalWarranty > 0 ? `${((unrecordedFail / totalWarranty) * 100).toFixed(1)}%` : '0%', 'Thiếu dữ liệu ngày lắp'],
     [''],
-    ['4. BÁO CÁO TỶ LỆ ĐẠT SLA CỦA NHÀ THẦU BẢO HÀNH'],
-    ['Nhà Thầu (Supplier)', 'Tổng Ca Bảo Hành', 'Đã Nghiệm Thu', 'Trễ Deadline', 'Tỷ Lệ Đúng Hạn (%)'],
+    ['4. BÁO CÁO SỰ CỐ BẢO HÀNH LẶP LẠI (RECURRENT WARRANTY & TÁI HỎNG POSM)'],
+    ['Chỉ Số Tái Hỏng', 'Số Lượng', 'Tỷ Lệ %', 'Ghi Chú Vận Hành'],
+    ['Tổng Số Vị Trí POSM Theo Dõi', totalPosmLocations, '100%', 'Số nhóm vị trí POSM duy nhất'],
+    ['Số Vị Trí POSM Bị Sự Cố Lặp (>= 2 lần)', recurrentPosmCount, recurrentRatePct, 'Số vị trí POSM hỏng tái diễn'],
+    ['Tỷ Lệ Tái Hỏng POSM Theo Vị Trí', recurrentRatePct, recurrentRatePct, 'Tỷ lệ tái hỏng trên tổng vị trí'],
+    [''],
+    ['DANH SÁCH TOP POSM BỊ SỰ CỐ BẢO HÀNH LẶP LẠI (>= 2 LẦN)'],
+    ['Tên Siêu Thị / Store Name', 'Mã Store', 'Loại POSM', 'Brand', 'Nhà Thầu Supplier', 'Số Lần Bảo Hành Lặp', 'Danh Sách Mã Request ID Bị Lặp']
   ];
+
+  recurrentGroups.forEach(grp => {
+    const reqIdList = grp.incidents.map(i => i.requestId).join(', ');
+    warrantyAnalyticsRows.push([
+      grp.storeName,
+      grp.storeCode,
+      grp.posm,
+      grp.brand,
+      grp.supplier,
+      grp.incidents.length,
+      reqIdList
+    ]);
+  });
+
+  warrantyAnalyticsRows.push(['']);
+  warrantyAnalyticsRows.push(['5. BÁO CÁO TỶ LỆ ĐẠT SLA CỦA NHÀ THẦU BẢO HÀNH']);
+  warrantyAnalyticsRows.push(['Nhà Thầu (Supplier)', 'Tổng Ca Bảo Hành', 'Đã Nghiệm Thu', 'Trễ Deadline', 'Tỷ Lệ Đúng Hạn (%)']);
 
   Object.entries(wSupplierMap)
     .sort((a, b) => b[1].total - a[1].total)
@@ -117,7 +209,7 @@ export const exportAnalystExecutiveReport = (
     });
 
   warrantyAnalyticsRows.push(['']);
-  warrantyAnalyticsRows.push(['5. TOP LOẠI POSM PHÁT SINH SỰ CỐ NHIỀU NHẤT']);
+  warrantyAnalyticsRows.push(['6. TOP LOẠI POSM PHÁT SINH SỰ CỐ NHIỀU NHẤT']);
   warrantyAnalyticsRows.push(['Loại Thiết Bị POSM', 'Số Ca Sự Cố', 'Tỷ Lệ %']);
 
   Object.entries(posmTypeMap)
@@ -128,7 +220,15 @@ export const exportAnalystExecutiveReport = (
     });
 
   const wsWarrantyAnalytics = XLSX.utils.aoa_to_sheet(warrantyAnalyticsRows);
-  wsWarrantyAnalytics['!cols'] = [{ wch: 38 }, { wch: 18 }, { wch: 18 }, { wch: 32 }, { wch: 22 }];
+  wsWarrantyAnalytics['!cols'] = [
+    { wch: 38 },
+    { wch: 18 },
+    { wch: 22 },
+    { wch: 32 },
+    { wch: 22 },
+    { wch: 20 },
+    { wch: 45 }
+  ];
   XLSX.utils.book_append_sheet(wb, wsWarrantyAnalytics, 'Warranty Analytics');
 
   // ==========================================
