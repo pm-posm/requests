@@ -19,6 +19,8 @@ export const exportAnalystExecutiveReport = (
   // ==========================================
   const wSupplierMap: Record<string, { total: number; done: number; overdue: number }> = {};
   const posmTypeMap: Record<string, number> = {};
+  const projectMap: Record<string, { count: number; supplierMap: Record<string, number> }> = {};
+
   let earlyFail = 0;
   let midFail = 0;
   let longFail = 0;
@@ -50,6 +52,12 @@ export const exportAnalystExecutiveReport = (
     // POSM Type
     const posm = item.posmType?.trim() || 'POSM Khác';
     posmTypeMap[posm] = (posmTypeMap[posm] || 0) + 1;
+
+    // Project Code Breakdown
+    const prj = item.projectCode?.trim() || 'Chưa gán mã dự án';
+    if (!projectMap[prj]) projectMap[prj] = { count: 0, supplierMap: {} };
+    projectMap[prj].count++;
+    projectMap[prj].supplierMap[sup] = (projectMap[prj].supplierMap[sup] || 0) + 1;
 
     // MTBF
     const pInst = parseDateToMs(item.installationDate);
@@ -213,15 +221,15 @@ export const exportAnalystExecutiveReport = (
   });
 
   warrantyAnalyticsRows.push(['']);
-  warrantyAnalyticsRows.push(['5. BÁO CÁO TỶ LỆ ĐẠT SLA CỦA NHÀ THẦU BẢO HÀNH']);
-  warrantyAnalyticsRows.push(['Nhà Thầu (Supplier)', 'Tổng Ca Bảo Hành', 'Đã Nghiệm Thu', 'Trễ Deadline', 'Tỷ Lệ Đúng Hạn (%)']);
+  warrantyAnalyticsRows.push(['5. TOP DỰ ÁN PHÁT SINH LỖI NHIỀU NHẤT']);
+  warrantyAnalyticsRows.push(['Mã Dự Án (Project Code)', 'Số Ca Sự Cố', 'Tỷ Lệ %', 'Nhà Thầu Chính Phụ Trách (Top Supplier)']);
 
-  Object.entries(wSupplierMap)
-    .sort((a, b) => b[1].total - a[1].total)
-    .forEach(([supName, data]) => {
-      const compliant = data.total - data.overdue;
-      const rate = data.total > 0 ? `${((compliant / data.total) * 100).toFixed(1)}%` : '100%';
-      warrantyAnalyticsRows.push([supName, data.total, data.done, data.overdue, rate]);
+  Object.entries(projectMap)
+    .sort((a, b) => b[1].count - a[1].count)
+    .forEach(([projectCode, data]) => {
+      const topSup = Object.entries(data.supplierMap).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Chưa gán thầu';
+      const pct = totalWarranty > 0 ? `${((data.count / totalWarranty) * 100).toFixed(1)}%` : '0%';
+      warrantyAnalyticsRows.push([projectCode, data.count, pct, topSup]);
     });
 
   warrantyAnalyticsRows.push(['']);

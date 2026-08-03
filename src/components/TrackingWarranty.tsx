@@ -502,30 +502,44 @@ export default function TrackingWarranty() {
         skipEmptyLines: true,
         complete: (results) => {
           if (results.data && results.data.length > 0) {
+            const getFlexibleVal = (rowObj: any, keys: string[]): string => {
+              if (!rowObj || typeof rowObj !== 'object') return '';
+              const objKeys = Object.keys(rowObj);
+              for (const targetKey of keys) {
+                const cleanTarget = targetKey.trim().toLowerCase();
+                const foundKey = objKeys.find(k => k.trim().toLowerCase() === cleanTarget);
+                if (foundKey && rowObj[foundKey] !== undefined && rowObj[foundKey] !== null) {
+                  const val = String(rowObj[foundKey]).trim();
+                  if (val) return val;
+                }
+              }
+              return '';
+            };
+
             const parsedItems: WarrantyItem[] = results.data.map((row: any, idx: number) => {
-              const rawRowId = row['Row_ID'] || row['STT'] || String(idx + 2);
+              const rawRowId = getFlexibleVal(row, ['Row_ID', 'STT', 'row_id']) || String(idx + 2);
               const rowId = String(rawRowId).replace(/\D/g, '') || String(idx + 2);
-              const requestId = row['Request ID'] || row['Mã Request'] || `BH-${rowId}`;
-              const storeName = row['Store name'] || row['Tên Store'] || row['Cửa Hàng'] || 'Cửa Hàng';
-              const storeCode = row['Store code'] || row['Mã Store'] || '';
-              const srName = row['SR'] || '';
-              const visTech = row['VIS-Tech'] || '';
-              const posmType = row['POSM'] || row['Loại POSM'] || 'POSM';
-              const category = row['CAT'] || '';
-              const brand = row['BRAND'] || row['Brand'] || '';
-              const sentDate = row['Ngày gửi '] || row['Ngày gửi'] || row['Ngày YC'] || '';
-              const projectCode = row['Mã dự án'] || row['Mã Dự Án'] || '';
-              const supplier = row['Supplier'] || row['Nhà Cung Cấp'] || '';
-              const mailTitle = row['Title mail '] || row['Title mail'] || '';
-              const errorDetail = row['Chi tiết lỗi'] || row['Lỗi'] || '';
-              const progress = row['Tiến độ'] || row['Trạng thái'] || (Array.isArray(row) ? row[14] : '') || 'Not started';
-              const expectedDate = row['Ngày xử lý dự kiến'] || (Array.isArray(row) ? row[15] : '') || '';
-              const completedDate = row['Ngày hoàn thành thực tế'] || (Array.isArray(row) ? row[16] : '') || '';
-              const proofImage = row['Hình ảnh nghiệm thu'] || (Array.isArray(row) ? row[17] : '') || '';
-              const note = row['Note'] || row['Ghi chú'] || (Array.isArray(row) ? row[18] : '') || '';
-              const raiseMailTime = row['Ngày raise mail'] || (Array.isArray(row) ? row[19] : '') || '';
-              const installationDate = row['Ngày lắp đặt'] || row['Ngày lắp đặt POSM'] || (Array.isArray(row) ? row[20] : '') || '';
-              const requestDeadline = row['Deadline'] || row['Deadline request'] || row['Deadline RQ'] || '';
+              const requestId = getFlexibleVal(row, ['Request ID', 'Mã Request', 'request_id']) || `BH-${rowId}`;
+              const storeName = getFlexibleVal(row, ['Store name', 'Tên Store', 'Cửa Hàng', 'store_name']) || 'Cửa Hàng';
+              const storeCode = getFlexibleVal(row, ['Store code', 'Mã Store', 'store_code', 'ess_store_code']) || '';
+              const srName = getFlexibleVal(row, ['SR', 'sr_name']) || '';
+              const visTech = getFlexibleVal(row, ['VIS-Tech', 'vis_tech', 'VISTech']) || '';
+              const posmType = getFlexibleVal(row, ['POSM', 'Loại POSM', 'posm_type']) || 'POSM';
+              const category = getFlexibleVal(row, ['CAT', 'Category', 'cat']) || '';
+              const brand = getFlexibleVal(row, ['BRAND', 'Brand', 'brand']) || '';
+              const sentDate = getFlexibleVal(row, ['Ngày gửi', 'Ngày YC', 'sent_date', 'date_of_rq']) || '';
+              const projectCode = getFlexibleVal(row, ['Mã dự án', 'Mã Dự Án', 'ma_du_an', 'project_code']) || '';
+              const supplier = getFlexibleVal(row, ['Supplier', 'Nhà Cung Cấp', 'supplier']) || '';
+              const mailTitle = getFlexibleVal(row, ['Title mail', 'title_mail', 'title_email_request']) || '';
+              const errorDetail = getFlexibleVal(row, ['Chi tiết lỗi', 'Lỗi', 'error_detail', 'sr_note']) || '';
+              const progress = getFlexibleVal(row, ['Tiến độ', 'Trạng thái', 'progress', 'status', 'tien_do']) || (Array.isArray(row) ? row[14] : '') || 'Not started';
+              const expectedDate = getFlexibleVal(row, ['Ngày xử lý dự kiến', 'expected_date']) || (Array.isArray(row) ? row[15] : '') || '';
+              const completedDate = getFlexibleVal(row, ['Ngày hoàn thành thực tế', 'completed_date']) || (Array.isArray(row) ? row[16] : '') || '';
+              const proofImage = getFlexibleVal(row, ['Hình ảnh nghiệm thu', 'proof_image']) || (Array.isArray(row) ? row[17] : '') || '';
+              const note = getFlexibleVal(row, ['Note', 'Ghi chú', 'vis_note', 'mer_note']) || (Array.isArray(row) ? row[18] : '') || '';
+              const raiseMailTime = getFlexibleVal(row, ['Ngày raise mail', 'raise_mail_time']) || (Array.isArray(row) ? row[19] : '') || '';
+              const installationDate = getFlexibleVal(row, ['Ngày lắp đặt', 'Ngày lắp đặt POSM', 'Ngày Lắp Đặt', 'ngay_lap_dat', 'installation_date']) || (Array.isArray(row) ? row[20] : '') || '';
+              const requestDeadline = getFlexibleVal(row, ['Deadline', 'Deadline request', 'Deadline RQ', 'deadline']) || '';
 
               return {
                 id: `sheet-${rowId}-${idx}`,
