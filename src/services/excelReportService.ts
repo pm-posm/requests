@@ -221,16 +221,26 @@ export const exportAnalystExecutiveReport = (
   });
 
   warrantyAnalyticsRows.push(['']);
-  warrantyAnalyticsRows.push(['5. TOP DỰ ÁN PHÁT SINH LỖI NHIỀU NHẤT']);
-  warrantyAnalyticsRows.push(['Mã Dự Án (Project Code)', 'Số Ca Sự Cố', 'Tỷ Lệ %', 'Nhà Thầu Chính Phụ Trách (Top Supplier)']);
+  warrantyAnalyticsRows.push(['5. TOP DỰ ÁN PHÁT SINH LỖI NHIỀU NHẤT (>= 2 CA SỰ CỐ)']);
+  warrantyAnalyticsRows.push(['Mã Dự Án (Project Code)', 'Số Ca Sự Cố', 'Tỷ Lệ %', 'Nhà Thầu Phụ Trách & Phân Bổ Ca (Supplier Breakdown)']);
 
-  Object.entries(projectMap)
-    .sort((a, b) => b[1].count - a[1].count)
-    .forEach(([projectCode, data]) => {
-      const topSup = Object.entries(data.supplierMap).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Chưa gán thầu';
+  const topProjectsList = Object.entries(projectMap)
+    .filter(([_, data]) => data.count > 1)
+    .sort((a, b) => b[1].count - a[1].count);
+
+  if (topProjectsList.length === 0) {
+    warrantyAnalyticsRows.push(['Không có dự án phát sinh >= 2 ca', 0, '0%', 'N/A']);
+  } else {
+    topProjectsList.forEach(([projectCode, data]) => {
+      const supplierBreakdown = Object.entries(data.supplierMap)
+        .sort((a, b) => b[1] - a[1])
+        .map(([supName, count]) => `${supName} (${count} ca)`)
+        .join(', ');
+
       const pct = totalWarranty > 0 ? `${((data.count / totalWarranty) * 100).toFixed(1)}%` : '0%';
-      warrantyAnalyticsRows.push([projectCode, data.count, pct, topSup]);
+      warrantyAnalyticsRows.push([projectCode, data.count, pct, supplierBreakdown || 'Chưa gán thầu']);
     });
+  }
 
   warrantyAnalyticsRows.push(['']);
   warrantyAnalyticsRows.push(['6. BÁO CÁO TỶ LỆ ĐẠT SLA CỦA NHÀ THẦU BẢO HÀNH']);
@@ -260,7 +270,7 @@ export const exportAnalystExecutiveReport = (
     { wch: 38 },
     { wch: 18 },
     { wch: 22 },
-    { wch: 32 },
+    { wch: 55 },
     { wch: 22 },
     { wch: 20 },
     { wch: 45 }

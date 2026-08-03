@@ -775,15 +775,13 @@ export default function TrackingWarranty() {
       posmTypeMap[posm] = (posmTypeMap[posm] || 0) + 1;
 
       // 3. Top Projects breakdown
-      const prj = item.projectCode?.trim();
-      if (prj) {
-        if (!projectMap[prj]) {
-          projectMap[prj] = { count: 0, suppliers: {} };
-        }
-        projectMap[prj].count += 1;
-        const supName = sup || 'Chưa chọn';
-        projectMap[prj].suppliers[supName] = (projectMap[prj].suppliers[supName] || 0) + 1;
+      const prj = item.projectCode?.trim() || 'Chưa gán mã dự án';
+      if (!projectMap[prj]) {
+        projectMap[prj] = { count: 0, suppliers: {} };
       }
+      projectMap[prj].count += 1;
+      const supName = sup || 'Chưa gán thầu';
+      projectMap[prj].suppliers[supName] = (projectMap[prj].suppliers[supName] || 0) + 1;
 
       // 4. Time & SLA Metrics Calculation
       const installMs = parseDateToMs(item.installationDate);
@@ -857,6 +855,7 @@ export default function TrackingWarranty() {
     });
 
     const topProjects = Object.entries(projectMap)
+      .filter(([_, data]) => data.count > 1)
       .map(([projectCode, data]) => {
         const supplierList = Object.entries(data.suppliers)
           .map(([name, count]) => ({ name, count }))
@@ -870,7 +869,7 @@ export default function TrackingWarranty() {
         };
       })
       .sort((a, b) => b.count - a.count)
-      .slice(0, 6);
+      .slice(0, 10);
 
     const posmTypeBreakdown = Object.entries(posmTypeMap)
       .map(([posmType, count]) => ({
@@ -1329,9 +1328,18 @@ export default function TrackingWarranty() {
                           }`}>
                             {idx + 1}
                           </span>
-                          <span className="font-mono font-bold text-slate-900 dark:text-white group-hover:text-amber-600 transition-colors">
+                          <span className={`font-mono font-bold transition-colors ${
+                            p.projectCode === 'Chưa gán mã dự án' 
+                              ? 'text-rose-600 dark:text-rose-400 italic' 
+                              : 'text-slate-900 dark:text-white group-hover:text-amber-600'
+                          }`}>
                             Mã: {p.projectCode}
                           </span>
+                          {p.projectCode === 'Chưa gán mã dự án' && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 rounded border border-rose-200 dark:border-rose-800">
+                              ⚠️ Thiếu dữ liệu mã
+                            </span>
+                          )}
                           
                           {/* Suppliers Breakdown */}
                           <div className="flex items-center gap-1 flex-wrap">
