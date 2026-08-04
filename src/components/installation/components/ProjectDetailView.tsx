@@ -317,8 +317,8 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                       )}
                     </td>
 
-                    {/* Hạng mục & Size (ULTRA-MINIMALIST COLLAPSIBLE SIZE FEATURE) */}
-                    <td className="px-4 py-3.5 max-w-[320px]">
+                    {/* Hạng mục & Size (FLOATING POPOVER CARD FEATURE - ZERO ROW HEIGHT EXPANSION) */}
+                    <td className="px-4 py-3.5 max-w-[280px]">
                       {(() => {
                         const rawItem = (store.item || '').trim();
                         const rawSize = (store.size || '').trim();
@@ -327,39 +327,57 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                         const mainTitle = itemLines[0] || rawItem || '-';
                         
                         // Remaining details from item lines 2+ plus size string
-                        const extraDetails = [
+                        const fullDetailsFormatted = [
                           ...itemLines.slice(1),
                           ...(rawSize ? [rawSize] : [])
                         ].join('\n');
 
-                        const hasExtraDetails = extraDetails.length > 0;
+                        const hasExtraDetails = fullDetailsFormatted.length > 0;
                         const isExpanded = expandedSizeRows[store.rowId];
 
                         return (
-                          <div className="space-y-0.5">
+                          <div className="space-y-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               {store.posmTypeCode && (
-                                <span className="font-mono text-[10px] font-bold text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/60 px-1.5 py-0.5 rounded border border-sky-200/50 dark:border-sky-900/50">
+                                <span className="font-mono text-[10px] font-bold text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/60 px-1.5 py-0.5 rounded border border-sky-200/50 dark:border-sky-900/50 shrink-0">
                                   {store.posmTypeCode}
                                 </span>
                               )}
-                              <span className="font-semibold text-slate-800 dark:text-slate-200">{mainTitle}</span>
+                              <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">{mainTitle}</span>
                             </div>
 
                             {hasExtraDetails && (
-                              <div className="mt-0.5">
+                              <div className="relative">
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setExpandedSizeRows(prev => ({ ...prev, [store.rowId]: !prev[store.rowId] }));
                                   }}
-                                  className="text-[11px] font-mono text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 inline-flex items-center gap-1 cursor-pointer hover:underline"
+                                  className="text-[10px] font-mono text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white inline-flex items-center gap-1 cursor-pointer bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-2 py-0.5 rounded transition-colors whitespace-nowrap"
+                                  title="Bấm để xem/thu gọn thông số kích thước chi tiết"
                                 >
-                                  <span>📐 Kích thước {isExpanded ? '▴' : '▾'}</span>
+                                  <span>📐 Size chi tiết {isExpanded ? '▴' : '▾'}</span>
                                 </button>
+
+                                {/* FLOATING POPOVER CARD - DOES NOT EXPAND TABLE ROW HEIGHT AT ALL */}
                                 {isExpanded && (
-                                  <div className="mt-1 pl-2 border-l-2 border-slate-200 dark:border-slate-700 text-[10px] font-mono text-slate-500 dark:text-slate-400 leading-relaxed whitespace-pre-line">
-                                    {extraDetails}
+                                  <div 
+                                    className="absolute left-0 top-full mt-1.5 z-40 w-72 p-3 bg-slate-900 text-white dark:bg-slate-950 dark:text-slate-100 rounded-xl shadow-2xl border border-slate-700 font-mono text-[11px] leading-relaxed whitespace-pre-line animate-in fade-in zoom-in-95 duration-150"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                      <span>📐 Thông Số Kích Thước</span>
+                                      <button 
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setExpandedSizeRows(prev => ({ ...prev, [store.rowId]: false }));
+                                        }}
+                                        className="text-slate-400 hover:text-white cursor-pointer px-1"
+                                      >
+                                        ✕
+                                      </button>
+                                    </div>
+                                    <div className="text-slate-200">{fullDetailsFormatted}</div>
                                   </div>
                                 )}
                               </div>
