@@ -108,10 +108,9 @@ export function useInstallationFilters(
     };
   }, [rawData]);
 
-  // Modal Status Options - Clean 1:1 mapping with Google Sheet
+  // Modal Status Options - Strictly 1:1 with 8 Google Sheet Data Validation values
   const modalStatusOptions = useMemo(() => {
-    // Official 8 Data Validation Status values from Google Sheet
-    const OFFICIAL_SHEET_STATUSES = [
+    return [
       'New',
       'Pending Install',
       'Completed',
@@ -121,24 +120,7 @@ export function useInstallationFilters(
       'Warranty - Uninstall',
       'QC Passed'
     ];
-
-    const set = new Set<string>();
-
-    // 1. Add statuses present in actual raw Google Sheet data
-    filterOptions.statuses.forEach(st => {
-      if (st && st.trim()) set.add(st.trim());
-    });
-
-    // 2. Add official sheet statuses if not already present
-    OFFICIAL_SHEET_STATUSES.forEach(st => set.add(st));
-
-    // 3. Add current editFormStatus if set
-    if (editFormStatus && editFormStatus.trim()) {
-      set.add(editFormStatus.trim());
-    }
-
-    return Array.from(set);
-  }, [filterOptions.statuses, editFormStatus]);
+  }, []);
 
   // Filter Flat Rows
   const filteredFlatRows = useMemo(() => {
