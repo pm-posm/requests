@@ -8,7 +8,9 @@ export interface GroupedProject {
   projectName: string;
   brandName: string;
   categoryCode: string;
+  catName?: string;
   brandCode: string;
+  posmTypeCode?: string;
   actualTimeRange?: string;
   plannedTimeRange?: string;
   customerSummary?: string;
@@ -237,12 +239,18 @@ export function useInstallationFilters(
         ? `${plannedStartSet[0]} ➔ ${plannedEndSet[0]}`
         : (plannedStartSet.length > 0 ? plannedStartSet[0] : 'Chưa có kế hoạch');
 
+      const posmTypeCodeSet = Array.from(new Set(stores.map(s => s.posmTypeCode).filter(p => p && p.trim())));
+      const posmTypeCode = posmTypeCodeSet.length > 0 ? posmTypeCodeSet.join(', ') : (firstRow.posmTypeCode || '');
+      const catName = firstRow.catName || '';
+
       result.push({
         projectCode,
         projectName,
         brandName,
         categoryCode,
+        catName,
         brandCode,
+        posmTypeCode,
         actualTimeRange,
         plannedTimeRange,
         customerSummary,

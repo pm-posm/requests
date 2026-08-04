@@ -175,6 +175,54 @@ export function useInstallationData() {
     }
   };
 
+  // Handle Bulk Save & 2-Way Sync for Multiple Rows
+  const handleBulkSaveAndSync = async (
+    targetRowIds: number[],
+    bulkForm: Partial<InstallationItem>
+  ) => {
+    if (targetRowIds.length === 0) return;
+
+    // Filter out empty fields from bulkForm
+    const cleanUpdates: Partial<InstallationItem> = {};
+    Object.entries(bulkForm).forEach(([key, val]) => {
+      if (val !== undefined && val !== null && String(val).trim() !== '') {
+        (cleanUpdates as any)[key] = String(val).trim();
+      }
+    });
+
+    if (Object.keys(cleanUpdates).length === 0) {
+      toast.error('Vui lòng nhập ít nhất 1 trường dữ liệu để cập nhật hàng loạt!');
+      return;
+    }
+
+    setIsSyncingRow(true);
+
+    // 1. Optimistic Update local state for all targetRowIds immediately
+    setRawData(prev => prev.map(row => {
+      if (targetRowIds.includes(row.rowId)) {
+        return {
+          ...row,
+          ...cleanUpdates
+        };
+      }
+      return row;
+    }));
+
+    // 2. Perform 2-Way Sync for all targetRowIds
+    const targetRows = rawData.filter(r => targetRowIds.includes(r.rowId));
+
+    for (const item of targetRows) {
+      const updatedItem = {
+        ...item,
+        ...cleanUpdates
+      };
+      await syncInstallationRowToSheet(webAppUrl, updatedItem);
+    }
+
+    setIsSyncingRow(false);
+    toast.success(`✅ Đã cập nhật và đồng bộ 2 chiều thành công ${targetRowIds.length} cửa hàng!`, { duration: 6000 });
+  };
+
   const handleSaveConfig = () => {
     localStorage.setItem('POSM_INSTALLATION_WEB_APP_URL', webAppUrl);
     setShowConfigModal(false);
@@ -208,6 +256,7 @@ export function useInstallationData() {
     acknowledgeNewSync,
     handleOpenEdit,
     handleSaveAndSync,
+    handleBulkSaveAndSync,
     handleSaveConfig
   };
 }

@@ -40,6 +40,7 @@ export default function TrackingInstallation() {
     acknowledgeNewSync,
     handleOpenEdit,
     handleSaveAndSync,
+    handleBulkSaveAndSync,
     handleSaveConfig
   } = useInstallationData();
 
@@ -222,9 +223,12 @@ export default function TrackingInstallation() {
               detailSelectedResult={detailSelectedResult}
               setDetailSelectedResult={setDetailSelectedResult}
               detailFilterOptions={detailFilterOptions}
+              modalStatusOptions={modalStatusOptions}
               filteredProjectDetailStores={filteredProjectDetailStores}
               contactMap={contactMap}
               handleOpenEdit={handleOpenEdit}
+              handleBulkSaveAndSync={handleBulkSaveAndSync}
+              isSyncingRow={isSyncingRow}
               baselineMaxRowId={baselineMaxRowId}
             />
           ) : null}

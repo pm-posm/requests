@@ -232,8 +232,13 @@ export const ProjectTableView: React.FC<ProjectTableViewProps> = ({
                           </span>
                         )}
                         {prj.brandName && (
-                          <span className="bg-slate-100 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 font-medium text-[10px] px-1.5 py-0.5 rounded uppercase">
-                            {prj.brandName}
+                          <span className="bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 font-medium text-[10px] px-1.5 py-0.5 rounded uppercase">
+                            {prj.brandName} {prj.brandCode ? `(${prj.brandCode})` : ''}
+                          </span>
+                        )}
+                        {prj.posmTypeCode && (
+                          <span className="bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-400 font-mono text-[10px] px-1.5 py-0.5 rounded uppercase border border-sky-200/60 dark:border-sky-900/60">
+                            {prj.posmTypeCode}
                           </span>
                         )}
                       </div>
