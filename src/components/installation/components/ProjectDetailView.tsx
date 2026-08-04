@@ -317,7 +317,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                       )}
                     </td>
 
-                    {/* Hạng mục & Size (COLLAPSIBLE SIZE FEATURE) */}
+                    {/* Hạng mục & Size (ULTRA-MINIMALIST COLLAPSIBLE SIZE FEATURE) */}
                     <td className="px-4 py-3.5 max-w-[320px]">
                       {(() => {
                         const rawItem = (store.item || '').trim();
@@ -336,7 +336,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                         const isExpanded = expandedSizeRows[store.rowId];
 
                         return (
-                          <div className="space-y-1">
+                          <div className="space-y-0.5">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               {store.posmTypeCode && (
                                 <span className="font-mono text-[10px] font-bold text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/60 px-1.5 py-0.5 rounded border border-sky-200/50 dark:border-sky-900/50">
@@ -347,19 +347,18 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                             </div>
 
                             {hasExtraDetails && (
-                              <div>
+                              <div className="mt-0.5">
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setExpandedSizeRows(prev => ({ ...prev, [store.rowId]: !prev[store.rowId] }));
                                   }}
-                                  className="text-[10px] font-semibold text-sky-700 dark:text-sky-300 hover:underline inline-flex items-center gap-1 cursor-pointer bg-sky-50 dark:bg-sky-950/50 px-2 py-0.5 rounded border border-sky-200/60 dark:border-sky-900/60 mt-0.5"
+                                  className="text-[11px] font-mono text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 inline-flex items-center gap-1 cursor-pointer hover:underline"
                                 >
-                                  <span>📐 {isExpanded ? 'Thu gọn kích thước' : 'Xem kích thước chi tiết'}</span>
-                                  {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                  <span>📐 Kích thước {isExpanded ? '▴' : '▾'}</span>
                                 </button>
                                 {isExpanded && (
-                                  <div className="mt-1.5 p-2 bg-slate-50 dark:bg-slate-950 rounded-lg border border-slate-200/80 dark:border-slate-800 text-[11px] font-mono text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line shadow-2xs">
+                                  <div className="mt-1 pl-2 border-l-2 border-slate-200 dark:border-slate-700 text-[10px] font-mono text-slate-500 dark:text-slate-400 leading-relaxed whitespace-pre-line">
                                     {extraDetails}
                                   </div>
                                 )}
@@ -445,7 +444,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
 
           <button
             onClick={() => {
-              setBulkForm({ status: '', technician: '', actualTime: '', completionTime: '', note: '' });
+              setBulkForm({ status: '', technician: '', actualTime: '', completionTime: '', plannedStartDate: '', plannedEndDate: '', warranty: '', note: '' });
               setIsBulkDrawerOpen(true);
             }}
             className="px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-extrabold rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm"
@@ -462,20 +461,18 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         </div>
       )}
 
-      {/* BULK EDIT DRAWER MODAL */}
+      {/* BULK EDIT DRAWER MODAL (1:1 IDENTICAL TO EditSyncDrawer.tsx) */}
       {isBulkDrawerOpen && (
-        <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/60 backdrop-blur-xs flex justify-end">
+        <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/50 backdrop-blur-xs flex justify-end transition-opacity">
           <div className="w-full max-w-md bg-white dark:bg-slate-900 h-full shadow-2xl flex flex-col border-l border-slate-200 dark:border-slate-800 animate-in slide-in-from-right duration-200">
+            {/* DRAWER HEADER */}
             <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-950/50">
               <div>
                 <h3 className="text-base font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                  <span>⚡ Cập Nhật Hàng Loạt</span>
-                  <span className="bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300 text-xs font-mono px-2 py-0.5 rounded">
-                    {selectedRowIds.size} cửa hàng
-                  </span>
+                  <span>Cập Nhật Hàng Loạt</span>
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Điền dữ liệu cần thay đổi đồng loạt (các trường để trống sẽ giữ nguyên)
+                <p className="text-xs text-slate-500 font-mono mt-0.5">
+                  {currentDetailProject.projectCode} • {selectedRowIds.size} vị trí được chọn
                 </p>
               </div>
               <button
@@ -486,11 +483,19 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               </button>
             </div>
 
+            {/* DRAWER BODY FORM */}
             <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar text-xs font-medium">
+              {/* Readonly Project Info Summary */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200/80 dark:border-slate-800 space-y-1">
+                <p className="font-bold text-slate-800 dark:text-slate-200 text-sm">{currentDetailProject.projectName}</p>
+                <p className="text-slate-500">Áp dụng: <strong className="text-sky-600 dark:text-sky-400 font-bold">{selectedRowIds.size} cửa hàng được chọn</strong></p>
+                <p className="text-slate-500">Nhãn: <strong className="text-slate-700 dark:text-slate-300">{currentDetailProject.brandName}</strong> (Ngành: {currentDetailProject.categoryCode})</p>
+              </div>
+
               {/* 1. Status Dropdown */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
-                  Trạng Thái (Status)
+                  Trạng Thái (Status) <span className="text-rose-500">*</span>
                 </label>
                 <select
                   value={bulkForm.status || ''}
@@ -532,7 +537,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 />
               </div>
 
-              {/* 4. Completion Time */}
+              {/* 4. Completion Time Date Picker */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide flex items-center justify-between">
                   <span>Completion Time (Ngày hoàn thành)</span>
@@ -549,14 +554,50 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 </div>
               </div>
 
-              {/* 5. Note / Ghi chú */}
+              {/* 5. Planned Start & End Dates */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">Dự Kiến Từ Ngày</label>
+                  <input
+                    type="date"
+                    value={localDdmmyyyyToISO(bulkForm.plannedStartDate || '')}
+                    onChange={(e) => setBulkForm(prev => ({ ...prev, plannedStartDate: localIsoToDDMMYYYY(e.target.value) }))}
+                    className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl outline-none font-mono text-xs"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">Dự Kiến Đến Ngày</label>
+                  <input
+                    type="date"
+                    value={localDdmmyyyyToISO(bulkForm.plannedEndDate || '')}
+                    onChange={(e) => setBulkForm(prev => ({ ...prev, plannedEndDate: localIsoToDDMMYYYY(e.target.value) }))}
+                    className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl outline-none font-mono text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* 6. Warranty / Uninstall */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+                  Warranty - Uninstall (Thông tin Bảo Hành)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Thông tin bảo hành hoặc lý do tháo dỡ"
+                  value={bulkForm.warranty || ''}
+                  onChange={(e) => setBulkForm(prev => ({ ...prev, warranty: e.target.value }))}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl outline-none text-slate-800 dark:text-slate-200 focus:border-sky-500"
+                />
+              </div>
+
+              {/* 7. Note / Ghi chú */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
                   Note (Ghi Chú Chi Tiết)
                 </label>
                 <textarea
                   rows={3}
-                  placeholder="Ghi chú cập nhật hàng loạt cho tất cả các ca được chọn..."
+                  placeholder="Ghi chú thêm về ca lắp đặt..."
                   value={bulkForm.note || ''}
                   onChange={(e) => setBulkForm(prev => ({ ...prev, note: e.target.value }))}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl outline-none text-slate-800 dark:text-slate-200 focus:border-sky-500"
@@ -564,10 +605,11 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               </div>
             </div>
 
+            {/* DRAWER FOOTER ACTIONS */}
             <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 flex items-center justify-end gap-2">
               <button
                 onClick={() => setIsBulkDrawerOpen(false)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold cursor-pointer"
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold cursor-pointer transition-colors"
               >
                 Hủy
               </button>
