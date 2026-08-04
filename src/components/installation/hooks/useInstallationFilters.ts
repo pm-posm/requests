@@ -108,9 +108,18 @@ export function useInstallationFilters(
     };
   }, [rawData]);
 
-  // Modal Status Options - Strictly 1:1 with 8 Google Sheet Data Validation values
+  // Modal Status Options - Dynamic 1:1 Real-time Mapping directly from Google Sheet Column Z
   const modalStatusOptions = useMemo(() => {
-    return [
+    const statusSet = new Set<string>();
+
+    // 1. Extract ALL unique non-empty status values directly present in Google Sheet rawData
+    rawData.forEach(row => {
+      const st = row.status ? row.status.trim() : '';
+      if (st) statusSet.add(st);
+    });
+
+    // 2. Default Data Validation fallback statuses (ensures valid options exist even if sheet rows are new)
+    const DEFAULT_VALIDATION_STATUSES = [
       'New',
       'Pending Install',
       'Completed',
@@ -120,7 +129,12 @@ export function useInstallationFilters(
       'Warranty - Uninstall',
       'QC Passed'
     ];
-  }, []);
+
+    DEFAULT_VALIDATION_STATUSES.forEach(st => statusSet.add(st));
+
+    // Sort in Vietnamese alphabetical order
+    return Array.from(statusSet).sort((a, b) => a.localeCompare(b, 'vi'));
+  }, [rawData]);
 
   // Filter Flat Rows
   const filteredFlatRows = useMemo(() => {
