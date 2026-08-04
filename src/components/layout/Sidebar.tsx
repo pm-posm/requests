@@ -99,14 +99,14 @@ export function Sidebar({
                 icon={<BarChart3 />} label="Dashboard Báo Cáo" 
                 active={pathname.startsWith('/analytics')} 
                 isCollapsed={isCollapsed}
-                isLocked={false}
+                isLocked={true}
                 onClick={() => handleRouteClick('/analytics', 'analytics')} 
               />
               <SidebarItem 
                 icon={<Inbox />} label="Xử lý Request" 
                 active={pathname.startsWith('/requests')} 
                 isCollapsed={isCollapsed}
-                isLocked={false}
+                isLocked={true}
                 onClick={() => handleRouteClick('/requests', 'request')} 
               />
               {!isCollapsed && (
@@ -114,7 +114,7 @@ export function Sidebar({
                   <SubSidebarItem 
                     label="Tất cả Request (Overview)" 
                     active={pathname === '/requests' || pathname === '/requests/overview'} 
-                    isLocked={false}
+                    isLocked={true}
                     onClick={() => handleRouteClick('/requests', 'request')} 
                   />
                 </div>
@@ -130,14 +130,14 @@ export function Sidebar({
                 icon={<FolderOpen />} label="Tổng hợp dự án" 
                 active={pathname.startsWith('/projects') || pathname.startsWith('/project')} 
                 isCollapsed={isCollapsed}
-                isLocked={false}
+                isLocked={true}
                 onClick={() => handleRouteClick('/projects', 'tong_du_an')} 
               />
               <SidebarItem 
                 icon={<KanbanSquare />} label="Bảng kế hoạch" 
                 active={pathname.startsWith('/store-plan')} 
                 isCollapsed={isCollapsed}
-                isLocked={false}
+                isLocked={true}
                 onClick={() => handleRouteClick('/store-plan', 'store_plan')} 
               />
             </div>
@@ -158,7 +158,7 @@ export function Sidebar({
                 icon={<Factory />} label="Nghiệm thu Xuất xưởng" 
                 active={pathname.startsWith('/tracking/ntxx')} 
                 isCollapsed={isCollapsed}
-                isLocked={false}
+                isLocked={true}
                 onClick={() => handleRouteClick('/tracking/ntxx', 'tracking_ntxx')} 
               />
               <SidebarItem 

@@ -51,7 +51,8 @@ export const calculateInstallationResult = (
   if (existingResultSign === '✔' && !isQCFailed) {
     return { sign: '✔', isOverdue: false, isLateOrFailed: false };
   }
-  if (existingResultSign === '❌' || isQCFailed || isPendingInstall) {
+  // Sign is ONLY ❌ if sheet explicitly has ❌ or status is QC Failed
+  if (existingResultSign === '❌' || isQCFailed) {
     return { sign: '❌', isOverdue: false, isLateOrFailed: true };
   }
 

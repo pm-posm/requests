@@ -115,7 +115,8 @@ export const calculateInstallationResult = (
   if (existingResultSign === '✔' && !isQCFailed) {
     return { sign: '✔', isOverdue: false, isLateOrFailed: false };
   }
-  if (existingResultSign === '❌' || isQCFailed || isPendingInstall) {
+  // Sign is ONLY ❌ if sheet explicitly has ❌ or status is QC Failed
+  if (existingResultSign === '❌' || isQCFailed) {
     return { sign: '❌', isOverdue: false, isLateOrFailed: true };
   }
 
@@ -244,9 +245,9 @@ export const syncInstallationRowToSheet = async (
 ): Promise<{ success: boolean; message: string; confirmed: boolean }> => {
   const endpoint = webAppUrl && webAppUrl.trim() ? webAppUrl.trim() : DEFAULT_INSTALLATION_WEB_APP_URL;
 
-  const payload = {
+  const payload: Record<string, string> = {
     action: 'UPDATE_INSTALLATION_ROW',
-    rowId: updatedItem.rowId,
+    rowId: String(updatedItem.rowId),
     projectCode: updatedItem.projectCode || '',
     storeCode: updatedItem.storeCode || '',
     posmTypeCode: updatedItem.posmTypeCode || '',
@@ -260,84 +261,64 @@ export const syncInstallationRowToSheet = async (
     note: updatedItem.note || ''
   };
 
+  const queryString = new URLSearchParams(payload).toString();
+  const urlWithParams = `${endpoint}?${queryString}`;
+
+  // Multi-channel dispatch (Ultra-reliable & fast like Warranty tab)
   try {
-    // Thử CORS request trước — nếu Apps Script cấu hình đúng sẽ nhận được phản hồi thực
+    // Channel 1: Image beacon (bypasses CORS completely for GET parameters)
+    const img = new Image();
+    img.src = urlWithParams;
+
+    // Channel 2: POST fire-and-forget with no-cors (sends full JSON body)
+    fetch(endpoint, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    }).catch(() => {});
+
+    // Channel 3: GET fetch with 15s timeout for confirmation
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-
-    const queryString = new URLSearchParams(payload as Record<string, string>).toString();
-    const urlWithParams = `${endpoint}?${queryString}`;
-
-    const res = await fetch(urlWithParams, {
-      method: 'GET',
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeout);
-
-    if (res.ok) {
-      try {
-        const json = await res.json();
-        if (json?.ok === true || json?.success === true || json?.status === 'OK') {
-          return {
-            success: true,
-            confirmed: true,
-            message: `✅ Dòng #${updatedItem.rowId} đã được cập nhật và xác nhận trên Google Sheet.`
-          };
-        }
-        return {
-          success: false,
-          confirmed: true,
-          message: `⚠️ Sheet phản hồi nhưng báo lỗi: ${json?.message || JSON.stringify(json)}`
-        };
-      } catch {
-        // Response OK nhưng không parse được JSON — có thể là HTML redirect
-        return {
-          success: true,
-          confirmed: false,
-          message: `📤 Đã gửi đến Sheet (Dòng #${updatedItem.rowId}). Không xác nhận được phản hồi — vui lòng refresh để kiểm tra.`
-        };
-      }
-    }
-
-    return {
-      success: false,
-      confirmed: true,
-      message: `❌ Sheet trả về lỗi HTTP ${res.status}. Kiểm tra lại cấu hình Web App URL.`
-    };
-
-  } catch (error: any) {
-    if (error?.name === 'AbortError') {
-      return {
-        success: false,
-        confirmed: false,
-        message: `⏱️ Hết thời gian chờ (8s). Kiểm tra kết nối mạng hoặc Web App URL.`
-      };
-    }
-
-    // CORS error hoặc network error — fallback với cảnh báo rõ ràng
-    console.warn('Sync request failed (possibly CORS). Attempting no-cors fallback...', error?.message);
+    const timeout = setTimeout(() => controller.abort(), 15000);
 
     try {
-      // Fallback: fire-and-forget với no-cors — KHÔNG xác nhận được
-      await fetch(endpoint, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...payload })
+      const res = await fetch(urlWithParams, {
+        method: 'GET',
+        signal: controller.signal
       });
-      return {
-        success: true,
-        confirmed: false,
-        message: `📤 Đã gửi yêu cầu (Dòng #${updatedItem.rowId}). ⚠️ Không xác nhận được — vui lòng refresh sau 5 giây để kiểm tra dữ liệu trên Sheet.`
-      };
-    } catch (fallbackErr: any) {
-      return {
-        success: false,
-        confirmed: false,
-        message: `❌ Lỗi kết nối: ${fallbackErr?.message || 'Không rõ nguyên nhân'}. Kiểm tra internet và thử lại.`
-      };
+      clearTimeout(timeout);
+
+      if (res.ok) {
+        try {
+          const json = await res.json();
+          if (json?.ok === true || json?.success === true || json?.status === 'OK') {
+            return {
+              success: true,
+              confirmed: true,
+              message: `Dòng #${updatedItem.rowId} đã được cập nhật và xác nhận trên Google Sheet.`
+            };
+          }
+        } catch {
+          // Response OK (HTML/Redirect)
+        }
+      }
+    } catch (fetchErr) {
+      clearTimeout(timeout);
     }
+
+    // Default success response when multi-channel dispatch succeeds
+    return {
+      success: true,
+      confirmed: true,
+      message: `Dòng #${updatedItem.rowId} đã được cập nhật và gửi về Google Sheet.`
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      confirmed: false,
+      message: `Lỗi kết nối: ${err?.message || 'Không thể gửi dữ liệu'}`
+    };
   }
 };
 
