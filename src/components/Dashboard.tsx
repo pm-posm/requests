@@ -173,7 +173,7 @@ export default function Dashboard() {
             </div>
           }>
             <Routes>
-              {/* Operations / Tracking Routes - ACCESSIBLE */}
+              {/* Operations & Tracking Routes */}
               <Route path="/tracking/warranty" element={
                 <div className="absolute inset-0 p-2.5 sm:p-4 md:p-5 overflow-y-auto custom-scrollbar bg-background">
                   <div className="w-full max-w-[1920px] mx-auto">
@@ -182,16 +182,44 @@ export default function Dashboard() {
                 </div>
               } />
 
-              {/* Contacts / Master Stores Route - ACCESSIBLE */}
-              <Route path="/contacts" element={<StoreContactPage />} />
+              <Route path="/tracking/installation" element={
+                <div className="absolute inset-0 p-2.5 sm:p-4 md:p-5 overflow-y-auto custom-scrollbar bg-background">
+                  <div className="w-full max-w-[1920px] mx-auto">
+                    <TrackingInstallation />
+                  </div>
+                </div>
+              } />
 
-              {/* TEMPORARILY LOCKED ROUTES - REDIRECT TO WARRANTY DEMO */}
-              <Route path="/analytics" element={<Navigate to="/tracking/warranty" replace />} />
-              <Route path="/requests/*" element={<Navigate to="/tracking/warranty" replace />} />
-              <Route path="/projects/*" element={<Navigate to="/tracking/warranty" replace />} />
-              <Route path="/store-plan/*" element={<Navigate to="/tracking/warranty" replace />} />
-              <Route path="/tracking/ntxx" element={<Navigate to="/tracking/warranty" replace />} />
-              <Route path="/tracking/installation" element={<Navigate to="/tracking/warranty" replace />} />
+              <Route path="/tracking/ntxx" element={
+                <div className="absolute inset-0 p-2.5 sm:p-4 md:p-5 overflow-y-auto custom-scrollbar bg-background">
+                  <div className="w-full max-w-[1920px] mx-auto">
+                    <TrackingNtxx />
+                  </div>
+                </div>
+              } />
+
+              {/* Analytics & BI Dashboard Route */}
+              <Route path="/analytics" element={
+                <div className="absolute inset-0 p-2.5 sm:p-4 md:p-5 overflow-y-auto custom-scrollbar bg-background">
+                  <div className="w-full max-w-[1920px] mx-auto">
+                    <Analytics />
+                  </div>
+                </div>
+              } />
+
+              {/* Requests Management Routes */}
+              <Route path="/requests" element={<DashboardOverview />} />
+              <Route path="/requests/overview" element={<DashboardOverview />} />
+              <Route path="/requests/stores" element={<DashboardStoreList />} />
+              <Route path="/requests/store/:storeCode" element={<DashboardStoreViewRouteWrapper />} />
+
+              {/* Projects & Plan Board Routes */}
+              <Route path="/projects" element={<TrackingProject />} />
+              <Route path="/project/:projectCode" element={<ProjectDetail />} />
+              <Route path="/store-plan" element={<StorePlanBoardPage />} />
+
+              {/* Contacts / Master Stores Route */}
+              <Route path="/contacts" element={<StoreContactPage />} />
 
               {/* Default Fallback Redirects */}
               <Route path="/" element={<Navigate to="/tracking/warranty" replace />} />

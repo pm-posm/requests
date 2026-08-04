@@ -18,7 +18,16 @@ interface SidebarProps {
   setIsMobileOpen: (v: boolean) => void;
 }
 
-const ALLOWED_PATHS = ['/tracking/warranty', '/contacts'];
+const ALLOWED_PATHS = [
+  '/tracking/warranty', 
+  '/tracking/installation', 
+  '/tracking/ntxx', 
+  '/analytics', 
+  '/requests', 
+  '/projects', 
+  '/store-plan', 
+  '/contacts'
+];
 
 export function Sidebar({
   mainMenu, setMainMenu, requestMenu, setRequestMenu, setSelectedStore, setIsNewRequestOpen, isMobileOpen, setIsMobileOpen
@@ -29,11 +38,6 @@ export function Sidebar({
   const [isCollapsed, setIsCollapsed] = React.useState(false);
 
   const handleRouteClick = (path: string, menuKey?: string) => {
-    const isAllowed = ALLOWED_PATHS.some(allowed => path.startsWith(allowed));
-    if (!isAllowed) {
-      toast.error('🔒 Tính năng đang trong quá trình bảo trì & nâng cấp hệ thống');
-      return;
-    }
     navigate(path);
     if (menuKey) setMainMenu(menuKey);
     if (window.innerWidth < 768) setIsMobileOpen(false);
@@ -95,14 +99,14 @@ export function Sidebar({
                 icon={<BarChart3 />} label="Dashboard Báo Cáo" 
                 active={pathname.startsWith('/analytics')} 
                 isCollapsed={isCollapsed}
-                isLocked={true}
+                isLocked={false}
                 onClick={() => handleRouteClick('/analytics', 'analytics')} 
               />
               <SidebarItem 
                 icon={<Inbox />} label="Xử lý Request" 
                 active={pathname.startsWith('/requests')} 
                 isCollapsed={isCollapsed}
-                isLocked={true}
+                isLocked={false}
                 onClick={() => handleRouteClick('/requests', 'request')} 
               />
               {!isCollapsed && (
@@ -110,7 +114,7 @@ export function Sidebar({
                   <SubSidebarItem 
                     label="Tất cả Request (Overview)" 
                     active={pathname === '/requests' || pathname === '/requests/overview'} 
-                    isLocked={true}
+                    isLocked={false}
                     onClick={() => handleRouteClick('/requests', 'request')} 
                   />
                 </div>
@@ -126,14 +130,14 @@ export function Sidebar({
                 icon={<FolderOpen />} label="Tổng hợp dự án" 
                 active={pathname.startsWith('/projects') || pathname.startsWith('/project')} 
                 isCollapsed={isCollapsed}
-                isLocked={true}
+                isLocked={false}
                 onClick={() => handleRouteClick('/projects', 'tong_du_an')} 
               />
               <SidebarItem 
                 icon={<KanbanSquare />} label="Bảng kế hoạch" 
                 active={pathname.startsWith('/store-plan')} 
                 isCollapsed={isCollapsed}
-                isLocked={true}
+                isLocked={false}
                 onClick={() => handleRouteClick('/store-plan', 'store_plan')} 
               />
             </div>
@@ -154,14 +158,14 @@ export function Sidebar({
                 icon={<Factory />} label="Nghiệm thu Xuất xưởng" 
                 active={pathname.startsWith('/tracking/ntxx')} 
                 isCollapsed={isCollapsed}
-                isLocked={true}
+                isLocked={false}
                 onClick={() => handleRouteClick('/tracking/ntxx', 'tracking_ntxx')} 
               />
               <SidebarItem 
                 icon={<ClipboardCheck />} label="Theo dõi Lắp đặt" 
                 active={pathname.startsWith('/tracking/installation')} 
                 isCollapsed={isCollapsed}
-                isLocked={true}
+                isLocked={false}
                 onClick={() => handleRouteClick('/tracking/installation', 'tracking_installation')} 
               />
             </div>

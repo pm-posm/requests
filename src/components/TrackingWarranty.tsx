@@ -783,10 +783,10 @@ export default function TrackingWarranty() {
       const supName = sup || 'Chưa gán thầu';
       projectMap[prj].suppliers[supName] = (projectMap[prj].suppliers[supName] || 0) + 1;
 
-      // 4. Time & SLA Metrics Calculation
+      // 4. Time & SLA Metrics Calculation (Ưu tiên mốc chính Cột T Deadline từ Mer View 2026)
       const installMs = parseDateToMs(item.installationDate);
       const sentMs = parseDateToMs(item.sentDate);
-      const expectedMs = parseDateToMs(item.expectedDate);
+      const expectedMs = parseDateToMs(item.requestDeadline || item.expectedDate);
       const completedMs = parseDateToMs(item.completedDate);
 
       // Duration: Installation ➔ Issue (MTBF - Chỉ tính khi thực sự có Ngày Lắp Đặt)
