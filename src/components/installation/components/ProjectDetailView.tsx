@@ -57,6 +57,99 @@ const localDdmmyyyyToISO = (ddmmyyyy: string): string => {
   return '';
 };
 
+// Actual Time Alert States: UPCOMING, IN_PROGRESS, DUE_SOON, OVERDUE
+export interface ActualTimeAlert {
+  state: 'UPCOMING' | 'IN_PROGRESS' | 'DUE_SOON' | 'OVERDUE' | 'COMPLETED' | 'NONE';
+  label: string;
+  badgeClass: string;
+  icon: string;
+}
+
+export const getActualTimeAlert = (
+  actualTime?: string,
+  completionTime?: string,
+  status?: string
+): ActualTimeAlert => {
+  const isCompleted = (status || '').toLowerCase().includes('completed') || 
+                      (status || '').toLowerCase().includes('qc passed') ||
+                      Boolean(completionTime && completionTime.trim());
+
+  if (isCompleted) {
+    return { state: 'COMPLETED', label: 'Hoàn thành', badgeClass: '', icon: '' };
+  }
+
+  if (!actualTime || !actualTime.trim()) {
+    return { state: 'NONE', label: '', badgeClass: '', icon: '' };
+  }
+
+  const cleanStr = actualTime.trim();
+  const parts = cleanStr.split(/[-–—]/).map(p => p.trim());
+  if (parts.length < 2) {
+    return { state: 'NONE', label: '', badgeClass: '', icon: '' };
+  }
+
+  const startPart = parts[0];
+  const endPart = parts[parts.length - 1];
+
+  const endTokens = endPart.split('/');
+  if (endTokens.length < 2) return { state: 'NONE', label: '', badgeClass: '', icon: '' };
+
+  let endD = parseInt(endTokens[0], 10);
+  let endM = parseInt(endTokens[1], 10) - 1;
+  let endY = endTokens.length === 3 ? parseInt(endTokens[2], 10) : new Date().getFullYear();
+  if (endY < 100) endY += 2000;
+
+  const endDate = new Date(endY, endM, endD, 23, 59, 59);
+
+  const startTokens = startPart.split('/');
+  let startD = parseInt(startTokens[0], 10);
+  let startM = startTokens.length >= 2 ? parseInt(startTokens[1], 10) - 1 : endM;
+  let startY = startTokens.length === 3 ? parseInt(startTokens[2], 10) : endY;
+  if (startY < 100) startY += 2000;
+
+  const startDate = new Date(startY, startM, startD, 0, 0, 0);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (today < startDate) {
+    return {
+      state: 'UPCOMING',
+      label: 'Đã lên lịch',
+      badgeClass: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700',
+      icon: '📅'
+    };
+  }
+
+  if (today > endDate) {
+    return {
+      state: 'OVERDUE',
+      label: 'Quá hạn',
+      badgeClass: 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border-rose-200 dark:border-rose-900 font-bold animate-pulse',
+      icon: '🚨'
+    };
+  }
+
+  const diffMs = endDate.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays <= 1) {
+    return {
+      state: 'DUE_SOON',
+      label: 'Sắp tới hạn (còn 1 ngày)',
+      badgeClass: 'bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-900 font-semibold',
+      icon: '⚠️'
+    };
+  }
+
+  return {
+    state: 'IN_PROGRESS',
+    label: 'Đang thực hiện',
+    badgeClass: 'bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border-sky-200 dark:border-sky-900 font-medium',
+    icon: '🔄'
+  };
+};
+
 export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   currentDetailProject,
   setActiveProjectDetailCode,
@@ -449,10 +542,23 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                       {!store.resultSign && <span className="text-slate-300">—</span>}
                     </td>
 
-                    {/* Lịch thi công */}
+                    {/* Lịch thi công & Cảnh báo thời gian */}
                     <td className="px-4 py-3.5 text-[11px] font-mono whitespace-nowrap">
                       <div>Actual: {store.actualTime || 'Chưa có'}</div>
                       {store.completionTime && <div className="text-emerald-600 font-semibold">Done: {store.completionTime}</div>}
+
+                      {(() => {
+                        const alert = getActualTimeAlert(store.actualTime, store.completionTime, store.status);
+                        if (!alert.label || alert.state === 'COMPLETED') return null;
+                        return (
+                          <div className="mt-1">
+                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] border ${alert.badgeClass}`}>
+                              <span>{alert.icon}</span>
+                              <span>{alert.label}</span>
+                            </span>
+                          </div>
+                        );
+                      })()}
                     </td>
 
                     {/* Action edit */}
@@ -530,11 +636,6 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 <p className="font-bold text-slate-800 dark:text-slate-200 text-sm">{currentDetailProject.projectName}</p>
                 <p className="text-slate-500">Áp dụng: <strong className="text-sky-600 dark:text-sky-400 font-bold">{selectedRowIds.size} cửa hàng được chọn</strong></p>
                 <p className="text-slate-500">Nhãn: <strong className="text-slate-700 dark:text-slate-300">{currentDetailProject.brandName}</strong> (Ngành: {currentDetailProject.categoryCode})</p>
-              </div>
-
-              {/* Safety Safeguard Notice Banner */}
-              <div className="p-2.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-900/60 rounded-xl text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed font-medium">
-                🔒 <strong>Bảo vệ dữ liệu Sheet:</strong> Các trường bạn để trống sẽ <strong>GIỮ NGUYÊN 100% GIÁ TRỊ CŨ</strong> trên Google Sheet và không bị mất/xóa!
               </div>
 
               {/* 1. Status Dropdown */}
