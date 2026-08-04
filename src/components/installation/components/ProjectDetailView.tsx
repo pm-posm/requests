@@ -116,6 +116,31 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     });
   };
 
+  const openBulkDrawer = () => {
+    const selectedStoresList = filteredProjectDetailStores.filter(s => selectedRowIds.has(s.rowId));
+
+    const getCommonValue = (field: keyof InstallationItem): string => {
+      if (selectedStoresList.length === 0) return '';
+      const firstVal = (selectedStoresList[0][field] as string || '').trim();
+      if (!firstVal) return '';
+      const allSame = selectedStoresList.every(s => (s[field] as string || '').trim() === firstVal);
+      return allSame ? firstVal : '';
+    };
+
+    setBulkForm({
+      status: getCommonValue('status'),
+      technician: getCommonValue('technician'),
+      actualTime: getCommonValue('actualTime'),
+      completionTime: getCommonValue('completionTime'),
+      plannedStartDate: getCommonValue('plannedStartDate'),
+      plannedEndDate: getCommonValue('plannedEndDate'),
+      warranty: getCommonValue('warranty'),
+      note: getCommonValue('note')
+    });
+
+    setIsBulkDrawerOpen(true);
+  };
+
   const handleApplyBulkEdit = async () => {
     const targetIds = Array.from(selectedRowIds);
     if (targetIds.length === 0) return;
@@ -461,10 +486,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
           <div className="h-4 w-px bg-slate-700" />
 
           <button
-            onClick={() => {
-              setBulkForm({ status: '', technician: '', actualTime: '', completionTime: '', plannedStartDate: '', plannedEndDate: '', warranty: '', note: '' });
-              setIsBulkDrawerOpen(true);
-            }}
+            onClick={openBulkDrawer}
             className="px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-extrabold rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm"
           >
             <span>⚡ Chỉnh Sửa Hàng Loạt</span>
@@ -508,6 +530,11 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 <p className="font-bold text-slate-800 dark:text-slate-200 text-sm">{currentDetailProject.projectName}</p>
                 <p className="text-slate-500">Áp dụng: <strong className="text-sky-600 dark:text-sky-400 font-bold">{selectedRowIds.size} cửa hàng được chọn</strong></p>
                 <p className="text-slate-500">Nhãn: <strong className="text-slate-700 dark:text-slate-300">{currentDetailProject.brandName}</strong> (Ngành: {currentDetailProject.categoryCode})</p>
+              </div>
+
+              {/* Safety Safeguard Notice Banner */}
+              <div className="p-2.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-900/60 rounded-xl text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed font-medium">
+                🔒 <strong>Bảo vệ dữ liệu Sheet:</strong> Các trường bạn để trống sẽ <strong>GIỮ NGUYÊN 100% GIÁ TRỊ CŨ</strong> trên Google Sheet và không bị mất/xóa!
               </div>
 
               {/* 1. Status Dropdown */}
