@@ -106,26 +106,35 @@ export function useInstallationFilters(
     };
   }, [rawData]);
 
-  // Modal Status Options
+  // Modal Status Options - Clean 1:1 mapping with Google Sheet
   const modalStatusOptions = useMemo(() => {
-    const SHEET_DATA_VALIDATION_STATUSES = [
-      'Completed',
-      'Pending Install',
+    // Official 8 Data Validation Status values from Google Sheet
+    const OFFICIAL_SHEET_STATUSES = [
       'New',
-      'QC Failed',
-      'Cancelled',
+      'Pending Install',
+      'Completed',
       'Installation QC Failed',
-      'QC Passed',
-      'Supplier chưa gửi Report'
+      'Supplier chưa gửi Report',
+      'Cancelled',
+      'Warranty - Uninstall',
+      'QC Passed'
     ];
 
-    const set = new Set<string>(SHEET_DATA_VALIDATION_STATUSES);
+    const set = new Set<string>();
+
+    // 1. Add statuses present in actual raw Google Sheet data
     filterOptions.statuses.forEach(st => {
       if (st && st.trim()) set.add(st.trim());
     });
+
+    // 2. Add official sheet statuses if not already present
+    OFFICIAL_SHEET_STATUSES.forEach(st => set.add(st));
+
+    // 3. Add current editFormStatus if set
     if (editFormStatus && editFormStatus.trim()) {
       set.add(editFormStatus.trim());
     }
+
     return Array.from(set);
   }, [filterOptions.statuses, editFormStatus]);
 
@@ -424,7 +433,19 @@ export function useInstallationFilters(
       supplierMap[supplierKey].total++;
       supplierMap[supplierKey].totalItems.push(row);
 
-      if (!hasActualTime) {
+      const isCancelled = statusLower.includes('cancelled') || statusLower.includes('cancel') || statusLower.includes('hủy');
+      const isNoReport = noteLower.includes('chưa gửi report') || statusLower.includes('chưa gửi report') || statusLower.includes('no report');
+      const isQCFailed = statusLower.includes('installation qc failed') || statusLower.includes('qc failed') || statusLower.includes('failed') || statusLower.includes('lỗi');
+
+      if (isCancelled) {
+        cancelledCount++;
+        supplierMap[supplierKey].cancelled++;
+        supplierMap[supplierKey].unupdatedItems.push(row);
+      } else if (isNoReport) {
+        noReportCount++;
+        supplierMap[supplierKey].noReport++;
+        supplierMap[supplierKey].unupdatedItems.push(row);
+      } else if (!hasActualTime) {
         noActualTimeTotalCount++;
         supplierMap[supplierKey].noActualTime++;
         supplierMap[supplierKey].noActualTimeItems.push(row);
@@ -433,26 +454,13 @@ export function useInstallationFilters(
         supplierMap[supplierKey].activeExecuted++;
         supplierMap[supplierKey].activeExecutedItems.push(row);
 
-        const isQCFailed = statusLower.includes('installation qc failed') || statusLower.includes('failed') || statusLower.includes('lỗi');
-        const isPendingInstall = statusLower.includes('pending install');
-        const isCancelled = statusLower.includes('cancelled') || statusLower.includes('cancel');
-        const isNoReport = noteLower.includes('chưa gửi report') || statusLower.includes('chưa gửi report');
-
-        if (resultSign === '❌' || resultSign === 'OVERDUE_RED' || (resultSign === '✔' && isQCFailed) || isPendingInstall) {
+        if (resultSign === '❌' || resultSign === 'OVERDUE_RED' || isQCFailed) {
           issueCount++;
           if (resultSign === 'OVERDUE_RED') overdueCount++;
           supplierMap[supplierKey].issue++;
           supplierMap[supplierKey].issueItems.push(row);
           issueAuditList.push(row);
-        } else if (isCancelled) {
-          cancelledCount++;
-          supplierMap[supplierKey].cancelled++;
-          supplierMap[supplierKey].unupdatedItems.push(row);
-        } else if (isNoReport) {
-          noReportCount++;
-          supplierMap[supplierKey].noReport++;
-          supplierMap[supplierKey].unupdatedItems.push(row);
-        } else if (resultSign === '✔') {
+        } else if (resultSign === '✔' || statusLower.includes('completed') || statusLower.includes('pass')) {
           completed++;
           supplierMap[supplierKey].success++;
           supplierMap[supplierKey].completedItems.push(row);
