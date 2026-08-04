@@ -54,6 +54,7 @@ export default function TrackingInstallation() {
     selectedTechnician, setSelectedTechnician,
     selectedCat, setSelectedCat,
     selectedResult, setSelectedResult,
+    selectedScheduleState, setSelectedScheduleState,
     analystSelectedMonth, setAnalystSelectedMonth,
     analystSelectedYear, setAnalystSelectedYear,
     expandedSupplierIssues,
@@ -196,6 +197,8 @@ export default function TrackingInstallation() {
               setSelectedCat={setSelectedCat}
               selectedResult={selectedResult}
               setSelectedResult={setSelectedResult}
+              selectedScheduleState={selectedScheduleState}
+              setSelectedScheduleState={setSelectedScheduleState}
               filterOptions={filterOptions}
               paginatedProjects={paginatedProjects}
               groupedProjectsCount={groupedProjects.length}

@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import type { InstallationItem } from '@/services/installationSyncService';
 import type { MasterStoreContactInfo } from '@/services/sheetSyncService';
-import { getRowMonthYear } from '../utils/statusCalculators';
+import { getRowMonthYear, getActualTimeAlert } from '../utils/statusCalculators';
 
 export interface GroupedProject {
   projectCode: string;
@@ -42,6 +42,7 @@ export function useInstallationFilters(
   const [selectedTechnician, setSelectedTechnician] = useState('all');
   const [selectedCat, setSelectedCat] = useState('all');
   const [selectedResult, setSelectedResult] = useState('all');
+  const [selectedScheduleState, setSelectedScheduleState] = useState('all');
 
   // Time Filter States (Analyst Tab)
   const [analystSelectedMonth, setAnalystSelectedMonth] = useState<string>('all');
@@ -175,9 +176,15 @@ export function useInstallationFilters(
       else if (selectedResult === 'fail') matchesResult = row.resultSign === '❌';
       else if (selectedResult === 'overdue') matchesResult = row.resultSign === 'OVERDUE_RED';
 
-      return matchesSearch && matchesRegion && matchesBrand && matchesSupplier && matchesStatus && matchesTechnician && matchesCat && matchesResult;
+      let matchesSchedule = true;
+      if (selectedScheduleState !== 'all') {
+        const alert = getActualTimeAlert(row.actualTime, row.completionTime, row.status);
+        matchesSchedule = alert.state === selectedScheduleState;
+      }
+
+      return matchesSearch && matchesRegion && matchesBrand && matchesSupplier && matchesStatus && matchesTechnician && matchesCat && matchesResult && matchesSchedule;
     });
-  }, [rawData, contactMap, searchTerm, selectedRegion, selectedBrand, selectedSupplier, selectedStatus, selectedTechnician, selectedCat, selectedResult]);
+  }, [rawData, contactMap, searchTerm, selectedRegion, selectedBrand, selectedSupplier, selectedStatus, selectedTechnician, selectedCat, selectedResult, selectedScheduleState]);
 
   // Group by Project
   const groupedProjects = useMemo(() => {
@@ -584,6 +591,7 @@ export function useInstallationFilters(
     setSelectedTechnician('all');
     setSelectedCat('all');
     setSelectedResult('all');
+    setSelectedScheduleState('all');
   };
 
   return {
@@ -595,6 +603,7 @@ export function useInstallationFilters(
     selectedTechnician, setSelectedTechnician,
     selectedCat, setSelectedCat,
     selectedResult, setSelectedResult,
+    selectedScheduleState, setSelectedScheduleState,
     analystSelectedMonth, setAnalystSelectedMonth,
     analystSelectedYear, setAnalystSelectedYear,
     expandedSupplierIssues, setExpandedSupplierIssues,

@@ -124,16 +124,16 @@ export const AnalystDashboard: React.FC<AnalystDashboardProps> = ({
           </CardContent>
         </Card>
 
-        {/* CARD 2: CHƯA XẾP LỊCH */}
+        {/* CARD 2: TỔNG VỊ TRÍ ASSET POSM */}
         <Card className="bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 shadow-xs">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Chưa Xếp Lịch</p>
-              <h3 className="text-2xl font-extrabold text-purple-700 dark:text-purple-400 mt-1">{overallStats.noActualTimeTotalCount} <span className="text-xs font-bold text-slate-500">vị trí</span></h3>
-              <p className="text-[10px] text-slate-400 font-medium">Chưa có Actual Time</p>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Tổng Vị Trí Asset POSM</p>
+              <h3 className="text-2xl font-extrabold text-purple-700 dark:text-purple-400 mt-1">{overallStats.total} <span className="text-xs font-bold text-slate-500">vị trí</span></h3>
+              <p className="text-[10px] text-slate-400 font-medium">Tổng số dòng Asset trên Sheet</p>
             </div>
             <div className="p-3 bg-purple-50 dark:bg-purple-950 text-purple-600 rounded-xl">
-              <Clock className="w-5 h-5" />
+              <Layers className="w-5 h-5" />
             </div>
           </CardContent>
         </Card>

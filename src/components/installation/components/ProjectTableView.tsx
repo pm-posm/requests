@@ -1,7 +1,7 @@
 import React from 'react';
 import { Search, Filter, ArrowRight } from 'lucide-react';
 import type { GroupedProject } from '../hooks/useInstallationFilters';
-import { evaluateScheduleHighlight } from '../utils/statusCalculators';
+import { evaluateScheduleHighlight, getActualTimeAlert } from '../utils/statusCalculators';
 
 interface ProjectTableViewProps {
   searchTerm: string;
@@ -20,6 +20,8 @@ interface ProjectTableViewProps {
   setSelectedCat: (val: string) => void;
   selectedResult: string;
   setSelectedResult: (val: string) => void;
+  selectedScheduleState: string;
+  setSelectedScheduleState: (val: string) => void;
   filterOptions: {
     regions: string[];
     brands: string[];
@@ -57,6 +59,8 @@ export const ProjectTableView: React.FC<ProjectTableViewProps> = ({
   setSelectedCat,
   selectedResult,
   setSelectedResult,
+  selectedScheduleState,
+  setSelectedScheduleState,
   filterOptions,
   paginatedProjects,
   groupedProjectsCount,
@@ -87,7 +91,7 @@ export const ProjectTableView: React.FC<ProjectTableViewProps> = ({
           </div>
 
           {/* QUICK CLEAR FILTERS BUTTON */}
-          {(searchTerm || selectedRegion !== 'all' || selectedBrand !== 'all' || selectedSupplier !== 'all' || selectedStatus !== 'all' || selectedTechnician !== 'all' || selectedCat !== 'all' || selectedResult !== 'all') && (
+          {(searchTerm || selectedRegion !== 'all' || selectedBrand !== 'all' || selectedSupplier !== 'all' || selectedStatus !== 'all' || selectedTechnician !== 'all' || selectedCat !== 'all' || selectedResult !== 'all' || selectedScheduleState !== 'all') && (
             <button
               onClick={clearAllFilters}
               className="px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold rounded-xl transition-colors cursor-pointer whitespace-nowrap"
@@ -98,7 +102,7 @@ export const ProjectTableView: React.FC<ProjectTableViewProps> = ({
         </div>
 
         {/* MULTI-SELECT DROPDOWNS BAR */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-2 text-xs font-medium">
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-2 text-xs font-medium">
           {/* 1. Ngành Hàng */}
           <select
             value={selectedCat}
@@ -171,7 +175,21 @@ export const ProjectTableView: React.FC<ProjectTableViewProps> = ({
             <option value="overdue">🚩 Quá hạn thi công</option>
           </select>
 
-          {/* 7. POSM QC Tech */}
+          {/* 7. Bộ Lọc Lịch Thi Công (Actual Time Alert States) */}
+          <select
+            value={selectedScheduleState}
+            onChange={(e) => setSelectedScheduleState(e.target.value)}
+            className="w-full px-2.5 py-2 bg-sky-50/80 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200/80 dark:border-sky-800 rounded-xl outline-none cursor-pointer font-semibold"
+          >
+            <option value="all">Tất cả Lịch Thi Công</option>
+            <option value="NO_ACTUAL_TIME">⏳ Chưa có Actual Time</option>
+            <option value="UPCOMING">📅 Đã lên lịch</option>
+            <option value="IN_PROGRESS">🔄 Đang thực hiện</option>
+            <option value="DUE_SOON">⚠️ Sắp tới hạn (còn 1 ngày)</option>
+            <option value="OVERDUE">🚨 Quá hạn</option>
+          </select>
+
+          {/* 8. POSM QC Tech */}
           <select
             value={selectedTechnician}
             onChange={(e) => setSelectedTechnician(e.target.value)}
@@ -267,12 +285,25 @@ export const ProjectTableView: React.FC<ProjectTableViewProps> = ({
                       {prj.plannedTimeRange}
                     </td>
 
-                    {/* Actual Time Supplier */}
+                    {/* Actual Time Supplier & Alert Badges */}
                     <td className="px-4 py-3.5 font-mono text-xs whitespace-nowrap">
                       {prj.actualTimeRange && prj.actualTimeRange !== 'Xem từng vị trí'
                         ? <span className="font-medium text-slate-700 dark:text-slate-300">{prj.actualTimeRange}</span>
                         : <span className="text-slate-300 dark:text-slate-600" title="Xem từng vị trí cụ thể trong chi tiết dự án">—</span>
                       }
+
+                      {(() => {
+                        const alert = getActualTimeAlert(prj.actualTimeRange);
+                        if (!alert.label || alert.state === 'COMPLETED') return null;
+                        return (
+                          <div className="mt-1">
+                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] border ${alert.badgeClass}`}>
+                              <span>{alert.icon}</span>
+                              <span>{alert.label}</span>
+                            </span>
+                          </div>
+                        );
+                      })()}
                     </td>
 
                     {/* Tiến Độ Hoàn Thành */}
