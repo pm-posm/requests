@@ -263,7 +263,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 const isSelected = selectedRowIds.has(store.rowId);
                 const contactInfo = contactMap.get((store.storeCode || '').toUpperCase().trim());
                 const isExpandedSize = expandedSizeRows[store.rowId];
-                const hasLongSize = store.size && store.size.trim().length > 35;
+                const hasLongSize = store.size && (store.size.trim().length > 20 || store.size.includes('\n'));
 
                 return (
                   <tr 
@@ -318,41 +318,56 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                     </td>
 
                     {/* Hạng mục & Size (COLLAPSIBLE SIZE FEATURE) */}
-                    <td className="px-4 py-3.5 max-w-[280px]">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {store.posmTypeCode && (
-                          <span className="font-mono text-[10px] font-bold text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/60 px-1.5 py-0.5 rounded border border-sky-200/50 dark:border-sky-900/50">
-                            {store.posmTypeCode}
-                          </span>
-                        )}
-                        <span className="font-semibold text-slate-800 dark:text-slate-200">{store.item || '-'}</span>
-                      </div>
+                    <td className="px-4 py-3.5 max-w-[320px]">
+                      {(() => {
+                        const rawItem = (store.item || '').trim();
+                        const rawSize = (store.size || '').trim();
 
-                      {store.size && store.size.trim() ? (
-                        <div className="mt-1">
-                          {!hasLongSize ? (
-                            <div className="text-slate-500 dark:text-slate-400 text-[11px] font-mono">{store.size}</div>
-                          ) : (
-                            <div>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setExpandedSizeRows(prev => ({ ...prev, [store.rowId]: !prev[store.rowId] }));
-                                }}
-                                className="text-[10px] font-semibold text-sky-700 dark:text-sky-300 hover:underline inline-flex items-center gap-1 cursor-pointer bg-sky-50 dark:bg-sky-950/50 px-2 py-0.5 rounded border border-sky-200/60 dark:border-sky-900/60"
-                              >
-                                <span>📐 {isExpandedSize ? 'Thu gọn kích thước' : 'Xem kích thước chi tiết'}</span>
-                                {isExpandedSize ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                              </button>
-                              {isExpandedSize && (
-                                <div className="mt-1.5 p-2 bg-slate-50 dark:bg-slate-950 rounded-lg border border-slate-200/80 dark:border-slate-800 text-[11px] font-mono text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line shadow-2xs">
-                                  {store.size}
-                                </div>
+                        const itemLines = rawItem.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+                        const mainTitle = itemLines[0] || rawItem || '-';
+                        
+                        // Remaining details from item lines 2+ plus size string
+                        const extraDetails = [
+                          ...itemLines.slice(1),
+                          ...(rawSize ? [rawSize] : [])
+                        ].join('\n');
+
+                        const hasExtraDetails = extraDetails.length > 0;
+                        const isExpanded = expandedSizeRows[store.rowId];
+
+                        return (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {store.posmTypeCode && (
+                                <span className="font-mono text-[10px] font-bold text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/60 px-1.5 py-0.5 rounded border border-sky-200/50 dark:border-sky-900/50">
+                                  {store.posmTypeCode}
+                                </span>
                               )}
+                              <span className="font-semibold text-slate-800 dark:text-slate-200">{mainTitle}</span>
                             </div>
-                          )}
-                        </div>
-                      ) : null}
+
+                            {hasExtraDetails && (
+                              <div>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setExpandedSizeRows(prev => ({ ...prev, [store.rowId]: !prev[store.rowId] }));
+                                  }}
+                                  className="text-[10px] font-semibold text-sky-700 dark:text-sky-300 hover:underline inline-flex items-center gap-1 cursor-pointer bg-sky-50 dark:bg-sky-950/50 px-2 py-0.5 rounded border border-sky-200/60 dark:border-sky-900/60 mt-0.5"
+                                >
+                                  <span>📐 {isExpanded ? 'Thu gọn kích thước' : 'Xem kích thước chi tiết'}</span>
+                                  {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                </button>
+                                {isExpanded && (
+                                  <div className="mt-1.5 p-2 bg-slate-50 dark:bg-slate-950 rounded-lg border border-slate-200/80 dark:border-slate-800 text-[11px] font-mono text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line shadow-2xs">
+                                    {extraDetails}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
 
                     {/* Supplier */}
