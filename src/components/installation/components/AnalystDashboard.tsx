@@ -211,113 +211,120 @@ export const AnalystDashboard: React.FC<AnalystDashboardProps> = ({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
               {overallStats.supplierMap.map((supp) => {
                 const rate = supp.activeExecuted > 0 ? Math.round((supp.success / supp.activeExecuted) * 100) : 0;
-                const isExpanded = expandedSupplierIssues[supp.displayName];
+                const noActualTimeItems = supp.totalItems.filter(item => !item.actualTime || !item.actualTime.trim());
+                const activeExecutedItems = supp.totalItems.filter(item => item.actualTime && item.actualTime.trim());
 
                 return (
-                  <React.Fragment key={supp.displayName}>
-                    <tr className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                      <td className="px-4 py-3.5 font-bold text-slate-800 dark:text-slate-200">
-                        {supp.displayName}
-                      </td>
-                      <td className="px-4 py-3.5 text-center font-bold text-slate-700 dark:text-slate-300">
+                  <tr key={supp.displayName} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                    <td className="px-4 py-3.5 font-bold text-slate-800 dark:text-slate-200">
+                      {supp.displayName}
+                    </td>
+                    <td className="px-4 py-3.5 text-center font-bold text-slate-700 dark:text-slate-300">
+                      <button
+                        onClick={() => setSupplierDrawerConfig({
+                          isOpen: true,
+                          supplierName: supp.displayName,
+                          metricType: 'TOTAL',
+                          metricTitle: 'Tất cả vị trí thi công',
+                          colorTheme: 'sky',
+                          items: supp.totalItems
+                        })}
+                        className="hover:underline cursor-pointer text-sky-600 font-extrabold"
+                      >
+                        {supp.total}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3.5 text-center text-purple-600 font-semibold">
+                      {supp.noActualTime > 0 ? (
                         <button
                           onClick={() => setSupplierDrawerConfig({
                             isOpen: true,
                             supplierName: supp.displayName,
-                            metricType: 'TOTAL',
-                            metricTitle: 'Tất cả vị trí thi công',
-                            colorTheme: 'sky',
-                            items: supp.totalItems
-                          })}
-                          className="hover:underline cursor-pointer text-sky-600 font-extrabold"
-                        >
-                          {supp.total}
-                        </button>
-                      </td>
-                      <td className="px-4 py-3.5 text-center text-purple-600 font-semibold">
-                        {supp.noActualTime}
-                      </td>
-                      <td className="px-4 py-3.5 text-center font-semibold text-slate-700 dark:text-slate-300">
-                        {supp.activeExecuted}
-                      </td>
-                      <td className="px-4 py-3.5 text-center text-emerald-600 font-bold">
-                        <button
-                          onClick={() => setSupplierDrawerConfig({
-                            isOpen: true,
-                            supplierName: supp.displayName,
-                            metricType: 'COMPLETED',
-                            metricTitle: 'Vị trí hoàn thành (Pass)',
-                            colorTheme: 'emerald',
-                            items: supp.completedItems
+                            metricType: 'NO_SCHEDULE',
+                            metricTitle: 'Vị trí Chưa Cập Nhật Lịch Thi Công',
+                            colorTheme: 'purple',
+                            items: noActualTimeItems
                           })}
                           className="hover:underline cursor-pointer font-extrabold"
                         >
-                          {supp.success}
+                          {supp.noActualTime}
                         </button>
-                      </td>
-                      <td className="px-4 py-3.5 text-center text-rose-600 font-bold">
-                        {supp.issue > 0 ? (
-                          <button
-                            onClick={() => toggleSupplierIssueExpand(supp.displayName)}
-                            className="inline-flex items-center gap-1 text-rose-600 hover:underline font-extrabold cursor-pointer"
-                          >
-                            <span>{supp.issue}</span>
-                            {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                          </button>
-                        ) : (
-                          <span>0</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3.5 text-center font-bold text-emerald-600">
-                        {rate}%
-                      </td>
-                      <td className="px-4 py-3.5 text-right">
+                      ) : (
+                        <span>0</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5 text-center font-semibold text-slate-700 dark:text-slate-300">
+                      {supp.activeExecuted > 0 ? (
                         <button
                           onClick={() => setSupplierDrawerConfig({
                             isOpen: true,
                             supplierName: supp.displayName,
-                            metricType: 'TOTAL',
-                            metricTitle: 'Xem tất cả dữ liệu',
-                            colorTheme: 'slate',
-                            items: supp.totalItems
+                            metricType: 'EXECUTING',
+                            metricTitle: 'Vị trí Đang/Đã Thi Công',
+                            colorTheme: 'sky',
+                            items: activeExecutedItems
                           })}
-                          className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded text-[11px] font-semibold cursor-pointer"
+                          className="hover:underline cursor-pointer font-extrabold"
                         >
-                          Xem danh sách
+                          {supp.activeExecuted}
                         </button>
-                      </td>
-                    </tr>
-
-                    {/* EXPANDABLE SUPPLIER ISSUE CAUSES */}
-                    {isExpanded && supp.issueItems.length > 0 && (
-                      <tr>
-                        <td colSpan={8} className="px-6 py-3 bg-rose-50/40 dark:bg-rose-950/20 border-y border-rose-100 dark:border-rose-900/40">
-                          <div className="space-y-2">
-                            <p className="text-[11px] font-bold text-rose-800 dark:text-rose-300 uppercase tracking-wide">
-                              Danh sách ca lỗi QC / Tồn đọng của {supp.displayName} ({supp.issueItems.length} ca):
-                            </p>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                              {supp.issueItems.map((item: InstallationItem) => (
-                                <div key={item.rowId} className="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-rose-200/60 dark:border-rose-900/60 flex items-center justify-between gap-2">
-                                  <div>
-                                    <span className="font-mono font-bold text-sky-700 dark:text-sky-400">{item.storeCode}</span> - <span className="font-semibold">{item.storeName}</span>
-                                    <p className="text-[10px] text-slate-500 mt-0.5">Hạng mục: {item.item || 'Chưa rõ'} • QC: {item.technician || 'Chưa phân công'}</p>
-                                    <p className="text-[10px] text-rose-600 font-semibold mt-0.5">Ghi chú: {item.note || 'Không có ghi chú'}</p>
-                                  </div>
-                                  <button
-                                    onClick={() => handleOpenEdit(item)}
-                                    className="px-2 py-1 bg-rose-100 hover:bg-rose-200 text-rose-800 text-[10px] font-bold rounded cursor-pointer shrink-0"
-                                  >
-                                    Sửa
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
+                      ) : (
+                        <span>0</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5 text-center text-emerald-600 font-bold">
+                      <button
+                        onClick={() => setSupplierDrawerConfig({
+                          isOpen: true,
+                          supplierName: supp.displayName,
+                          metricType: 'COMPLETED',
+                          metricTitle: 'Vị trí hoàn thành (Pass)',
+                          colorTheme: 'emerald',
+                          items: supp.completedItems
+                        })}
+                        className="hover:underline cursor-pointer font-extrabold"
+                      >
+                        {supp.success}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3.5 text-center text-rose-600 font-bold">
+                      {supp.issue > 0 ? (
+                        <button
+                          onClick={() => setSupplierDrawerConfig({
+                            isOpen: true,
+                            supplierName: supp.displayName,
+                            metricType: 'ISSUE',
+                            metricTitle: 'Vị trí Lỗi QC / Failed / Trễ Hạn',
+                            colorTheme: 'rose',
+                            items: supp.issueItems
+                          })}
+                          className="hover:underline cursor-pointer font-extrabold text-rose-600"
+                        >
+                          {supp.issue}
+                        </button>
+                      ) : (
+                        <span>0</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5 text-center font-bold text-emerald-600">
+                      {rate}%
+                    </td>
+                    <td className="px-4 py-3.5 text-right">
+                      <button
+                        onClick={() => setSupplierDrawerConfig({
+                          isOpen: true,
+                          supplierName: supp.displayName,
+                          metricType: 'TOTAL',
+                          metricTitle: 'Xem tất cả dữ liệu',
+                          colorTheme: 'slate',
+                          items: supp.totalItems
+                        })}
+                        className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded text-[11px] font-semibold cursor-pointer"
+                      >
+                        Xem danh sách
+                      </button>
+                    </td>
+                  </tr>
                 );
               })}
             </tbody>

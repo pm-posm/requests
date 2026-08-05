@@ -377,7 +377,6 @@ export default function TrackingInstallation() {
                           </td>
                           <td className="p-2.5">
                             <div className="font-bold text-slate-800 dark:text-slate-200 text-xs">{item.item || item.posmTypeCode}</div>
-                            {item.size && <div className="text-[10px] font-mono text-slate-400">Size: {item.size}</div>}
                           </td>
                           <td className="p-2.5">
                             <div className="font-bold text-slate-800 dark:text-slate-200">{item.supplierName || 'Chưa gán thầu'}</div>
