@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import type { InstallationItem } from './installationSyncService';
+import { calculateInstallationResult } from '../components/installation/utils/statusCalculators';
 
 export interface ExportReportOptions {
   periodText?: string;
@@ -8,7 +9,7 @@ export interface ExportReportOptions {
 
 /**
  * Service Xuất Báo Cáo Excel Executive 2-Tab Cho Theo Dõi Lắp Đặt POSM
- * TAB 1: SUMMARY & SUPPLIERS (Bảng Tổng hợp Tiến độ, Supplier Matrix, Chi tiết Dự án Issue)
+ * TAB 1: SUMMARY & SUPPLIERS (Bảng Tổng hợp Tiến độ, Supplier Matrix, Chi tiết Dự án Issue / Sự cố)
  * TAB 2: RAW DATA (Dữ liệu thô 100% ca lắp đặt theo bộ lọc)
  */
 export const exportInstallationExecutiveReport = (
@@ -47,7 +48,8 @@ export const exportInstallationExecutiveReport = (
   items.forEach(item => {
     const statusLower = (item.status || '').toLowerCase().trim();
     const noteLower = (item.note || '').toLowerCase().trim();
-    const resultSign = item.resultSign || '';
+    const res = calculateInstallationResult(item.actualTime, item.completionTime, item.status, item.resultSign);
+    
     const supplierName = item.supplierName || 'Khác/Chưa rõ';
     const supplierKey = supplierName.toUpperCase();
 
@@ -64,21 +66,35 @@ export const exportInstallationExecutiveReport = (
     }
     supplierMap[supplierKey].total++;
 
-    const isQCFailed = statusLower.includes('installation qc failed') || statusLower.includes('failed') || statusLower.includes('lỗi');
-    const isPendingInstall = statusLower.includes('pending install');
-    const isCancelled = statusLower.includes('cancelled') || statusLower.includes('cancel');
-    const isNoReport = noteLower.includes('chưa gửi report') || statusLower.includes('chưa gửi report');
+    const isQCFailed = statusLower.includes('installation qc failed') || statusLower.includes('qc failed') || statusLower.includes('failed') || statusLower.includes('lỗi');
+    const isCancelled = statusLower.includes('cancelled') || statusLower.includes('cancel') || statusLower.includes('hủy');
+    const isNoReport = noteLower.includes('chưa gửi report') || statusLower.includes('chưa gửi report') || statusLower.includes('no report');
 
+    let resultText = '—';
     if (isCancelled) {
+      resultText = 'Hủy';
       cancelledCount++;
       supplierMap[supplierKey].cancelled++;
     } else if (isNoReport) {
+      resultText = 'Chưa gửi Report';
       noReportCount++;
       supplierMap[supplierKey].noReport++;
-    } else if (resultSign === '❌' || (resultSign === '✔' && isQCFailed) || isPendingInstall) {
+    } else if (res.isLateOrFailed || res.sign === '❌' || isQCFailed) {
+      resultText = res.failReason === 'LATE' ? '❌ Trễ hạn' : res.failReason === 'QC_FAIL' ? '❌ QC Fail' : '❌ Fail';
       issueCount++;
       supplierMap[supplierKey].issue++;
+    } else if (res.sign === '✔' || statusLower.includes('completed') || statusLower.includes('pass')) {
+      resultText = '✔ Pass';
+      successCount++;
+      supplierMap[supplierKey].success++;
+    } else {
+      resultText = '—';
+      unupdatedCount++;
+      supplierMap[supplierKey].unupdated++;
+    }
 
+    // Push to Issue Rows in Tab 1 if row has issue, cancelled, no report, or fail
+    if (isCancelled || isNoReport || res.isLateOrFailed || res.sign === '❌' || isQCFailed) {
       issueRows.push([
         issueRows.length + 1,
         item.projectCode || '-',
@@ -89,15 +105,10 @@ export const exportInstallationExecutiveReport = (
         item.actualTime || '-',
         item.completionTime || 'Chưa hoàn thành',
         item.status || 'QC Failed',
-        item.note || 'Lỗi nghiệm thu / Trễ tiến độ',
+        resultText,
+        item.note || 'Lỗi nghiệm thu / Trễ tiến độ / Sự cố',
         supplierName
       ]);
-    } else if (resultSign === '✔' && !isQCFailed) {
-      successCount++;
-      supplierMap[supplierKey].success++;
-    } else {
-      unupdatedCount++;
-      supplierMap[supplierKey].unupdated++;
     }
   });
 
@@ -139,11 +150,11 @@ export const exportInstallationExecutiveReport = (
   });
 
   summaryRows.push(['']);
-  summaryRows.push(['3. CHI TIẾT CÁC DỰ ÁN TRỄ DEADLINE / QC FAIL (ISSUE AUDIT TABLE)']);
-  summaryRows.push(['STT', 'Mã dự án', 'Hạng mục', 'CAT', 'Brand', 'Tên cửa hàng', 'Lịch lắp đặt', 'Ngày hoàn thành', 'Status', 'Chi tiết Issue / Ghi chú', 'Supplier']);
+  summaryRows.push(['3. CHI TIẾT CÁC DỰ ÁN SỰ CỐ / LỖI QC / TRỄ DEADLINE / HỦY (ISSUE AUDIT TABLE)']);
+  summaryRows.push(['STT', 'Mã dự án', 'Hạng mục', 'CAT', 'Brand', 'Tên cửa hàng', 'Lịch lắp đặt', 'Ngày hoàn thành', 'Status', 'Kết quả ><', 'Chi tiết Issue / Ghi chú', 'Supplier']);
 
   if (issueRows.length === 0) {
-    summaryRows.push(['-', 'Không có dự án phát sinh lỗi QC Fail hoặc trễ deadline trong kỳ báo cáo này', '-', '-', '-', '-', '-', '-', '-', '-', '-']);
+    summaryRows.push(['-', 'Không có dự án phát sinh lỗi QC Fail hoặc trễ deadline trong kỳ báo cáo này', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-']);
   } else {
     issueRows.forEach(row => summaryRows.push(row));
   }
@@ -159,6 +170,7 @@ export const exportInstallationExecutiveReport = (
     { wch: 20 }, // Lịch lắp
     { wch: 18 }, // Ngày HT
     { wch: 20 }, // Status
+    { wch: 16 }, // Kết quả ><
     { wch: 35 }, // Issue Note
     { wch: 18 }  // Supplier
   ];
@@ -182,6 +194,17 @@ export const exportInstallationExecutiveReport = (
   ];
 
   items.forEach((item, idx) => {
+    const res = calculateInstallationResult(item.actualTime, item.completionTime, item.status, item.resultSign);
+    const statusLower = (item.status || '').toLowerCase().trim();
+    const isQCFailed = statusLower.includes('installation qc failed') || statusLower.includes('qc failed') || statusLower.includes('failed') || statusLower.includes('lỗi');
+    
+    let resultSignText = '—';
+    if (res.sign === '✔') {
+      resultSignText = '✔ Pass';
+    } else if (res.sign === '❌' || isQCFailed) {
+      resultSignText = res.failReason === 'LATE' ? '❌ Trễ hạn' : res.failReason === 'QC_FAIL' ? '❌ QC Fail' : '❌ Fail';
+    }
+
     rawRows.push([
       idx + 1,
       item.projectCode || '-',
@@ -206,7 +229,7 @@ export const exportInstallationExecutiveReport = (
       item.actualTime || '-',
       item.completionTime || '-',
       item.status || '-',
-      item.resultSign || '-',
+      resultSignText,
       item.warranty || '-',
       item.note || '-'
     ]);
