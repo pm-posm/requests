@@ -6,7 +6,7 @@ import {
 import type { InstallationItem } from '@/services/installationSyncService';
 import type { MasterStoreContactInfo } from '@/services/sheetSyncService';
 import type { GroupedProject } from '../hooks/useInstallationFilters';
-import { getStatusBadgeStyle, evaluateScheduleHighlight } from '../utils/statusCalculators';
+import { getStatusBadgeStyle, evaluateScheduleHighlight, calculateInstallationResult, getActualTimeAlert } from '../utils/statusCalculators';
 
 interface ProjectDetailViewProps {
   currentDetailProject: GroupedProject;
@@ -57,98 +57,7 @@ const localDdmmyyyyToISO = (ddmmyyyy: string): string => {
   return '';
 };
 
-// Actual Time Alert States: UPCOMING, IN_PROGRESS, DUE_SOON, OVERDUE
-export interface ActualTimeAlert {
-  state: 'UPCOMING' | 'IN_PROGRESS' | 'DUE_SOON' | 'OVERDUE' | 'COMPLETED' | 'NONE';
-  label: string;
-  badgeClass: string;
-  icon: string;
-}
 
-export const getActualTimeAlert = (
-  actualTime?: string,
-  completionTime?: string,
-  status?: string
-): ActualTimeAlert => {
-  const isCompleted = (status || '').toLowerCase().includes('completed') || 
-                      (status || '').toLowerCase().includes('qc passed') ||
-                      Boolean(completionTime && completionTime.trim());
-
-  if (isCompleted) {
-    return { state: 'COMPLETED', label: 'Hoàn thành', badgeClass: '', icon: '' };
-  }
-
-  if (!actualTime || !actualTime.trim()) {
-    return { state: 'NONE', label: '', badgeClass: '', icon: '' };
-  }
-
-  const cleanStr = actualTime.trim();
-  const parts = cleanStr.split(/[-–—]/).map(p => p.trim());
-  if (parts.length < 2) {
-    return { state: 'NONE', label: '', badgeClass: '', icon: '' };
-  }
-
-  const startPart = parts[0];
-  const endPart = parts[parts.length - 1];
-
-  const endTokens = endPart.split('/');
-  if (endTokens.length < 2) return { state: 'NONE', label: '', badgeClass: '', icon: '' };
-
-  let endD = parseInt(endTokens[0], 10);
-  let endM = parseInt(endTokens[1], 10) - 1;
-  let endY = endTokens.length === 3 ? parseInt(endTokens[2], 10) : new Date().getFullYear();
-  if (endY < 100) endY += 2000;
-
-  const endDate = new Date(endY, endM, endD, 23, 59, 59);
-
-  const startTokens = startPart.split('/');
-  let startD = parseInt(startTokens[0], 10);
-  let startM = startTokens.length >= 2 ? parseInt(startTokens[1], 10) - 1 : endM;
-  let startY = startTokens.length === 3 ? parseInt(startTokens[2], 10) : endY;
-  if (startY < 100) startY += 2000;
-
-  const startDate = new Date(startY, startM, startD, 0, 0, 0);
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  if (today < startDate) {
-    return {
-      state: 'UPCOMING',
-      label: 'Đã lên lịch',
-      badgeClass: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700',
-      icon: '📅'
-    };
-  }
-
-  if (today > endDate) {
-    return {
-      state: 'OVERDUE',
-      label: 'Quá hạn',
-      badgeClass: 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border-rose-200 dark:border-rose-900 font-bold animate-pulse',
-      icon: '🚨'
-    };
-  }
-
-  const diffMs = endDate.getTime() - today.getTime();
-  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffDays <= 1) {
-    return {
-      state: 'DUE_SOON',
-      label: 'Sắp tới hạn (còn 1 ngày)',
-      badgeClass: 'bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-900 font-semibold',
-      icon: '⚠️'
-    };
-  }
-
-  return {
-    state: 'IN_PROGRESS',
-    label: 'Đang thực hiện',
-    badgeClass: 'bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border-sky-200 dark:border-sky-900 font-medium',
-    icon: '🔄'
-  };
-};
 
 export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   currentDetailProject,
