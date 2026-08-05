@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import type { InstallationItem } from '@/services/installationSyncService';
 import type { MasterStoreContactInfo } from '@/services/sheetSyncService';
-import { getRowMonthYear, getActualTimeAlert } from '../utils/statusCalculators';
+import { getRowMonthYear, getActualTimeAlert, calculateInstallationResult } from '../utils/statusCalculators';
 
 export interface GroupedProject {
   projectCode: string;
