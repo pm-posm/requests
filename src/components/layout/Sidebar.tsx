@@ -37,7 +37,22 @@ export function Sidebar({
   const pathname = location.pathname;
   const [isCollapsed, setIsCollapsed] = React.useState(false);
 
-  const handleRouteClick = (path: string, menuKey?: string) => {
+  const handleRouteClick = (path: string, menuKey?: string, isLocked?: boolean) => {
+    if (isLocked) {
+      toast('🚧 Tính năng đang phát triển, sẽ hoạt động trong tương lai!', {
+        icon: '🔒',
+        duration: 3500,
+        style: {
+          borderRadius: '12px',
+          background: '#0f172a',
+          color: '#f8fafc',
+          border: '1px solid #334155',
+          fontSize: '13px',
+          fontWeight: 500
+        }
+      });
+      return;
+    }
     navigate(path);
     if (menuKey) setMainMenu(menuKey);
     if (window.innerWidth < 768) setIsMobileOpen(false);
@@ -100,14 +115,14 @@ export function Sidebar({
                 active={pathname.startsWith('/analytics')} 
                 isCollapsed={isCollapsed}
                 isLocked={true}
-                onClick={() => handleRouteClick('/analytics', 'analytics')} 
+                onClick={() => handleRouteClick('/analytics', 'analytics', true)} 
               />
               <SidebarItem 
                 icon={<Inbox />} label="Xử lý Request" 
                 active={pathname.startsWith('/requests')} 
                 isCollapsed={isCollapsed}
                 isLocked={true}
-                onClick={() => handleRouteClick('/requests', 'request')} 
+                onClick={() => handleRouteClick('/requests', 'request', true)} 
               />
               {!isCollapsed && (
                 <div className="pl-6 pr-2 py-1 space-y-0.5 border-l border-slate-200 dark:border-slate-800 ml-5 my-1">
@@ -115,7 +130,7 @@ export function Sidebar({
                     label="Tất cả Request (Overview)" 
                     active={pathname === '/requests' || pathname === '/requests/overview'} 
                     isLocked={true}
-                    onClick={() => handleRouteClick('/requests', 'request')} 
+                    onClick={() => handleRouteClick('/requests', 'request', true)} 
                   />
                 </div>
               )}
@@ -131,14 +146,14 @@ export function Sidebar({
                 active={pathname.startsWith('/projects') || pathname.startsWith('/project')} 
                 isCollapsed={isCollapsed}
                 isLocked={true}
-                onClick={() => handleRouteClick('/projects', 'tong_du_an')} 
+                onClick={() => handleRouteClick('/projects', 'tong_du_an', true)} 
               />
               <SidebarItem 
                 icon={<KanbanSquare />} label="Bảng kế hoạch" 
                 active={pathname.startsWith('/store-plan')} 
                 isCollapsed={isCollapsed}
                 isLocked={true}
-                onClick={() => handleRouteClick('/store-plan', 'store_plan')} 
+                onClick={() => handleRouteClick('/store-plan', 'store_plan', true)} 
               />
             </div>
           </div>
@@ -152,21 +167,21 @@ export function Sidebar({
                 active={pathname.startsWith('/tracking/warranty')} 
                 isCollapsed={isCollapsed}
                 isLocked={false}
-                onClick={() => handleRouteClick('/tracking/warranty', 'tracking_warranty')} 
+                onClick={() => handleRouteClick('/tracking/warranty', 'tracking_warranty', false)} 
               />
               <SidebarItem 
                 icon={<Factory />} label="Nghiệm thu Xuất xưởng" 
                 active={pathname.startsWith('/tracking/ntxx')} 
                 isCollapsed={isCollapsed}
                 isLocked={true}
-                onClick={() => handleRouteClick('/tracking/ntxx', 'tracking_ntxx')} 
+                onClick={() => handleRouteClick('/tracking/ntxx', 'tracking_ntxx', true)} 
               />
               <SidebarItem 
                 icon={<ClipboardCheck />} label="Theo dõi Lắp đặt" 
                 active={pathname.startsWith('/tracking/installation')} 
                 isCollapsed={isCollapsed}
                 isLocked={false}
-                onClick={() => handleRouteClick('/tracking/installation', 'tracking_installation')} 
+                onClick={() => handleRouteClick('/tracking/installation', 'tracking_installation', false)} 
               />
             </div>
           </div>

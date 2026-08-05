@@ -331,13 +331,13 @@ export default function TrackingWarranty() {
 
     // 2. Trigger Multi-channel Sync to Google Sheet
     const targetUrl = formatWebAppUrl(webAppUrl);
+    console.log('[MAIL SYNC] webAppUrl state:', webAppUrl);
+    console.log('[MAIL SYNC] targetUrl resolved:', targetUrl);
     if (targetUrl) {
       try {
         setIsSyncingToSheet(true);
 
         const payloadObj = {
-          targetTab: 'warranty',
-          sheetName: 'Mer View 2026',
           rowId: selectedItem.rowId,
           requestId: selectedItem.requestId,
           titleMail: finalTitle,
@@ -347,13 +347,11 @@ export default function TrackingWarranty() {
 
         const queryParams = new URLSearchParams(payloadObj).toString();
         const fullGetUrl = `${targetUrl}?${queryParams}`;
+        console.log('[MAIL SYNC] GET URL:', fullGetUrl);
 
-        await fetch(targetUrl, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(payloadObj)
-        });
+        await fetch(fullGetUrl, { mode: 'no-cors' })
+          .then(() => console.log('[MAIL SYNC] GET sent successfully (no-cors)'))
+          .catch((err) => console.error('[MAIL SYNC] GET failed:', err));
 
         setMailSentSuccess(`🟢 Đã xác nhận gửi mail & tự động đồng bộ Title Mail "${finalTitle}" về BaoHanh_Model & Mer View 2026!`);
       } catch (err: any) {
@@ -426,11 +424,11 @@ export default function TrackingWarranty() {
 
     // Multi-channel reverse sync to Google Sheet via Web App
     const targetUrl = formatWebAppUrl(webAppUrl);
+    console.log('[WARRANTY SYNC] webAppUrl state:', webAppUrl);
+    console.log('[WARRANTY SYNC] targetUrl resolved:', targetUrl);
     if (targetUrl) {
       try {
         const payload: Record<string, string> = {
-          targetTab: 'warranty',
-          sheetName: 'Mer View 2026',
           rowId: selectedItem.rowId,
           requestId: selectedItem.requestId,
         };
@@ -443,30 +441,27 @@ export default function TrackingWarranty() {
         if (editExpectedDate.trim()) payload.expectedDate = editExpectedDate.trim();
         if (editCompletedDate.trim()) payload.completedDate = editCompletedDate.trim();
         if (editPrecedingRequestId.trim()) payload.precedingRequestId = editPrecedingRequestId.trim();
-        if (editWarrantyCoverage.trim()) {
-          payload.warrantyCoverage = editWarrantyCoverage.trim();
-          payload.coverage = editWarrantyCoverage.trim();
-          payload.trangThaiBH = editWarrantyCoverage.trim();
-        }
-        if (editWarrantyCost.trim()) {
-          payload.warrantyCost = editWarrantyCost.trim();
-          payload.cost = editWarrantyCost.trim();
-          payload.chiPhiBH = editWarrantyCost.trim();
-        }
         if (editNote.trim()) payload.note = editNote.trim();
 
         const queryParams = new URLSearchParams(payload).toString();
         const fullGetUrl = `${targetUrl}?${queryParams}`;
-        const img = new Image();
-        img.src = fullGetUrl;
+        console.log('[WARRANTY SYNC] GET URL:', fullGetUrl);
+        console.log('[WARRANTY SYNC] Payload:', payload);
 
-        fetch(fullGetUrl, { mode: 'no-cors' }).catch(() => {});
+        // Primary: GET request (most reliable with Google Apps Script)
+        fetch(fullGetUrl, { mode: 'no-cors' })
+          .then(() => console.log('[WARRANTY SYNC] GET sent (no-cors, opaque response)'))
+          .catch((err) => console.error('[WARRANTY SYNC] GET failed:', err));
+
+        // Fallback: POST request
         fetch(targetUrl, {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify(payload)
-        }).catch(() => {});
+        })
+          .then(() => console.log('[WARRANTY SYNC] POST sent (no-cors, opaque response)'))
+          .catch((err) => console.error('[WARRANTY SYNC] POST failed:', err));
 
         toast.success(`🟢 Đã lưu dữ liệu ca ${selectedItem.requestId} & đồng bộ 2 chiều về Google Sheet!`);
         setDrawerSaveSuccess('🟢 Đã lưu thay đổi & đồng bộ tự động về BaoHanh_Model và Mer View 2026!');
