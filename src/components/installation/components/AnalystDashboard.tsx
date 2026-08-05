@@ -167,14 +167,24 @@ export const AnalystDashboard: React.FC<AnalystDashboardProps> = ({
         </Card>
 
         {/* CARD 5: CHƯA BÁO CÁO / HỦY */}
-        <Card className="bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 shadow-xs">
+        <Card 
+          onClick={() => setSupplierDrawerConfig({
+            isOpen: true,
+            supplierName: 'Tất cả Supplier',
+            metricType: 'CANCELLED_NO_REPORT',
+            metricTitle: 'Danh Sách Ca Chưa Gửi Report & Ca Bị Hủy',
+            colorTheme: 'purple',
+            items: overallStats.noReportOrCancelledItems || []
+          })}
+          className="bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-purple-300 dark:hover:border-purple-700 transition-all cursor-pointer group"
+        >
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Chưa Báo Cáo / Hủy</p>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide group-hover:text-purple-600 transition-colors">Chưa Báo Cáo / Hủy</p>
               <h3 className="text-2xl font-extrabold text-slate-700 dark:text-slate-300 mt-1">{overallStats.noReportCount + overallStats.cancelledCount} <span className="text-xs font-bold text-slate-500">vị trí</span></h3>
               <p className="text-[10px] text-slate-400 font-medium">{overallStats.noReportCount} chưa gửi report • {overallStats.cancelledCount} hủy</p>
             </div>
-            <div className="p-3 bg-slate-100 dark:bg-slate-800 text-slate-600 rounded-xl">
+            <div className="p-3 bg-purple-50 dark:bg-purple-950 text-purple-600 rounded-xl group-hover:scale-105 transition-transform">
               <AlertOctagon className="w-5 h-5" />
             </div>
           </CardContent>

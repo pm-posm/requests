@@ -427,11 +427,13 @@ export function useInstallationFilters(
 
     const catMap: Record<string, number> = {};
     const issueAuditList: InstallationItem[] = [];
+    const noReportOrCancelledItems: InstallationItem[] = [];
 
     filteredAnalystRows.forEach(row => {
       const statusLower = (row.status || '').toLowerCase().trim();
       const noteLower = (row.note || '').toLowerCase().trim();
-      const resultSign = row.resultSign || '';
+      const res = calculateInstallationResult(row.actualTime, row.completionTime, row.status, row.resultSign);
+      const resultSign = res.sign;
       const hasActualTime = !!(row.actualTime && row.actualTime.trim());
 
       const supplierName = row.supplierName || 'Khác/Chưa rõ';
@@ -467,10 +469,14 @@ export function useInstallationFilters(
         cancelledCount++;
         supplierMap[supplierKey].cancelled++;
         supplierMap[supplierKey].unupdatedItems.push(row);
+        noReportOrCancelledItems.push(row);
+        issueAuditList.push(row);
       } else if (isNoReport) {
         noReportCount++;
         supplierMap[supplierKey].noReport++;
         supplierMap[supplierKey].unupdatedItems.push(row);
+        noReportOrCancelledItems.push(row);
+        issueAuditList.push(row);
       } else if (!hasActualTime) {
         noActualTimeTotalCount++;
         supplierMap[supplierKey].noActualTime++;
@@ -480,7 +486,7 @@ export function useInstallationFilters(
         supplierMap[supplierKey].activeExecuted++;
         supplierMap[supplierKey].activeExecutedItems.push(row);
 
-        if (resultSign === '❌' || resultSign === 'OVERDUE_RED' || isQCFailed) {
+        if (res.isLateOrFailed || resultSign === '❌' || isQCFailed) {
           issueCount++;
           if (resultSign === 'OVERDUE_RED') overdueCount++;
           supplierMap[supplierKey].issue++;
@@ -525,6 +531,7 @@ export function useInstallationFilters(
       cancelledCount,
       unupdatedCount,
       completionRate,
+      noReportOrCancelledItems,
       supplierMap: Object.values(supplierMap).sort((a, b) => b.total - a.total),
       catMap: Object.entries(catMap).sort((a, b) => b[1] - a[1]),
       issueAuditList
