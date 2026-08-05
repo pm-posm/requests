@@ -1,6 +1,6 @@
 import React from 'react';
 import { 
-  FolderKanban, Clock, CheckCircle2, AlertTriangle, AlertOctagon, ChevronDown, ChevronUp, Search, User, Phone, Edit3
+  FolderKanban, Clock, CheckCircle2, AlertTriangle, AlertOctagon, ChevronDown, ChevronUp, Search, User, Phone, Edit3, Layers
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import type { InstallationItem } from '@/services/installationSyncService';
