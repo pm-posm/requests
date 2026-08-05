@@ -99,7 +99,7 @@ export const mapCategoryCodeToCatName = (categoryCode?: string): string => {
   return CAT_MAPPING[upper] || upper || 'Khác';
 };
 
-// Calculate Result >< (✔, ❌, CANCELLED, OVERDUE_RED, '')
+// Calculate Result >< (✔, ❌, '') strictly mapped with Sheet Column X
 export const calculateInstallationResult = (
   actualTime?: string,
   completionTime?: string,
@@ -107,78 +107,21 @@ export const calculateInstallationResult = (
   existingResultSign?: string
 ): { sign: string; isOverdue: boolean; isLateOrFailed: boolean } => {
   const statusLower = (statusStr || '').toLowerCase().trim();
-  const isCancelled = statusLower.includes('cancelled') || statusLower.includes('cancel') || statusLower.includes('hủy');
-  
-  if (isCancelled) {
-    return { sign: 'CANCELLED', isOverdue: false, isLateOrFailed: false };
-  }
+  const rawSign = (existingResultSign || '').trim();
 
   const isQCFailed = statusLower.includes('installation qc failed') || statusLower.includes('failed') || statusLower.includes('lỗi');
-  const isCompleted = statusLower.includes('completed') || statusLower.includes('hoàn thành') || statusLower.includes('pass');
-  const isPendingInstall = statusLower.includes('pending install');
+  const isCompleted = statusLower.includes('completed') || statusLower.includes('hoàn thành') || statusLower.includes('qc passed');
 
-  // If Sheet already has explicit ✔ or ❌
-  if (existingResultSign === '✔' && !isQCFailed) {
+  // 1:1 Mapping strictly with Sheet Column X (or explicit Status)
+  if (rawSign === '✔' || (isCompleted && !isQCFailed)) {
     return { sign: '✔', isOverdue: false, isLateOrFailed: false };
   }
-  // Sign is ONLY ❌ if sheet explicitly has ❌ or status is QC Failed
-  if (existingResultSign === '❌' || isQCFailed) {
+
+  if (rawSign === '❌' || isQCFailed) {
     return { sign: '❌', isOverdue: false, isLateOrFailed: true };
   }
 
-  // Parse deadline from end of Actual Time string (e.g., "02/07 – 14/07/2026")
-  let deadlineDate: Date | null = null;
-  if (actualTime && actualTime.trim()) {
-    const parts = actualTime.split(/[-–—]/);
-    const deadlineStr = parts[parts.length - 1].trim();
-    const dParts = deadlineStr.split('/');
-    if (dParts.length === 3) {
-      let d = parseInt(dParts[0], 10);
-      let m = parseInt(dParts[1], 10) - 1;
-      let y = parseInt(dParts[2], 10);
-      if (y < 100) y += 2000;
-      if (!isNaN(d) && !isNaN(m) && !isNaN(y)) {
-        deadlineDate = new Date(y, m, d);
-      }
-    }
-  }
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  // Parse completion date
-  let compDate: Date | null = null;
-  if (completionTime && completionTime.trim()) {
-    const cParts = completionTime.trim().split('/');
-    if (cParts.length === 3) {
-      let d = parseInt(cParts[0], 10);
-      let m = parseInt(cParts[1], 10) - 1;
-      let y = parseInt(cParts[2], 10);
-      if (y < 100) y += 2000;
-      if (!isNaN(d) && !isNaN(m) && !isNaN(y)) {
-        compDate = new Date(y, m, d);
-      }
-    }
-  }
-
-  if (!completionTime || !completionTime.trim()) {
-    if (deadlineDate && deadlineDate.getTime() < today.getTime()) {
-      return { sign: 'OVERDUE_RED', isOverdue: true, isLateOrFailed: true };
-    }
-    return { sign: '', isOverdue: false, isLateOrFailed: false };
-  }
-
-  if (deadlineDate && compDate) {
-    if (compDate.getTime() <= deadlineDate.getTime() && isCompleted && !isQCFailed) {
-      return { sign: '✔', isOverdue: false, isLateOrFailed: false };
-    } else if (isQCFailed) {
-      return { sign: '❌', isOverdue: false, isLateOrFailed: true };
-    } else {
-      return { sign: '', isOverdue: false, isLateOrFailed: false };
-    }
-  }
-
-  return { sign: isCompleted ? '✔' : '', isOverdue: false, isLateOrFailed: isQCFailed };
+  return { sign: '', isOverdue: false, isLateOrFailed: false };
 };
 
 /**
