@@ -336,27 +336,24 @@ export default function TrackingWarranty() {
       try {
         setIsSyncingToSheet(true);
 
-        const queryParams = new URLSearchParams({
+        const payloadObj = {
+          targetTab: 'warranty',
+          sheetName: 'Mer View 2026',
           rowId: selectedItem.rowId,
           requestId: selectedItem.requestId,
           titleMail: finalTitle,
           raiseMailTime: timestamp,
           progress: 'Vis - Đã gửi RQ tới Agency'
-        }).toString();
+        };
 
+        const queryParams = new URLSearchParams(payloadObj).toString();
         const fullGetUrl = `${targetUrl}?${queryParams}`;
 
         await fetch(targetUrl, {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({
-            rowId: selectedItem.rowId,
-            requestId: selectedItem.requestId,
-            titleMail: finalTitle,
-            raiseMailTime: timestamp,
-            progress: 'Vis - Đã gửi RQ tới Agency'
-          })
+          body: JSON.stringify(payloadObj)
         });
 
         setMailSentSuccess(`🟢 Đã xác nhận gửi mail & tự động đồng bộ Title Mail "${finalTitle}" về BaoHanh_Model & Mer View 2026!`);
@@ -433,6 +430,8 @@ export default function TrackingWarranty() {
     if (targetUrl) {
       try {
         const payload: Record<string, string> = {
+          targetTab: 'warranty',
+          sheetName: 'Mer View 2026',
           rowId: selectedItem.rowId,
           requestId: selectedItem.requestId,
         };
