@@ -21,6 +21,7 @@ export interface GroupedProject {
     completed: number;
     installing: number;
     qcFailed: number;
+    lateCount: number;
     overdueCount: number;
     warranty: number;
     cancelled: number;
@@ -210,18 +211,22 @@ export function useInstallationFilters(
       let completed = 0;
       let installing = 0;
       let qcFailed = 0;
+      let lateCount = 0;
       let overdueCount = 0;
       let warranty = 0;
       let cancelled = 0;
 
       stores.forEach(s => {
-        const st = (s.status || '').toLowerCase();
+        const res = calculateInstallationResult(s.actualTime, s.completionTime, s.status, s.resultSign);
         const alert = getActualTimeAlert(s.actualTime, s.completionTime, s.status);
         if (alert.state === 'OVERDUE') overdueCount++;
 
-        if (st.includes('hoàn thành') || st.includes('completed') || st.includes('pass') || s.resultSign === '✔') completed++;
-        else if (st.includes('thi công') || st.includes('lắp đặt') || st.includes('progress')) installing++;
-        else if (st.includes('failed') || st.includes('lỗi') || s.resultSign === '❌') qcFailed++;
+        if (res.sign === '✔') completed++;
+        else if (res.failReason === 'QC_FAIL') qcFailed++;
+        else if (res.failReason === 'LATE') lateCount++;
+
+        const st = (s.status || '').toLowerCase();
+        if (st.includes('thi công') || st.includes('lắp đặt') || st.includes('progress')) installing++;
         else if (st.includes('warranty') || st.includes('bảo hành') || st.includes('tháo dỡ')) warranty++;
         else if (st.includes('cancel') || st.includes('hủy')) cancelled++;
       });
@@ -274,6 +279,7 @@ export function useInstallationFilters(
           completed,
           installing,
           qcFailed,
+          lateCount,
           overdueCount,
           warranty,
           cancelled,

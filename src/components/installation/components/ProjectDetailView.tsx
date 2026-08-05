@@ -521,19 +521,27 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                       </span>
                     </td>
 
-                    {/* Kết quả >< (Strict 1:1 from Sheet Column X) */}
+                    {/* Kết quả >< (Strict 1:1 from Sheet Column X & Apps Script onEdit logic) */}
                     <td className="px-4 py-3.5 text-center">
-                      {store.resultSign === '✔' ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-900 rounded text-xs font-bold">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Pass
-                        </span>
-                      ) : store.resultSign === '❌' ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-900 rounded text-xs font-bold">
-                          <AlertTriangle className="w-3.5 h-3.5" /> Fail
-                        </span>
-                      ) : (
-                        <span className="text-slate-300 dark:text-slate-600">—</span>
-                      )}
+                      {(() => {
+                        const res = calculateInstallationResult(store.actualTime, store.completionTime, store.status, store.resultSign);
+                        if (res.sign === '✔') {
+                          return (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-900 rounded text-xs font-bold">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> Pass
+                            </span>
+                          );
+                        }
+                        if (res.sign === '❌') {
+                          const labelText = res.failReason === 'LATE' ? 'Trễ hạn' : res.failReason === 'QC_FAIL' ? 'QC Fail' : 'Fail';
+                          return (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-900 rounded text-xs font-bold" title={res.failReason === 'LATE' ? 'Nghiệm thu trễ hơn ngày Actual Time' : 'Bị lỗi QC'}>
+                              <AlertTriangle className="w-3.5 h-3.5" /> {labelText}
+                            </span>
+                          );
+                        }
+                        return <span className="text-slate-300 dark:text-slate-600">—</span>;
+                      })()}
                     </td>
 
                     {/* Lịch thi công & Cảnh báo thời gian */}
