@@ -5,7 +5,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import type { InstallationItem } from '@/services/installationSyncService';
 import type { MasterStoreContactInfo } from '@/services/sheetSyncService';
-import { getStatusBadgeStyle } from '../utils/statusCalculators';
+import { getStatusBadgeStyle, calculateInstallationResult } from '../utils/statusCalculators';
 
 interface AnalystDashboardProps {
   analystSelectedMonth: string;
@@ -368,6 +368,7 @@ export const AnalystDashboard: React.FC<AnalystDashboardProps> = ({
                 <th className="px-4 py-3">Supplier</th>
                 <th className="px-4 py-3">QC Tech</th>
                 <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3 text-center">Kết Quả &gt;&lt;</th>
                 <th className="px-4 py-3">Ghi Chú Lỗi</th>
                 <th className="px-4 py-3 text-right">Xử Lý</th>
               </tr>
@@ -390,6 +391,27 @@ export const AnalystDashboard: React.FC<AnalystDashboardProps> = ({
                       {item.status || 'QC Failed'}
                     </span>
                   </td>
+                  <td className="px-4 py-3 text-center">
+                    {(() => {
+                      const res = calculateInstallationResult(item.actualTime, item.completionTime, item.status, item.resultSign);
+                      if (res.sign === '✔') {
+                        return (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-900 rounded text-xs font-bold">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Pass
+                          </span>
+                        );
+                      }
+                      if (res.sign === '❌') {
+                        const labelText = res.failReason === 'LATE' ? 'Trễ hạn' : res.failReason === 'QC_FAIL' ? 'QC Fail' : 'Fail';
+                        return (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-900 rounded text-xs font-bold" title={res.failReason === 'LATE' ? 'Nghiệm thu trễ hơn ngày Actual Time' : 'Bị lỗi QC'}>
+                            <AlertTriangle className="w-3.5 h-3.5" /> {labelText}
+                          </span>
+                        );
+                      }
+                      return <span className="text-slate-300 dark:text-slate-600">—</span>;
+                    })()}
+                  </td>
                   <td className="px-4 py-3 text-rose-600 dark:text-rose-400 max-w-[250px] truncate">
                     {item.note || 'Không có ghi chú lỗi'}
                   </td>
@@ -406,7 +428,7 @@ export const AnalystDashboard: React.FC<AnalystDashboardProps> = ({
               ))}
               {filteredIssueList.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-slate-400">
+                  <td colSpan={7} className="px-6 py-8 text-center text-slate-400">
                     Không có ca lỗi QC nào phù hợp với bộ lọc
                   </td>
                 </tr>
