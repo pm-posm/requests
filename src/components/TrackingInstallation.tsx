@@ -397,12 +397,11 @@ export default function TrackingInstallation() {
                                 <span>⚠️ Chưa có Actual Time</span>
                               </div>
                             )}
-                            <div className="text-[10px] text-slate-500 mt-1 font-mono">
-                              <span className="text-slate-400">QC Xong: </span>
-                              <span className={item.completionTime && item.completionTime.trim() ? 'font-bold text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}>
-                                {item.completionTime && item.completionTime.trim() ? item.completionTime : 'Chưa nghiệm thu'}
-                              </span>
-                            </div>
+                            {item.completionTime && item.completionTime.trim() && (
+                              <div className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold mt-1">
+                                Done: {item.completionTime}
+                              </div>
+                            )}
                           </td>
                           <td className="p-3">
                             <div className="flex flex-col gap-1">
