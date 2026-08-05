@@ -256,9 +256,11 @@ export interface ActualTimeAlert {
 export const getActualTimeAlert = (
   actualTime?: string,
   completionTime?: string,
-  status?: string
+  status?: string,
+  isFullyCompleted?: boolean
 ): ActualTimeAlert => {
-  const isCompleted = (status || '').toLowerCase().includes('completed') || 
+  const isCompleted = isFullyCompleted ||
+                      (status || '').toLowerCase().includes('completed') || 
                       (status || '').toLowerCase().includes('qc passed') ||
                       Boolean(completionTime && completionTime.trim());
 

@@ -293,7 +293,8 @@ export const ProjectTableView: React.FC<ProjectTableViewProps> = ({
                       }
 
                       {(() => {
-                        const alert = getActualTimeAlert(prj.actualTimeRange);
+                        const isProjectDone = prj.stats.total > 0 && prj.stats.completed === prj.stats.total;
+                        const alert = getActualTimeAlert(prj.actualTimeRange, undefined, undefined, isProjectDone);
                         if (!alert.label || alert.state === 'COMPLETED') return null;
                         return (
                           <div className="mt-1">
