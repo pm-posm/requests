@@ -278,8 +278,8 @@ export const getActualTimeAlert = (
   }
 
   const cleanStr = actualTime.trim();
-  const parts = cleanStr.split(/[-–—]/).map(p => p.trim());
-  if (parts.length < 2) {
+  const parts = cleanStr.split(/[-–—]/).map(p => p.trim()).filter(Boolean);
+  if (parts.length === 0) {
     return {
       state: 'NO_ACTUAL_TIME',
       label: 'Chưa có Actual Time',
@@ -288,8 +288,9 @@ export const getActualTimeAlert = (
     };
   }
 
+  // Handle single date (e.g. "04/08/2026") or date range (e.g. "04/08/2026 - 15/08/2026")
   const startPart = parts[0];
-  const endPart = parts[parts.length - 1];
+  const endPart = parts.length > 1 ? parts[parts.length - 1] : parts[0];
 
   const endTokens = endPart.split('/');
   if (endTokens.length < 2) {
