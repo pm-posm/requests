@@ -321,10 +321,16 @@ export const ProjectTableView: React.FC<ProjectTableViewProps> = ({
                           />
                         </div>
                         {prj.stats.qcFailed > 0 && (
-                          <span className="text-[10px] font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                          <div className="text-[10px] font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1">
                             <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                            QC Fail: {prj.stats.qcFailed} ca
-                          </span>
+                            <span>QC Fail: {prj.stats.qcFailed} ca</span>
+                          </div>
+                        )}
+                        {prj.stats.overdueCount > 0 && (
+                          <div className="text-[10px] font-medium text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                            <span>Quá hạn: {prj.stats.overdueCount} ca</span>
+                          </div>
                         )}
                       </div>
                     </td>

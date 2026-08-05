@@ -21,6 +21,7 @@ export interface GroupedProject {
     completed: number;
     installing: number;
     qcFailed: number;
+    overdueCount: number;
     warranty: number;
     cancelled: number;
     completedRate: number;
@@ -210,11 +211,15 @@ export function useInstallationFilters(
       let completed = 0;
       let installing = 0;
       let qcFailed = 0;
+      let overdueCount = 0;
       let warranty = 0;
       let cancelled = 0;
 
       stores.forEach(s => {
         const st = (s.status || '').toLowerCase();
+        const alert = getActualTimeAlert(s.actualTime, s.completionTime, s.status);
+        if (alert.state === 'OVERDUE') overdueCount++;
+
         if (st.includes('hoàn thành') || st.includes('completed') || st.includes('pass') || s.resultSign === '✔') completed++;
         else if (st.includes('thi công') || st.includes('lắp đặt') || st.includes('progress')) installing++;
         else if (st.includes('failed') || st.includes('lỗi') || s.resultSign === '❌') qcFailed++;
@@ -270,6 +275,7 @@ export function useInstallationFilters(
           completed,
           installing,
           qcFailed,
+          overdueCount,
           warranty,
           cancelled,
           completedRate
