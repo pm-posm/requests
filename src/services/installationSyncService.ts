@@ -99,7 +99,7 @@ export const mapCategoryCodeToCatName = (categoryCode?: string): string => {
   return CAT_MAPPING[upper] || upper || 'Khác';
 };
 
-// Calculate Result >< (✔, ❌, OVERDUE_RED, '')
+// Calculate Result >< (✔, ❌, CANCELLED, OVERDUE_RED, '')
 export const calculateInstallationResult = (
   actualTime?: string,
   completionTime?: string,
@@ -107,6 +107,12 @@ export const calculateInstallationResult = (
   existingResultSign?: string
 ): { sign: string; isOverdue: boolean; isLateOrFailed: boolean } => {
   const statusLower = (statusStr || '').toLowerCase().trim();
+  const isCancelled = statusLower.includes('cancelled') || statusLower.includes('cancel') || statusLower.includes('hủy');
+  
+  if (isCancelled) {
+    return { sign: 'CANCELLED', isOverdue: false, isLateOrFailed: false };
+  }
+
   const isQCFailed = statusLower.includes('installation qc failed') || statusLower.includes('failed') || statusLower.includes('lỗi');
   const isCompleted = statusLower.includes('completed') || statusLower.includes('hoàn thành') || statusLower.includes('pass');
   const isPendingInstall = statusLower.includes('pending install');
@@ -165,8 +171,10 @@ export const calculateInstallationResult = (
   if (deadlineDate && compDate) {
     if (compDate.getTime() <= deadlineDate.getTime() && isCompleted && !isQCFailed) {
       return { sign: '✔', isOverdue: false, isLateOrFailed: false };
-    } else {
+    } else if (isQCFailed) {
       return { sign: '❌', isOverdue: false, isLateOrFailed: true };
+    } else {
+      return { sign: '', isOverdue: false, isLateOrFailed: false };
     }
   }
 

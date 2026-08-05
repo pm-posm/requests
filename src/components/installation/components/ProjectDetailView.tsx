@@ -534,12 +534,17 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                           <AlertTriangle className="w-3.5 h-3.5" /> Failed
                         </span>
                       )}
+                      {store.resultSign === 'CANCELLED' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded text-xs font-semibold">
+                          🚫 Hủy ca
+                        </span>
+                      )}
                       {store.resultSign === 'OVERDUE_RED' && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-rose-600 text-white rounded text-xs font-bold animate-pulse">
                           <AlertOctagon className="w-3.5 h-3.5" /> Quá Hạn
                         </span>
                       )}
-                      {!store.resultSign && <span className="text-slate-300">—</span>}
+                      {(!store.resultSign || store.resultSign === '') && <span className="text-slate-300">—</span>}
                     </td>
 
                     {/* Lịch thi công & Cảnh báo thời gian */}
