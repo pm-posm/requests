@@ -329,10 +329,9 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               onChange={(e) => setDetailSelectedResult(e.target.value)}
               className="px-2.5 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl outline-none cursor-pointer font-bold"
             >
-              <option value="all">Kết quả &gt;&lt;</option>
+              <option value="all">Tất cả Kết quả</option>
               <option value="pass">✔ Pass</option>
-              <option value="fail">❌ QC Fail</option>
-              <option value="overdue">🚩 Quá hạn</option>
+              <option value="fail">❌ Fail</option>
             </select>
 
             <select

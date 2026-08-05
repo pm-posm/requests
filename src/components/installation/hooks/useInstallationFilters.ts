@@ -175,7 +175,6 @@ export function useInstallationFilters(
       let matchesResult = true;
       if (selectedResult === 'pass') matchesResult = row.resultSign === '✔';
       else if (selectedResult === 'fail') matchesResult = row.resultSign === '❌';
-      else if (selectedResult === 'overdue') matchesResult = row.resultSign === 'OVERDUE_RED';
 
       let matchesSchedule = true;
       if (selectedScheduleState !== 'all') {
@@ -346,8 +345,6 @@ export function useInstallationFilters(
         matchesResult = store.resultSign === '✔';
       } else if (detailSelectedResult === 'fail') {
         matchesResult = store.resultSign === '❌';
-      } else if (detailSelectedResult === 'overdue') {
-        matchesResult = store.resultSign === 'OVERDUE_RED';
       }
 
       return matchesSearch && matchesQcTech && matchesStatus && matchesSupplier && matchesResult;
