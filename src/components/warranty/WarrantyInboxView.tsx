@@ -188,6 +188,9 @@ const EmailBodyViewer: React.FC<{
   );
 };
 
+// Default Official Production Apps Script Web App URL
+const DEFAULT_WARRANTY_GMAIL_APPS_SCRIPT_URL = (import.meta.env.VITE_REQUEST_WEB_APP_URL || '').trim() || 'https://script.google.com/macros/s/AKfycbxztDMOhd6lO6QY_AmF4jMyXUWCP69jlb8XY7f9zIAQVGhXukaa0I_kd_uwqrTce8Y4iA/exec';
+
 // Default dynamic search presets for Warranty
 const DEFAULT_KEYWORD_PRESETS = [
   'subject:"bảo hành"',
@@ -248,10 +251,10 @@ const SAMPLE_WARRANTY_THREADS: WarrantyEmailThread[] = [
         cc: 'long.tc@fieldforce.vn',
         date: '20/07/2026 14:35',
         snippet: 'Đã hoàn tất thay nguồn led tại Coop Phạm Văn Đồng, gửi biên bản nghiệm thu...',
-        body: 'Dear Anh Thắng & Anh Long,\n\nLink4 đã xử lý xong sự cố đứt dây nguồn cấp led tại quầy GE Coop Xtra Phạm Văn Đồng. Đèn led đã sáng đều và ổn định.\n\nGửi kèm Biên bản nghiệm thu có chữ ký quản lý siêu thị.\n\nTrân trọng!',
+        body: 'Dear Anh Thắng & Anh Long,\n\nLink4 đã xử lý xong sự cố đứt dây nguồn cấp led tại quầy GE Coop Xtra Phạm Văn Đồng. Đèn led đã sáng đều và ổn định.\n\nĐính kèm biên bản nghiệm thu có ký nhận của siêu thị.\n\nTrân trọng,\nĐội thi công Link4',
         attachments: [
-          { name: 'bbnt_hoan_thanh_bh635.pdf', contentType: 'application/pdf', size: '850 KB', isImage: false },
-          { name: 'anh_nghiem_thu_sang_den.jpg', contentType: 'image/jpeg', size: '3.4 MB', isImage: true }
+          { name: 'bien_ban_nghiem_thu_sua_chua.pdf', contentType: 'application/pdf', size: '1.2 MB', isImage: false },
+          { name: 'anh_nghiem_thu_sau_fix.jpg', contentType: 'image/jpeg', size: '3.4 MB', isImage: true }
         ]
       }
     ]
@@ -340,8 +343,8 @@ interface WarrantyInboxViewProps {
 }
 
 export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
-  warrantyItems,
-  webAppUrl,
+  warrantyItems = [],
+  webAppUrl = '',
   onOpenWarrantyDrawer
 }) => {
   const [threads, setThreads] = useState<WarrantyEmailThread[]>(() => {
@@ -388,7 +391,7 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
   const [newKeywordInput, setNewKeywordInput] = useState('');
 
   const [appsScriptUrl, setAppsScriptUrl] = useState<string>(() => {
-    return localStorage.getItem('WARRANTY_GMAIL_APPS_SCRIPT_URL') || webAppUrl || '';
+    return localStorage.getItem('WARRANTY_GMAIL_APPS_SCRIPT_URL') || webAppUrl || DEFAULT_WARRANTY_GMAIL_APPS_SCRIPT_URL;
   });
 
   useEffect(() => {
@@ -421,15 +424,17 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
 
   // Auto-fetch live Gmail threads on Component Mount & Active Keyword change
   useEffect(() => {
-    if (appsScriptUrl && activeKeyword) {
+    const activeUrl = (appsScriptUrl || webAppUrl || DEFAULT_WARRANTY_GMAIL_APPS_SCRIPT_URL).trim();
+    if (activeUrl && activeKeyword) {
       // First mount / keyword switch: Fetch up to 20 threads to build base dataset
       fetchLiveGmailThreads(activeKeyword, true, 20);
     }
-  }, [activeKeyword, appsScriptUrl]);
+  }, [activeKeyword, appsScriptUrl, webAppUrl]);
 
   // Periodic background auto-sync every 60 seconds (Delta Scan: only top 5 newest threads to respond in < 1s)
   useEffect(() => {
-    if (!appsScriptUrl || !activeKeyword) return;
+    const activeUrl = (appsScriptUrl || webAppUrl || DEFAULT_WARRANTY_GMAIL_APPS_SCRIPT_URL).trim();
+    if (!activeUrl || !activeKeyword) return;
     const interval = setInterval(() => {
       // Only poll when the user is actively viewing this browser tab
       if (document.visibilityState === 'visible') {
@@ -437,14 +442,15 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
       }
     }, 60000);
     return () => clearInterval(interval);
-  }, [appsScriptUrl, activeKeyword]);
+  }, [appsScriptUrl, activeKeyword, webAppUrl]);
 
   // Fetch threads from live Apps Script with Smart Incremental / Delta Merge
   const fetchLiveGmailThreads = async (queryToSearch: string, isSilent = false, customLimit?: number) => {
     // Chặn gọi song song nếu đang quét dở (chống spam click)
     if (isFetchingRef.current) return;
 
-    if (!appsScriptUrl || !appsScriptUrl.trim()) {
+    const activeUrl = (appsScriptUrl || webAppUrl || DEFAULT_WARRANTY_GMAIL_APPS_SCRIPT_URL).trim();
+    if (!activeUrl) {
       if (!isSilent) {
         setIsRefreshing(true);
         setTimeout(() => {
@@ -465,7 +471,7 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
     try {
       isFetchingRef.current = true;
       setIsRefreshing(true);
-      const targetUrl = `${appsScriptUrl.trim()}${appsScriptUrl.includes('?') ? '&' : '?'}action=gmail&q=${encodeURIComponent(queryToSearch)}&limit=${effectiveLimit}`;
+      const targetUrl = `${activeUrl}${activeUrl.includes('?') ? '&' : '?'}action=gmail&q=${encodeURIComponent(queryToSearch)}&limit=${effectiveLimit}`;
       const res = await fetch(targetUrl);
       const json = await res.json();
 
@@ -854,10 +860,11 @@ function getAttachmentData(msgId, attIdx) {
       return;
     }
 
-    if (appsScriptUrl) {
+    const activeUrl = (appsScriptUrl || webAppUrl || DEFAULT_WARRANTY_GMAIL_APPS_SCRIPT_URL).trim();
+    if (activeUrl) {
       const toastId = toast.loading('Đang tải hình ảnh chất lượng cao...');
       try {
-        const targetUrl = `${appsScriptUrl.trim()}${appsScriptUrl.includes('?') ? '&' : '?'}action=getAttachmentData&msgId=${encodeURIComponent(msgId)}&attIdx=${attIdx}`;
+        const targetUrl = `${activeUrl}${activeUrl.includes('?') ? '&' : '?'}action=getAttachmentData&msgId=${encodeURIComponent(msgId)}&attIdx=${attIdx}`;
         const res = await fetch(targetUrl);
         const json = await res.json();
         if (json.status === 'success' && json.dataUri) {

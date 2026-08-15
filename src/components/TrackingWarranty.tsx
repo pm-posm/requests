@@ -18,8 +18,8 @@ import { WarrantyInboxView } from './warranty/WarrantyInboxView';
 // Official Public Google Sheet CSV URL for BaoHanh_Model
 const DEFAULT_WARRANTY_SHEET_CSV = 'https://docs.google.com/spreadsheets/d/119LpiU1XheXgOxKWxw17E_u4vgRTBPhc-4FADDS8B1Q/export?format=csv&gid=2053849390';
 
-// Deployed Web App URL for Apps Script Reverse Sync (Active Production)
-const DEFAULT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxfRHXEd8bWkavq93RWBG7eOOrOgZglzDOjK-Ey7L6vZmT2FM1piausg9AOk8_aStae/exec';
+// Deployed Web App URL for Apps Script Reverse Sync & Live Gmail (Active Production)
+const DEFAULT_WEB_APP_URL = (import.meta.env.VITE_REQUEST_WEB_APP_URL || '').trim() || 'https://script.google.com/macros/s/AKfycbxztDMOhd6lO6QY_AmF4jMyXUWCP69jlb8XY7f9zIAQVGhXukaa0I_kd_uwqrTce8Y4iA/exec';
 
 // Helper to format Web App URL or raw Deployment ID
 const formatWebAppUrl = (rawUrl?: string): string => {
