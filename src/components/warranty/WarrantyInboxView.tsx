@@ -464,7 +464,7 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
     try {
       isFetchingRef.current = true;
       setIsRefreshing(true);
-      const targetUrl = `${appsScriptUrl.trim()}${appsScriptUrl.includes('?') ? '&' : '?'}q=${encodeURIComponent(queryToSearch)}&limit=${effectiveLimit}`;
+      const targetUrl = `${appsScriptUrl.trim()}${appsScriptUrl.includes('?') ? '&' : '?'}action=gmail&q=${encodeURIComponent(queryToSearch)}&limit=${effectiveLimit}`;
       const res = await fetch(targetUrl);
       const json = await res.json();
 
