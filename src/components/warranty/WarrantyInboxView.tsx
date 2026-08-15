@@ -340,12 +340,14 @@ interface WarrantyInboxViewProps {
   warrantyItems: WarrantyItem[];
   webAppUrl?: string;
   onOpenWarrantyDrawer?: (item: WarrantyItem) => void;
+  onUpdateWebAppUrl?: (url: string) => void;
 }
 
 export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
   warrantyItems = [],
   webAppUrl = '',
-  onOpenWarrantyDrawer
+  onOpenWarrantyDrawer,
+  onUpdateWebAppUrl
 }) => {
   const [threads, setThreads] = useState<WarrantyEmailThread[]>(() => {
     try {
@@ -722,11 +724,16 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
   }, [threads, searchQuery, filterType, newThreadIds, warrantyItems]);
 
   const handleSaveConfig = (newUrl: string) => {
-    setAppsScriptUrl(newUrl);
-    localStorage.setItem('WARRANTY_GMAIL_APPS_SCRIPT_URL', newUrl);
+    const trimmed = newUrl.trim();
+    setAppsScriptUrl(trimmed);
+    localStorage.setItem('WARRANTY_GMAIL_APPS_SCRIPT_URL', trimmed);
+    localStorage.setItem('warranty_web_app_url', trimmed);
+    if (onUpdateWebAppUrl) {
+      onUpdateWebAppUrl(trimmed);
+    }
     setShowConfigModal(false);
-    toast.success('Đã lưu Google Apps Script Gmail Endpoint!');
-    if (newUrl.trim()) {
+    toast.success('Đã lưu Google Apps Script Web App Endpoint & Đồng bộ toàn hệ thống!');
+    if (trimmed) {
       fetchLiveGmailThreads(activeKeyword);
     }
   };

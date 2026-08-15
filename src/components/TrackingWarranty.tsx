@@ -139,7 +139,7 @@ export default function TrackingWarranty() {
     return localStorage.getItem('warranty_sheet_url') || DEFAULT_WARRANTY_SHEET_CSV;
   });
   const [webAppUrl, setWebAppUrl] = useState<string>(() => {
-    const saved = localStorage.getItem('warranty_web_app_url');
+    const saved = localStorage.getItem('warranty_web_app_url') || localStorage.getItem('WARRANTY_GMAIL_APPS_SCRIPT_URL');
     if (saved && saved.trim()) {
       return saved.trim();
     }
@@ -1110,6 +1110,7 @@ export default function TrackingWarranty() {
   const handleSaveSheetUrl = () => {
     localStorage.setItem('warranty_sheet_url', tempUrlInput);
     localStorage.setItem('warranty_web_app_url', tempWebAppInput);
+    localStorage.setItem('WARRANTY_GMAIL_APPS_SCRIPT_URL', tempWebAppInput);
     setSheetUrl(tempUrlInput);
     setWebAppUrl(tempWebAppInput);
     setIsUrlModalOpen(false);
@@ -1896,6 +1897,11 @@ export default function TrackingWarranty() {
             warrantyItems={warrantyItems}
             webAppUrl={webAppUrl}
             onOpenWarrantyDrawer={(item) => setSelectedItem(item)}
+            onUpdateWebAppUrl={(url) => {
+              setWebAppUrl(url);
+              localStorage.setItem('warranty_web_app_url', url);
+              localStorage.setItem('WARRANTY_GMAIL_APPS_SCRIPT_URL', url);
+            }}
           />
         </div>
       )}
