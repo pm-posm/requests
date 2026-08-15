@@ -1236,17 +1236,35 @@ function getAttachmentData(msgId, attIdx) {
                     </h2>
                   </div>
 
-                  {/* Actions */}
-                  {matchedWarrantyItem && onOpenWarrantyDrawer && (
+                  {/* Header Actions */}
+                  <div className="flex items-center gap-2 flex-wrap shrink-0">
+                    {/* Direct link to original Gmail Thread */}
                     <button
-                      onClick={() => onOpenWarrantyDrawer(matchedWarrantyItem)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-bold transition-colors cursor-pointer border border-indigo-200 dark:border-indigo-800 shrink-0 shadow-2xs"
-                      title="Mở Drawer chỉnh sửa ca bảo hành này trên Sheet"
+                      onClick={() => {
+                        const gmailUrl = activeThread.threadId && !activeThread.threadId.startsWith('th-00')
+                          ? `https://mail.google.com/mail/u/0/#all/${activeThread.threadId}`
+                          : `https://mail.google.com/mail/u/0/#search/${encodeURIComponent(activeThread.subject)}`;
+                        window.open(gmailUrl, '_blank');
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:hover:bg-rose-900/80 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-bold transition-colors cursor-pointer border border-rose-200 dark:border-rose-800 shrink-0 shadow-2xs"
+                      title="Mở thẳng luồng email gốc này trên Gmail Web"
                     >
-                      <span>Mở Ca #{matchedWarrantyItem.rowId || matchedWarrantyItem.requestId}</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
+                      <Mail className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                      <span>Mở trên Gmail</span>
+                      <ExternalLink className="w-3 h-3 opacity-70" />
                     </button>
-                  )}
+
+                    {matchedWarrantyItem && onOpenWarrantyDrawer && (
+                      <button
+                        onClick={() => onOpenWarrantyDrawer(matchedWarrantyItem)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-bold transition-colors cursor-pointer border border-indigo-200 dark:border-indigo-800 shrink-0 shadow-2xs"
+                        title="Mở Drawer chỉnh sửa ca bảo hành này trên Sheet"
+                      >
+                        <span>Mở Ca #{matchedWarrantyItem.rowId || matchedWarrantyItem.requestId}</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Sheet Metadata Card if matched */}
@@ -1259,7 +1277,7 @@ function getAttachmentData(msgId, attIdx) {
                       </div>
                       <div>
                         <span className="text-[10px] text-slate-400 block">Nhà thầu:</span>
-                        <strong className="text-slate-800 dark:text-slate-200 font-semibold">{matchedWarrantyItem.supplier || 'Chưa gán'}</strong>
+                        <span className="text-slate-700 dark:text-slate-300 font-mono">{matchedWarrantyItem.supplier || 'Chưa gán'}</span>
                       </div>
                       <div>
                         <span className="text-[10px] text-slate-400 block">Tiến độ:</span>
@@ -1328,9 +1346,25 @@ function getAttachmentData(msgId, attIdx) {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 text-[11px] font-mono text-slate-400 shrink-0 self-start sm:self-auto">
-                          <Clock className="w-3 h-3 text-slate-400" />
-                          <span>{msg.date}</span>
+                        <div className="flex items-center gap-2.5 text-[11px] font-mono text-slate-400 shrink-0 self-start sm:self-auto">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const msgGmailUrl = activeThread.threadId && !activeThread.threadId.startsWith('th-00')
+                                ? `https://mail.google.com/mail/u/0/#all/${activeThread.threadId}`
+                                : `https://mail.google.com/mail/u/0/#search/${encodeURIComponent(activeThread.subject)}`;
+                              window.open(msgGmailUrl, '_blank');
+                            }}
+                            className="inline-flex items-center gap-1 text-[11px] text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:underline cursor-pointer font-sans font-semibold"
+                            title="Mở thư này trên Gmail"
+                          >
+                            <Mail className="w-3 h-3" />
+                            <span>Gmail ↗</span>
+                          </button>
+                          <div className="flex items-center gap-1 text-slate-400">
+                            <Clock className="w-3 h-3 text-slate-400" />
+                            <span>{msg.date}</span>
+                          </div>
                         </div>
                       </div>
 

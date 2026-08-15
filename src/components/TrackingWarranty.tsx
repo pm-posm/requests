@@ -2665,15 +2665,31 @@ export default function TrackingWarranty() {
                     )}
                   </div>
 
-                  <div className="pt-2.5 border-t border-sky-200/60 dark:border-sky-800/60 flex items-center justify-between gap-2">
-                    <span className="text-[11px] text-sky-900 dark:text-sky-200 font-medium">Tạo Thread mail tới Supplier:</span>
-                    <button
-                      onClick={() => handleOpenMailModal(selectedItem)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-semibold text-xs shadow-sm transition-colors cursor-pointer shrink-0"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      <span>Gửi Mail Supplier</span>
-                    </button>
+                  <div className="pt-2.5 border-t border-sky-200/60 dark:border-sky-800/60 flex items-center justify-between gap-2 flex-wrap">
+                    <span className="text-[11px] text-sky-900 dark:text-sky-200 font-medium">Hành động Thread mail:</span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {(selectedItem.mailTitle || selectedItem.requestId) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const q = selectedItem.mailTitle || selectedItem.requestId;
+                            window.open(`https://mail.google.com/mail/u/0/#search/${encodeURIComponent(q)}`, '_blank');
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:hover:bg-rose-900 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-lg font-semibold text-xs shadow-2xs transition-colors cursor-pointer shrink-0"
+                          title="Tìm và mở luồng email này trong Gmail Web"
+                        >
+                          <Mail className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                          <span>Xem trên Gmail ↗</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleOpenMailModal(selectedItem)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-semibold text-xs shadow-sm transition-colors cursor-pointer shrink-0"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Gửi Mail Supplier</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
