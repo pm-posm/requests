@@ -359,7 +359,8 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
   });
   const [mobileShowDetail, setMobileShowDetail] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<'ALL' | 'MATCHED' | 'HAS_ATTACHMENT' | 'IN_PROGRESS'>('ALL');
+  const [filterType, setFilterType] = useState<'ALL' | 'NEW' | 'MATCHED' | 'HAS_ATTACHMENT' | 'IN_PROGRESS'>('ALL');
+  const [newThreadIds, setNewThreadIds] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
   const isFetchingRef = useRef(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
@@ -528,26 +529,46 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
 
         // Smart merge with existing threads by threadId (detects new emails + replies to existing threads)
         setThreads(prevThreads => {
-          const prevMap = new Map(prevThreads.map(t => [t.threadId, t]));
+          // If incoming contains real threads from Gmail, purge initial mock sample threads
+          const isMockSample = (t: WarrantyEmailThread) => t.threadId.startsWith('th-00');
+          const realPrev = incoming.length > 0 ? prevThreads.filter(t => !isMockSample(t)) : prevThreads;
+          const prevMap = new Map(realPrev.map(t => [t.threadId, t]));
+
           let newIncomingCount = 0;
           let updatedRepliesCount = 0;
+          const newlyDiscoveredIds: string[] = [];
 
           incoming.forEach(t => {
             const prev = prevMap.get(t.threadId);
             if (!prev) {
               newIncomingCount++;
+              newlyDiscoveredIds.push(t.threadId);
             } else if ((t.messagesCount || 1) > (prev.messagesCount || 1)) {
               updatedRepliesCount++;
+              newlyDiscoveredIds.push(t.threadId);
             }
             prevMap.set(t.threadId, t);
           });
 
           // Sort strictly by timestamp descending (newest activity at the top)
           const merged = Array.from(prevMap.values()).sort((a, b) => {
-            const timeA = a.rawTimestamp || (a.lastUpdated ? new Date(a.lastUpdated).getTime() : 0);
-            const timeB = b.rawTimestamp || (b.lastUpdated ? new Date(b.lastUpdated).getTime() : 0);
+            const timeA = typeof a.rawTimestamp === 'number' && !isNaN(a.rawTimestamp) ? a.rawTimestamp : 0;
+            const timeB = typeof b.rawTimestamp === 'number' && !isNaN(b.rawTimestamp) ? b.rawTimestamp : 0;
             return timeB - timeA;
           });
+
+          // Auto-mark newly discovered threads
+          if (newlyDiscoveredIds.length > 0) {
+            setNewThreadIds(prev => {
+              const next = new Set(prev);
+              newlyDiscoveredIds.forEach(id => next.add(id));
+              return next;
+            });
+            // Auto focus to newest incoming thread
+            if (merged[0]) {
+              setSelectedThreadId(merged[0].threadId);
+            }
+          }
 
           // Save lightweight version to LocalStorage: preserves small image thumbnails (<45KB) for seamless F5 reload
           try {
@@ -599,10 +620,6 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
         });
 
         setLastSyncedTime(new Date().toLocaleTimeString('vi-VN'));
-
-        if (incoming.length > 0) {
-          setSelectedThreadId(prev => (prev && incoming.some(m => m.threadId === prev)) ? prev : incoming[0].threadId);
-        }
       } else {
         if (!isSilent) {
           toast.error('Lỗi phản hồi từ Apps Script: ' + (json.message || 'Không có dữ liệu'));
@@ -680,6 +697,10 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
       }
 
       // 2. Filter Types
+      if (filterType === 'NEW') {
+        if (!newThreadIds.has(t.threadId)) return false;
+      }
+
       if (filterType === 'MATCHED') {
         const hasMatch = warrantyItems.some(w => 
           (w.requestId && t.requestId && w.requestId.toLowerCase().trim() === t.requestId.toLowerCase().trim())
@@ -692,7 +713,7 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
 
       return true;
     });
-  }, [threads, searchQuery, filterType, warrantyItems]);
+  }, [threads, searchQuery, filterType, newThreadIds, warrantyItems]);
 
   const handleSaveConfig = (newUrl: string) => {
     setAppsScriptUrl(newUrl);
@@ -1040,6 +1061,19 @@ function getAttachmentData(msgId, attIdx) {
               >
                 Tất cả ({threads.length})
               </button>
+              {newThreadIds.size > 0 && (
+                <button
+                  onClick={() => setFilterType('NEW')}
+                  className={`px-2.5 py-1 rounded-lg font-bold transition-colors shrink-0 cursor-pointer flex items-center gap-1 ${
+                    filterType === 'NEW'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800'
+                  }`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                  <span>Mới nhận ({newThreadIds.size})</span>
+                </button>
+              )}
               <button
                 onClick={() => setFilterType('MATCHED')}
                 className={`px-2.5 py-1 rounded-lg font-semibold transition-colors shrink-0 cursor-pointer ${
@@ -1082,22 +1116,38 @@ function getAttachmentData(msgId, attIdx) {
             ) : (
               filteredThreads.map(thread => {
                 const isSelected = thread.threadId === selectedThreadId;
+                const isNew = newThreadIds.has(thread.threadId);
                 return (
                   <div
                     key={thread.threadId}
                     onClick={() => {
                       setSelectedThreadId(thread.threadId);
                       setMobileShowDetail(true);
+                      if (isNew) {
+                        setNewThreadIds(prev => {
+                          const next = new Set(prev);
+                          next.delete(thread.threadId);
+                          return next;
+                        });
+                      }
                     }}
                     className={`p-3.5 transition-all cursor-pointer select-none relative ${
                       isSelected
                         ? 'bg-indigo-50/70 dark:bg-indigo-950/40 border-l-4 border-l-indigo-600'
+                        : isNew
+                        ? 'bg-emerald-50/40 dark:bg-emerald-950/20 border-l-4 border-l-emerald-500'
                         : 'hover:bg-slate-50 dark:hover:bg-slate-800/40 border-l-4 border-l-transparent'
                     }`}
                   >
                     {/* Row 1: Badges & Date */}
                     <div className="flex items-center justify-between gap-2 mb-1.5">
                       <div className="flex items-center gap-1.5 flex-wrap">
+                        {isNew && (
+                          <span className="px-1.5 py-0.5 rounded-full font-bold text-[10px] bg-emerald-500 text-white flex items-center gap-1 shadow-2xs animate-pulse">
+                            <span className="w-1 h-1 rounded-full bg-white"></span>
+                            <span>Mới</span>
+                          </span>
+                        )}
                         {thread.requestId ? (
                           <span className="px-2 py-0.5 rounded-md font-mono font-bold text-[10px] bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
                             {thread.requestId}
@@ -1111,8 +1161,12 @@ function getAttachmentData(msgId, attIdx) {
                           {thread.fromName || thread.from}
                         </span>
                       </div>
-                      <span className="text-[10px] text-slate-400 font-mono shrink-0">
-                        {thread.lastUpdated.split(' ')[0]}
+                      <span className={`text-[10px] font-mono shrink-0 ${isNew ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-400'}`}>
+                        {thread.lastUpdated ? (
+                          thread.lastUpdated.includes(':') && thread.rawTimestamp && (Date.now() - thread.rawTimestamp < 86400000)
+                            ? thread.lastUpdated.split(' ')[0]
+                            : thread.lastUpdated.split(' ')[0]
+                        ) : ''}
                       </span>
                     </div>
 
