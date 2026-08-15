@@ -292,9 +292,22 @@ export const ProjectTableView: React.FC<ProjectTableViewProps> = ({
                       }
 
                       {(() => {
-                        const isProjectDone = prj.stats.total > 0 && prj.stats.completed === prj.stats.total;
-                        const alert = getActualTimeAlert(prj.actualTimeRange, undefined, undefined, isProjectDone);
+                        const isProjectProcessedOrStarted = prj.stats.processed > 0;
+                        const alert = getActualTimeAlert(prj.actualTimeRange, undefined, undefined, isProjectProcessedOrStarted);
                         if (!alert.label || alert.state === 'COMPLETED') return null;
+
+                        // Option 1: If project has started / is in progress (>0% and <100%), show "Đang thực hiện" instead of "Quá hạn"
+                        if (prj.stats.processedRate > 0 && prj.stats.processedRate < 100) {
+                          return (
+                            <div className="mt-1">
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] border bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border-sky-200 dark:border-sky-900 font-medium">
+                                <span>🔄</span>
+                                <span>Đang thực hiện</span>
+                              </span>
+                            </div>
+                          );
+                        }
+
                         return (
                           <div className="mt-1">
                             <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] border ${alert.badgeClass}`}>
@@ -311,7 +324,7 @@ export const ProjectTableView: React.FC<ProjectTableViewProps> = ({
                       <div className="w-44 space-y-1">
                         <div className="flex justify-between text-[11px] font-semibold">
                           <span className="text-emerald-600 dark:text-emerald-400">{prj.stats.completedRate}%</span>
-                          <span className="text-slate-400">{prj.stats.completed}/{prj.stats.total}</span>
+                          <span className="text-slate-400">{prj.stats.processed}/{prj.stats.total}</span>
                         </div>
                         <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
                           <div
@@ -319,24 +332,20 @@ export const ProjectTableView: React.FC<ProjectTableViewProps> = ({
                             style={{ width: `${prj.stats.completedRate}%` }}
                           />
                         </div>
-                        {prj.stats.qcFailed > 0 && (
-                          <div className="text-[10px] font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                            <span>QC Fail: {prj.stats.qcFailed} ca</span>
-                          </div>
-                        )}
-                        {prj.stats.lateCount > 0 && (
-                          <div className="text-[10px] font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                            <span>Trễ hạn: {prj.stats.lateCount} ca</span>
-                          </div>
-                        )}
-                        {prj.stats.overdueCount > 0 && (
-                          <div className="text-[10px] font-medium text-amber-700 dark:text-amber-400 flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                            <span>Chưa xong (Quá hạn): {prj.stats.overdueCount} ca</span>
-                          </div>
-                        )}
+                        <div className="flex items-center gap-2 flex-wrap text-[10px]">
+                          {prj.stats.failed > 0 && (
+                            <div className="font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                              <span>Fail: {prj.stats.failed} ca</span>
+                            </div>
+                          )}
+                          {prj.stats.cancelled > 0 && (
+                            <div className="font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                              <span>Cancel: {prj.stats.cancelled} ca</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
 

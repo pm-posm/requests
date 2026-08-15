@@ -105,10 +105,20 @@ export const AnalystDashboard: React.FC<AnalystDashboardProps> = ({
       {/* TOP KPI CARDS - 5 CLEAN METRICS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* CARD 1: TỔNG SỐ MÃ DỰ ÁN */}
-        <Card className="bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 shadow-xs">
+        <Card 
+          onClick={() => setSupplierDrawerConfig({
+            isOpen: true,
+            supplierName: 'Tất cả dự án',
+            metricType: 'TOTAL',
+            metricTitle: `Danh Sách Tất Cả Vị Trí (${overallStats.totalProjects} Mã Dự Án)`,
+            colorTheme: 'sky',
+            items: overallStats.allAnalystItems || []
+          })}
+          className="bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-sky-400 dark:hover:border-sky-700 transition-all cursor-pointer group"
+        >
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Tổng Mã Dự Án</p>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide group-hover:text-sky-600 transition-colors">Tổng Mã Dự Án</p>
               <h3 className="text-2xl font-extrabold text-sky-700 dark:text-sky-400 mt-1">{overallStats.totalProjects} <span className="text-xs font-bold text-slate-500">Mã DA</span></h3>
               <p className="text-[10px] text-slate-400 font-medium">
                 {overallStats.total} vị trí
@@ -118,49 +128,79 @@ export const AnalystDashboard: React.FC<AnalystDashboardProps> = ({
                 }
               </p>
             </div>
-            <div className="p-3 bg-sky-50 dark:bg-sky-950 text-sky-600 rounded-xl">
+            <div className="p-3 bg-sky-50 dark:bg-sky-950 text-sky-600 rounded-xl group-hover:scale-105 transition-transform">
               <FolderKanban className="w-5 h-5" />
             </div>
           </CardContent>
         </Card>
 
         {/* CARD 2: TỔNG VỊ TRÍ ASSET POSM */}
-        <Card className="bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 shadow-xs">
+        <Card 
+          onClick={() => setSupplierDrawerConfig({
+            isOpen: true,
+            supplierName: 'Tất cả vị trí',
+            metricType: 'TOTAL',
+            metricTitle: `Danh Sách Tất Cả Vị Trí Asset POSM (${overallStats.total} vị trí)`,
+            colorTheme: 'purple',
+            items: overallStats.allAnalystItems || []
+          })}
+          className="bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-purple-400 dark:hover:border-purple-700 transition-all cursor-pointer group"
+        >
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Tổng Vị Trí Asset POSM</p>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide group-hover:text-purple-600 transition-colors">Tổng Vị Trí Asset POSM</p>
               <h3 className="text-2xl font-extrabold text-purple-700 dark:text-purple-400 mt-1">{overallStats.total} <span className="text-xs font-bold text-slate-500">vị trí</span></h3>
-              <p className="text-[10px] text-slate-400 font-medium">Tổng số dòng Asset trên Sheet</p>
+              <p className="text-[10px] text-slate-400 font-medium">Bấm để xem toàn bộ danh sách</p>
             </div>
-            <div className="p-3 bg-purple-50 dark:bg-purple-950 text-purple-600 rounded-xl">
+            <div className="p-3 bg-purple-50 dark:bg-purple-950 text-purple-600 rounded-xl group-hover:scale-105 transition-transform">
               <Layers className="w-5 h-5" />
             </div>
           </CardContent>
         </Card>
 
         {/* CARD 3: HOÀN THÀNH (PASS) */}
-        <Card className="bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 shadow-xs">
+        <Card 
+          onClick={() => setSupplierDrawerConfig({
+            isOpen: true,
+            supplierName: 'Tất cả ca Pass',
+            metricType: 'COMPLETED',
+            metricTitle: `Danh Sách Ca Hoàn Thành Pass (${overallStats.completed} vị trí)`,
+            colorTheme: 'emerald',
+            items: overallStats.completedItems || []
+          })}
+          className="bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-emerald-400 dark:hover:border-emerald-700 transition-all cursor-pointer group"
+        >
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Hoàn Thành (Pass)</p>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide group-hover:text-emerald-600 transition-colors">Hoàn Thành (Pass)</p>
               <h3 className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">{overallStats.completed} <span className="text-xs font-bold text-slate-500">vị trí</span></h3>
               <p className="text-[10px] text-emerald-600 font-bold">Đạt {overallStats.completionRate}% tiến độ</p>
             </div>
-            <div className="p-3 bg-emerald-50 dark:bg-emerald-950 text-emerald-600 rounded-xl">
+            <div className="p-3 bg-emerald-50 dark:bg-emerald-950 text-emerald-600 rounded-xl group-hover:scale-105 transition-transform">
               <CheckCircle2 className="w-5 h-5" />
             </div>
           </CardContent>
         </Card>
 
-        {/* CARD 4: LỖI / QC FAILED */}
-        <Card className="bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 shadow-xs">
+        {/* CARD 4: CA LỖI (FAIL) */}
+        <Card 
+          onClick={() => setSupplierDrawerConfig({
+            isOpen: true,
+            supplierName: 'Tất cả ca Fail',
+            metricType: 'ISSUE',
+            metricTitle: `Danh Sách Các Ca Bị Lỗi Fail (${overallStats.issueCount} ca)`,
+            colorTheme: 'rose',
+            items: overallStats.issueAuditList || []
+          })}
+          className="bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-rose-400 dark:hover:border-rose-700 transition-all cursor-pointer group"
+        >
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Lỗi / QC Failed</p>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide group-hover:text-rose-600 transition-colors">Ca Lỗi (Fail)</p>
               <h3 className="text-2xl font-extrabold text-rose-600 dark:text-rose-400 mt-1">{overallStats.issueCount} <span className="text-xs font-bold text-slate-500">ca</span></h3>
-              <p className="text-[10px] text-rose-500 font-medium">{overallStats.overdueCount} ca quá hạn thi công</p>
+              <p className="text-[10px] text-rose-500 font-medium">Tổng số ca nghiệm thu Fail</p>
             </div>
-            <div className="p-3 bg-rose-50 dark:bg-rose-950 text-rose-600 rounded-xl">
+            <div className="p-3 bg-rose-50 dark:bg-rose-950 text-rose-600 rounded-xl group-hover:scale-105 transition-transform">
               <AlertTriangle className="w-5 h-5" />
             </div>
           </CardContent>
@@ -176,7 +216,7 @@ export const AnalystDashboard: React.FC<AnalystDashboardProps> = ({
             colorTheme: 'purple',
             items: overallStats.noReportOrCancelledItems || []
           })}
-          className="bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-purple-300 dark:hover:border-purple-700 transition-all cursor-pointer group"
+          className="bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-purple-400 dark:hover:border-purple-700 transition-all cursor-pointer group"
         >
           <CardContent className="p-4 flex items-center justify-between">
             <div>
@@ -196,10 +236,10 @@ export const AnalystDashboard: React.FC<AnalystDashboardProps> = ({
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
-              Ma Trận Đánh Giá Năng Lực Nhà Cung Cấp (Suppliers)
+              Bảng Đánh Giá Nhà Cung Cấp (Supplier)
             </h3>
-            <p className="text-xs text-slate-500">
-              Thống kê tổng số vị trí, số ca hoàn thành, số ca lỗi QC và tỷ lệ hoàn thành theo từng Supplier
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Báo cáo tiến độ thi công và kết quả của từng nhà cung cấp (Bấm vào con số để xem chi tiết)
             </p>
           </div>
         </div>
@@ -207,14 +247,14 @@ export const AnalystDashboard: React.FC<AnalystDashboardProps> = ({
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 text-slate-500 font-semibold uppercase tracking-wider text-[10px]">
-                <th className="px-4 py-3">Nhà Cung Cấp (Supplier)</th>
-                <th className="px-4 py-3 text-center">Tổng Vị Trí</th>
-                <th className="px-4 py-3 text-center">Chưa Cập Nhật Lịch</th>
-                <th className="px-4 py-3 text-center">Đang/Đã Thi Công</th>
-                <th className="px-4 py-3 text-center">Thành Công (Pass)</th>
-                <th className="px-4 py-3 text-center">Lỗi QC / Failed</th>
-                <th className="px-4 py-3 text-center">Tỷ Lệ Hoàn Thành</th>
+              <tr className="bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
+                <th className="px-4 py-3">Nhà Cung Cấp</th>
+                <th className="px-4 py-3 text-center">Tổng Ca</th>
+                <th className="px-4 py-3 text-center">Chưa Có Lịch</th>
+                <th className="px-4 py-3 text-center">Đã Lên Lịch</th>
+                <th className="px-4 py-3 text-center">Pass</th>
+                <th className="px-4 py-3 text-center">Fail</th>
+                <th className="px-4 py-3 text-center">Tỷ Lệ Pass</th>
                 <th className="px-4 py-3 text-right">Chi Tiết</th>
               </tr>
             </thead>
@@ -226,10 +266,10 @@ export const AnalystDashboard: React.FC<AnalystDashboardProps> = ({
 
                 return (
                   <tr key={supp.displayName} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                    <td className="px-4 py-3.5 font-bold text-slate-800 dark:text-slate-200">
+                    <td className="px-4 py-3.5 font-extrabold text-slate-800 dark:text-slate-200 text-xs">
                       {supp.displayName}
                     </td>
-                    <td className="px-4 py-3.5 text-center font-bold text-slate-700 dark:text-slate-300">
+                    <td className="px-4 py-3.5 text-center">
                       <button
                         onClick={() => setSupplierDrawerConfig({
                           isOpen: true,
@@ -239,12 +279,13 @@ export const AnalystDashboard: React.FC<AnalystDashboardProps> = ({
                           colorTheme: 'sky',
                           items: supp.totalItems
                         })}
-                        className="hover:underline cursor-pointer text-sky-600 font-extrabold"
+                        className="hover:underline cursor-pointer text-sky-600 dark:text-sky-400 font-black text-sm md:text-base hover:scale-110 transition-transform inline-block"
+                        title="Bấm để xem tất cả vị trí"
                       >
                         {supp.total}
                       </button>
                     </td>
-                    <td className="px-4 py-3.5 text-center text-purple-600 font-semibold">
+                    <td className="px-4 py-3.5 text-center">
                       {supp.noActualTime > 0 ? (
                         <button
                           onClick={() => setSupplierDrawerConfig({
@@ -255,15 +296,16 @@ export const AnalystDashboard: React.FC<AnalystDashboardProps> = ({
                             colorTheme: 'purple',
                             items: noActualTimeItems
                           })}
-                          className="hover:underline cursor-pointer font-extrabold"
+                          className="hover:underline cursor-pointer text-purple-600 dark:text-purple-400 font-black text-sm md:text-base hover:scale-110 transition-transform inline-block"
+                          title="Bấm để xem danh sách chưa có lịch"
                         >
                           {supp.noActualTime}
                         </button>
                       ) : (
-                        <span>0</span>
+                        <span className="text-slate-300 dark:text-slate-700 text-sm font-semibold">0</span>
                       )}
                     </td>
-                    <td className="px-4 py-3.5 text-center font-semibold text-slate-700 dark:text-slate-300">
+                    <td className="px-4 py-3.5 text-center">
                       {supp.activeExecuted > 0 ? (
                         <button
                           onClick={() => setSupplierDrawerConfig({
@@ -274,15 +316,16 @@ export const AnalystDashboard: React.FC<AnalystDashboardProps> = ({
                             colorTheme: 'sky',
                             items: activeExecutedItems
                           })}
-                          className="hover:underline cursor-pointer font-extrabold"
+                          className="hover:underline cursor-pointer text-slate-700 dark:text-slate-200 font-black text-sm md:text-base hover:scale-110 transition-transform inline-block"
+                          title="Bấm để xem danh sách đã lên lịch"
                         >
                           {supp.activeExecuted}
                         </button>
                       ) : (
-                        <span>0</span>
+                        <span className="text-slate-300 dark:text-slate-700 text-sm font-semibold">0</span>
                       )}
                     </td>
-                    <td className="px-4 py-3.5 text-center text-emerald-600 font-bold">
+                    <td className="px-4 py-3.5 text-center">
                       <button
                         onClick={() => setSupplierDrawerConfig({
                           isOpen: true,
@@ -292,12 +335,13 @@ export const AnalystDashboard: React.FC<AnalystDashboardProps> = ({
                           colorTheme: 'emerald',
                           items: supp.completedItems
                         })}
-                        className="hover:underline cursor-pointer font-extrabold"
+                        className="hover:underline cursor-pointer text-emerald-600 dark:text-emerald-400 font-black text-sm md:text-base hover:scale-110 transition-transform inline-block"
+                        title="Bấm để xem các ca Pass"
                       >
                         {supp.success}
                       </button>
                     </td>
-                    <td className="px-4 py-3.5 text-center text-rose-600 font-bold">
+                    <td className="px-4 py-3.5 text-center">
                       {supp.issue > 0 ? (
                         <button
                           onClick={() => setSupplierDrawerConfig({
@@ -308,15 +352,16 @@ export const AnalystDashboard: React.FC<AnalystDashboardProps> = ({
                             colorTheme: 'rose',
                             items: supp.issueItems
                           })}
-                          className="hover:underline cursor-pointer font-extrabold text-rose-600"
+                          className="hover:underline cursor-pointer text-rose-600 dark:text-rose-400 font-black text-sm md:text-base hover:scale-110 transition-transform inline-block"
+                          title="Bấm để xem các ca Fail"
                         >
                           {supp.issue}
                         </button>
                       ) : (
-                        <span>0</span>
+                        <span className="text-slate-300 dark:text-slate-700 text-sm font-semibold">0</span>
                       )}
                     </td>
-                    <td className="px-4 py-3.5 text-center font-bold text-emerald-600">
+                    <td className="px-4 py-3.5 text-center font-extrabold text-emerald-600 text-sm">
                       {rate}%
                     </td>
                     <td className="px-4 py-3.5 text-right">
@@ -329,7 +374,7 @@ export const AnalystDashboard: React.FC<AnalystDashboardProps> = ({
                           colorTheme: 'slate',
                           items: supp.totalItems
                         })}
-                        className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded text-[11px] font-semibold cursor-pointer"
+                        className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold cursor-pointer transition-colors shadow-2xs"
                       >
                         Xem danh sách
                       </button>
@@ -419,10 +464,9 @@ export const AnalystDashboard: React.FC<AnalystDashboardProps> = ({
                         );
                       }
                       if (res.sign === '❌') {
-                        const labelText = res.failReason === 'LATE' ? 'Trễ hạn' : res.failReason === 'QC_FAIL' ? 'QC Fail' : 'Fail';
                         return (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-900 rounded text-xs font-bold" title={res.failReason === 'LATE' ? 'Nghiệm thu trễ hơn ngày Actual Time' : 'Bị lỗi QC'}>
-                            <AlertTriangle className="w-3.5 h-3.5" /> {labelText}
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-900 rounded text-xs font-bold">
+                            <AlertTriangle className="w-3.5 h-3.5" /> Fail
                           </span>
                         );
                       }

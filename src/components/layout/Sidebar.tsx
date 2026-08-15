@@ -121,16 +121,16 @@ export function Sidebar({
                 icon={<Inbox />} label="Xử lý Request" 
                 active={pathname.startsWith('/requests')} 
                 isCollapsed={isCollapsed}
-                isLocked={true}
-                onClick={() => handleRouteClick('/requests', 'request', true)} 
+                isLocked={false}
+                onClick={() => handleRouteClick('/requests', 'request', false)} 
               />
               {!isCollapsed && (
                 <div className="pl-6 pr-2 py-1 space-y-0.5 border-l border-slate-200 dark:border-slate-800 ml-5 my-1">
                   <SubSidebarItem 
                     label="Tất cả Request (Overview)" 
                     active={pathname === '/requests' || pathname === '/requests/overview'} 
-                    isLocked={true}
-                    onClick={() => handleRouteClick('/requests', 'request', true)} 
+                    isLocked={false}
+                    onClick={() => handleRouteClick('/requests', 'request', false)} 
                   />
                 </div>
               )}
@@ -152,8 +152,8 @@ export function Sidebar({
                 icon={<KanbanSquare />} label="Bảng kế hoạch" 
                 active={pathname.startsWith('/store-plan')} 
                 isCollapsed={isCollapsed}
-                isLocked={true}
-                onClick={() => handleRouteClick('/store-plan', 'store_plan', true)} 
+                isLocked={false}
+                onClick={() => handleRouteClick('/store-plan', 'store_plan', false)} 
               />
             </div>
           </div>
@@ -173,8 +173,8 @@ export function Sidebar({
                 icon={<Factory />} label="Nghiệm thu Xuất xưởng" 
                 active={pathname.startsWith('/tracking/ntxx')} 
                 isCollapsed={isCollapsed}
-                isLocked={true}
-                onClick={() => handleRouteClick('/tracking/ntxx', 'tracking_ntxx', true)} 
+                isLocked={false}
+                onClick={() => handleRouteClick('/tracking/ntxx', 'tracking_ntxx', false)} 
               />
               <SidebarItem 
                 icon={<ClipboardCheck />} label="Theo dõi Lắp đặt" 

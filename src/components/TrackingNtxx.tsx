@@ -3,10 +3,12 @@ import Papa from 'papaparse';
 import { 
   Search, Loader2, RefreshCw, AlertCircle, ChevronDown, ChevronUp, ChevronRight,
   CheckCircle2, AlertTriangle, ClipboardList, Filter, FileSpreadsheet, 
-  FileText, Image, Play, ShieldAlert, Award, Package, ShieldCheck, Table, BarChart3
+  FileText, Image, Play, ShieldAlert, Award, Package, ShieldCheck, Table, BarChart3, Factory,
+  X, ExternalLink, Calendar, UserCheck, MapPin, Eye, ArrowLeft, Store, Phone, User
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { getLiveMasterContactMap, type MasterStoreContactInfo } from '@/services/sheetSyncService';
 
 // Define the interface for the raw NTXX spreadsheet row mapped to clean camelCase fields
 interface NtxxRow {
@@ -39,6 +41,7 @@ interface GroupedNtxxProject {
   projectCode: string;
   category: string;
   brand: string;
+  customer: string;
   item: string;
   batches: NtxxRow[];
   stats: {
@@ -77,7 +80,7 @@ const COLUMN_MAPPING: Record<string, keyof NtxxRow> = {
   'Ghi chú': 'note',
 };
 
-const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/110dpKX0WPZ76LHImzqrZwt58wG6Kq3rkCJ-ilpRpsbg/export?format=csv&gid=1872121397';
+const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/110dpKX0WPZ76LHImzqrZwt58wG6Kq3rkCJ-ilpRpsbg/export?format=csv&gid=2095387878';
 
 export default function TrackingNtxx() {
   const [activeModuleTab, setActiveModuleTab] = useState<'DATA_LIST' | 'ANALYST'>('DATA_LIST');
@@ -85,6 +88,41 @@ export default function TrackingNtxx() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const [lastSyncedAt, setLastSyncedAt] = useState<string>(new Date().toLocaleTimeString('vi-VN'));
+  const [countdownSeconds, setCountdownSeconds] = useState(30);
+
+  // Selected Project Detail Drawer State
+  const [selectedDetailProject, setSelectedDetailProject] = useState<GroupedNtxxProject | null>(null);
+
+  // Master Store Contact Directory Map State
+  const [contactMap, setContactMap] = useState<Map<string, MasterStoreContactInfo>>(new Map());
+
+  // Store List Right Sidebar Drawer State
+  const [storeDrawerConfig, setStoreDrawerConfig] = useState<{
+    isOpen: boolean;
+    type: 'PASS' | 'FAIL';
+    storesList: string[];
+    batchIndex: number;
+    projectCode: string;
+    supplierName: string;
+  }>({
+    isOpen: false,
+    type: 'PASS',
+    storesList: [],
+    batchIndex: 0,
+    projectCode: '',
+    supplierName: ''
+  });
+
+  // Pre-load Master Store Contact Map
+  useEffect(() => {
+    getLiveMasterContactMap().then(map => {
+      setContactMap(map);
+    }).catch(err => {
+      console.warn('Could not load master contact map:', err);
+    });
+  }, []);
 
   // Expanded projects state (tầng 1)
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
@@ -102,10 +140,11 @@ export default function TrackingNtxx() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  const loadData = () => {
-    setIsLoading(true);
+  const loadData = (showToast = false) => {
+    setIsRefreshing(true);
     setError(null);
-    Papa.parse(SHEET_CSV_URL, {
+    const targetUrl = `${SHEET_CSV_URL}&_cachebust=${Date.now()}`;
+    Papa.parse(targetUrl, {
       download: true,
       header: true,
       skipEmptyLines: true,
@@ -130,6 +169,11 @@ export default function TrackingNtxx() {
         setRawData(formattedData);
         setIsLoading(false);
         setIsRefreshing(false);
+        setLastSyncedAt(new Date().toLocaleTimeString('vi-VN'));
+        setCountdownSeconds(30);
+        if (showToast) {
+          toast.success('Đã kéo dữ liệu mới nhất từ Sheet Form_Responses2!');
+        }
       },
       error: (err: any) => {
         console.error('Error fetching NTXX sheet data:', err);
@@ -140,13 +184,23 @@ export default function TrackingNtxx() {
     });
   };
 
+  // Real-time Auto-polling Interval (mỗi 30s tự động kéo dữ liệu mới từ Sheet)
   useEffect(() => {
     loadData();
+    const interval = setInterval(() => {
+      setCountdownSeconds(prev => {
+        if (prev <= 1) {
+          loadData();
+          return 30;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleRefresh = () => {
-    setIsRefreshing(true);
-    loadData();
+    loadData(true);
   };
 
   // Get unique options for filters based on raw data
@@ -174,10 +228,11 @@ export default function TrackingNtxx() {
   // Step 1: Filter Flat Rows based on UI filters
   const filteredFlatRows = useMemo(() => {
     return rawData.filter(row => {
-      // Search term matches: Mã dự án, Supplier, CAT, Brand, Hạng mục, Ghi chú, Cửa hàng
+      // Search term matches: Mã dự án, Customer, Supplier, CAT, Brand, Hạng mục, Ghi chú, Cửa hàng
       const term = searchTerm.trim().toLowerCase();
       const matchesSearch = !term ? true : (
         (row.projectCode || '').toLowerCase().includes(term) ||
+        (row.customer || '').toLowerCase().includes(term) ||
         (row.supplierName || '').toLowerCase().includes(term) ||
         (row.category || '').toLowerCase().includes(term) ||
         (row.brand || '').toLowerCase().includes(term) ||
@@ -207,6 +262,7 @@ export default function TrackingNtxx() {
           projectCode: code,
           category: row.category || 'N/A',
           brand: row.brand || 'N/A',
+          customer: row.customer || 'Chưa phân loại',
           item: row.item || 'N/A',
           batches: [],
           stats: {
@@ -351,29 +407,72 @@ export default function TrackingNtxx() {
     );
   };
 
+  // If a specific project is selected, render ONLY the dedicated Project Detail View Component
+  if (selectedDetailProject) {
+    return (
+      <div className="space-y-6">
+        <NtxxProjectDetailView 
+          project={selectedDetailProject} 
+          onBack={() => setSelectedDetailProject(null)} 
+          onOpenStoreDrawer={(config) => setStoreDrawerConfig({ ...config, isOpen: true })}
+        />
+
+        <NtxxStoreListDrawer 
+          isOpen={storeDrawerConfig.isOpen}
+          onClose={() => setStoreDrawerConfig(prev => ({ ...prev, isOpen: false }))}
+          type={storeDrawerConfig.type}
+          storesList={storeDrawerConfig.storesList}
+          batchIndex={storeDrawerConfig.batchIndex}
+          projectCode={storeDrawerConfig.projectCode}
+          supplierName={storeDrawerConfig.supplierName}
+          contactMap={contactMap}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       
-      {/* Top Header Section */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <FileSpreadsheet className="h-6 w-6 text-emerald-500" />
-            Nghiệm thu Xuất xưởng (FAT - NTXX)
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Theo dõi chất lượng sản xuất POSM tại xưởng trước khi phân phối tới các cửa hàng.
-          </p>
+      {/* TOP HEADER SECTION - UNIFIED REAL-TIME SYNC HEADER */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+        <div className="flex items-center gap-3.5">
+          <div className="p-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl border border-slate-200 dark:border-slate-700">
+            <Factory className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
+                Điều Hành &amp; Phân Tích Nghiệm Thu Xuất Xưởng (NTXX)
+              </h1>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-900/60">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                Live Sync Active
+              </span>
+              <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded text-xs flex items-center gap-1.5">
+                <span>Sync: {lastSyncedAt}</span>
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 border-l border-slate-300 dark:border-slate-700 pl-1.5 font-semibold">
+                  🔄 0:{(countdownSeconds % 60).toString().padStart(2, '0')}
+                </span>
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Google Sheet Form_Responses2 • <strong className="text-slate-800 dark:text-slate-200 font-semibold">{groupedProjects.length} Mã Dự Án</strong> ({rawData.length} Đợt nghiệm thu tại xưởng)
+            </p>
+          </div>
         </div>
-        
-        <button
-          onClick={handleRefresh}
-          disabled={isLoading || isRefreshing}
-          className="flex items-center gap-2 px-3 py-2 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/80 rounded-lg transition-colors font-medium shadow-sm cursor-pointer"
-        >
-          <RefreshCw className={`h-4 w-4 text-slate-500 ${isRefreshing ? 'animate-spin' : ''}`} />
-          {isRefreshing ? 'Đang làm mới...' : 'Làm mới dữ liệu'}
-        </button>
+
+        {/* TOP MODULE CONTROLS */}
+        <div className="flex items-center gap-2 self-start md:self-auto flex-wrap">
+          <button
+            onClick={handleRefresh}
+            disabled={isLoading || isRefreshing}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-800 transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-emerald-600 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>{isRefreshing ? 'Đang đồng bộ...' : 'Đồng Bổ Sheet'}</span>
+          </button>
+        </div>
       </div>
 
       {/* MODULE INTERNAL NAVIGATION SUB-TABS */}
@@ -615,280 +714,112 @@ export default function TrackingNtxx() {
 
           </div>
 
-          {/* Grouped Projects Table (Tầng 1) */}
+          {/* Grouped Projects Table (Tier 1 - Clean Summary Rows) */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800 shadow-sm overflow-hidden">
             <div className="overflow-x-auto min-w-full">
               <table className="min-w-full divide-y divide-slate-200/60 dark:divide-slate-800 text-left text-sm text-slate-800 dark:text-slate-200">
-                <thead className="bg-slate-55 dark:bg-slate-950 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                <thead className="bg-slate-50 dark:bg-slate-950 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                   <tr>
-                    <th scope="col" className="px-6 py-4 w-[1%]">Dự án</th>
-                    <th scope="col" className="px-6 py-4 w-[15%]">Mã Dự án</th>
-                    <th scope="col" className="px-6 py-4">Nhãn hàng & CAT</th>
+                    <th scope="col" className="px-6 py-4 w-[14%]">Mã Dự Án</th>
+                    <th scope="col" className="px-6 py-4 w-[14%]">Customer</th>
+                    <th scope="col" className="px-6 py-4">Nhãn hàng &amp; CAT</th>
                     <th scope="col" className="px-6 py-4">Hạng mục tiêu biểu</th>
-                    <th scope="col" className="px-6 py-4 w-[15%]">Đợt Nghiệm Thu</th>
-                    <th scope="col" className="px-6 py-4 w-[25%]">Tỷ lệ Đạt Xuất Xưởng</th>
+                    <th scope="col" className="px-6 py-4 w-[14%]">Đợt Nghiệm Thu</th>
+                    <th scope="col" className="px-6 py-4 w-[22%]">Tỷ lệ Đạt Xuất Xưởng</th>
+                    <th scope="col" className="px-6 py-4 w-[12%] text-right">Chi Tiết</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200/60 dark:divide-slate-800 bg-white dark:bg-slate-900">
                   {paginatedProjects.map((project) => {
-                    const isProjectExpanded = !!expandedProjects[project.projectCode];
                     const { totalBatches, totalQty, passedBatches, failedBatches, passRate, isFailed } = project.stats;
 
                     return (
-                      <React.Fragment key={project.projectCode}>
-                        {/* Project Row (Tầng 1) */}
-                        <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-850/50 transition-colors font-medium border-l-2 border-l-transparent hover:border-l-indigo-500">
-                          {/* Toggle Expand Column */}
-                          <td className="px-6 py-4">
-                            <button
-                              onClick={() => toggleProject(project.projectCode)}
-                              className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-colors cursor-pointer"
-                            >
-                              {isProjectExpanded ? (
-                                <ChevronDown className="h-4.5 w-4.5" />
+                      <tr 
+                        key={project.projectCode}
+                        onClick={() => setSelectedDetailProject(project)}
+                        className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors font-medium border-l-2 border-l-transparent hover:border-l-indigo-500 cursor-pointer"
+                      >
+                        {/* Project Code Clickable Link */}
+                        <td className="px-6 py-4">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedDetailProject(project);
+                            }}
+                            className="inline-flex items-center gap-1.5 font-extrabold text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 hover:underline cursor-pointer group"
+                          >
+                            <span className="text-sm">#{project.projectCode}</span>
+                            <Eye className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 transition-opacity" />
+                          </button>
+                        </td>
+
+                        {/* Customer */}
+                        <td className="px-6 py-4">
+                          <Badge variant="outline" className="bg-sky-50 text-sky-800 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800 font-extrabold text-xs">
+                            {project.customer}
+                          </Badge>
+                        </td>
+
+                        {/* Brand & Category */}
+                        <td className="px-6 py-4">
+                          <div className="flex flex-wrap gap-1.5 items-center">
+                            <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-300 dark:border-indigo-900 font-semibold">
+                              {project.brand}
+                            </Badge>
+                            <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold">({project.category})</span>
+                          </div>
+                        </td>
+
+                        {/* Typical Item */}
+                        <td className="px-6 py-4 max-w-xs md:max-w-sm">
+                          <div className="font-semibold text-slate-900 dark:text-slate-100 truncate" title={project.item}>
+                            {project.item}
+                          </div>
+                        </td>
+
+                        {/* Batches count & Total Qty */}
+                        <td className="px-6 py-4">
+                          <div className="font-bold text-slate-900 dark:text-slate-100">{totalBatches} đợt</div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">Số lượng: {totalQty} cái</div>
+                        </td>
+
+                        {/* Pass rate & visual progress bar */}
+                        <td className="px-6 py-4">
+                          <div className="flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
+                            <span className="flex items-center gap-1">
+                              {isFailed ? (
+                                <span className="text-rose-500 font-bold">{failedBatches} đợt LỖI</span>
                               ) : (
-                                <ChevronRight className="h-4.5 w-4.5" />
+                                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{passedBatches}/{totalBatches} Đạt</span>
                               )}
-                            </button>
-                          </td>
-
-                          {/* Project Code */}
-                          <td className="px-6 py-4">
-                            <span className="font-bold text-slate-900 dark:text-white select-all">
-                              {project.projectCode}
                             </span>
-                          </td>
+                            <span className={`font-bold ${passRate === 100 ? 'text-emerald-600 dark:text-emerald-400' : 'text-indigo-600 dark:text-indigo-400'}`}>{passRate}% đạt</span>
+                          </div>
+                          {/* Visual Progress Bar */}
+                          <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden border border-slate-200/20 shadow-inner">
+                            <div 
+                              className={`h-full rounded-full transition-all duration-300 ${passRate === 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`}
+                              style={{ width: `${passRate}%` }}
+                            />
+                          </div>
+                        </td>
 
-                          {/* Brand & Category */}
-                          <td className="px-6 py-4">
-                            <div className="flex flex-wrap gap-1.5 items-center">
-                              <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-300 dark:border-indigo-900">
-                                {project.brand}
-                              </Badge>
-                              <span className="text-xs text-slate-450 dark:text-slate-500 font-semibold">({project.category})</span>
-                            </div>
-                          </td>
-
-                          {/* Typical Item */}
-                          <td className="px-6 py-4 max-w-xs md:max-w-sm">
-                            <div className="font-semibold text-slate-900 dark:text-slate-100 truncate" title={project.item}>
-                              {project.item}
-                            </div>
-                          </td>
-
-                          {/* Batches count & Total Qty */}
-                          <td className="px-6 py-4">
-                            <div className="font-bold text-slate-900 dark:text-slate-100">{totalBatches} đợt</div>
-                            <div className="text-[10px] text-slate-400 dark:text-slate-500 font-bold mt-0.5">Số lượng: {totalQty} cái</div>
-                          </td>
-
-                          {/* Pass rate & visual progress bar */}
-                          <td className="px-6 py-4">
-                            <div className="flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
-                              <span className="flex items-center gap-1">
-                                {isFailed ? (
-                                  <span className="text-rose-500 font-bold">{failedBatches} đợt LỖI</span>
-                                ) : (
-                                  <span className="text-emerald-600 font-semibold">{passedBatches}/{totalBatches} Đạt</span>
-                                )}
-                              </span>
-                              <span className={`font-bold ${passRate === 100 ? 'text-emerald-600 dark:text-emerald-400' : 'text-indigo-600 dark:text-indigo-400'}`}>{passRate}% đạt</span>
-                            </div>
-                            {/* Visual Progress Bar */}
-                            <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden border border-slate-200/20 shadow-inner">
-                              <div 
-                                className={`h-full rounded-full transition-all duration-300 ${passRate === 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`}
-                                style={{ width: `${passRate}%` }}
-                              />
-                            </div>
-                          </td>
-                        </tr>
-
-                        {/* Nested Inspections List (Tầng 2) */}
-                        {isProjectExpanded && (
-                          <tr className="bg-slate-50/20 dark:bg-slate-900/30">
-                            <td colSpan={6} className="px-6 py-4 border-t border-b border-slate-150 dark:border-slate-800/80">
-                              <div className="pl-6 pr-2 py-2 border-l-2 border-l-indigo-300 dark:border-l-indigo-900 space-y-3">
-                                
-                                <div className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                                  <span>Danh sách đợt nghiệm thu tại xưởng ({project.batches.length} đợt)</span>
-                                </div>
-
-                                <div className="rounded-xl border border-slate-200/60 dark:border-slate-800/80 overflow-hidden bg-white dark:bg-slate-950 shadow-xs">
-                                  <table className="min-w-full divide-y divide-slate-155 dark:divide-slate-800 text-left text-xs">
-                                    <thead className="bg-slate-55 dark:bg-slate-900 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                                      <tr>
-                                        <th scope="col" className="px-4 py-3 w-[1%]">Chi tiết</th>
-                                        <th scope="col" className="px-4 py-3">Ngày NTXX</th>
-                                        <th scope="col" className="px-4 py-3">Nhà thầu (Supplier)</th>
-                                        <th scope="col" className="px-4 py-3">Hạng mục thi công</th>
-                                        <th scope="col" className="px-4 py-3 w-[12%]">Số lượng</th>
-                                        <th scope="col" className="px-4 py-3">Kết quả</th>
-                                        <th scope="col" className="px-4 py-3 w-[20%]">Tài liệu NT (Drive)</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-955 text-slate-700 dark:text-slate-300">
-                                      {project.batches.map((batch, batchIdx) => {
-                                        const batchKey = `${project.projectCode}_${batchIdx}`;
-                                        const isBatchExpanded = !!expandedBatches[batchKey];
-
-                                        return (
-                                          <React.Fragment key={batchKey}>
-                                            <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-900/40 transition-colors">
-                                              
-                                              {/* Batch detail toggle */}
-                                              <td className="px-4 py-3">
-                                                <button
-                                                  onClick={() => toggleBatch(batchKey)}
-                                                  className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-900 text-slate-500 transition-colors cursor-pointer"
-                                                >
-                                                  {isBatchExpanded ? (
-                                                    <ChevronUp className="h-3.5 w-3.5" />
-                                                  ) : (
-                                                    <ChevronDown className="h-3.5 w-3.5" />
-                                                  )}
-                                                </button>
-                                              </td>
-
-                                              {/* Actual NTXX Date */}
-                                              <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-100">
-                                                {batch.actualDate || 'Chưa thực hiện'}
-                                                {batch.scheduleDate && (
-                                                  <div className="text-[9px] text-slate-400 font-medium mt-0.5">Lịch gửi: {batch.scheduleDate}</div>
-                                                )}
-                                              </td>
-
-                                              {/* Supplier */}
-                                              <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-200">
-                                                {batch.supplierName}
-                                              </td>
-
-                                              {/* Item spec */}
-                                              <td className="px-4 py-3 max-w-[180px] truncate" title={batch.item}>
-                                                {batch.item}
-                                              </td>
-
-                                              {/* Quantity */}
-                                              <td className="px-4 py-3 font-bold text-slate-900 dark:text-slate-100">
-                                                {batch.qty} {batch.unit || 'cái'}
-                                              </td>
-
-                                              {/* Result badge */}
-                                              <td className="px-4 py-3">
-                                                <span className={`inline-flex items-center px-2.5 py-0.5 text-[10px] font-bold rounded-full border ${getResultBadgeStyle(batch.result)}`}>
-                                                  {batch.result || 'Chưa rõ'}
-                                                </span>
-                                              </td>
-
-                                              {/* Multimedia Drive links preview */}
-                                              <td className="px-4 py-3">
-                                                <div className="flex flex-wrap gap-1">
-                                                  {renderDriveLink(batch.bbntLink, 'BBNT', <FileText className="h-3 w-3" />)}
-                                                  {renderDriveLink(batch.overviewLink, 'Tổng quan', <Image className="h-3 w-3" />)}
-                                                  {(batch.detailLink1 || batch.detailLink2 || batch.videoLink) && (
-                                                    <Badge variant="outline" className="text-[9px] border-slate-200 dark:border-slate-800 scale-90 origin-left">
-                                                      +{ [batch.detailLink1, batch.detailLink2, batch.videoLink].filter(Boolean).length } tệp khác
-                                                    </Badge>
-                                                  )}
-                                                </div>
-                                              </td>
-
-                                            </tr>
-
-                                            {/* Batch Sub-details (Tầng 3 - Cửa hàng, Ảnh, Video chi tiết) */}
-                                            {isBatchExpanded && (
-                                              <tr className="bg-slate-50/50 dark:bg-slate-900/60 animate-in fade-in slide-in-from-top-1 duration-150">
-                                                <td colSpan={7} className="px-4 py-3 border-t border-slate-100 dark:border-slate-800">
-                                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-[11px] text-slate-600 dark:text-slate-400 p-1">
-                                                    
-                                                    {/* Category / Brand / Specs */}
-                                                    <div className="space-y-1.5">
-                                                      <span className="font-bold text-slate-400 uppercase tracking-wider text-[9px]">Chi tiết Nghiệm thu</span>
-                                                      <div className="space-y-1">
-                                                        <div className="flex justify-between py-0.5 border-b border-slate-100 dark:border-slate-900">
-                                                          <span className="text-slate-500 font-semibold">Ngành hàng (CAT):</span>
-                                                          <span className="text-slate-800 dark:text-slate-200 font-bold">{batch.category || 'N/A'}</span>
-                                                        </div>
-                                                        <div className="flex justify-between py-0.5 border-b border-slate-100 dark:border-slate-900">
-                                                          <span className="text-slate-500 font-semibold">Nhãn hàng (Brand):</span>
-                                                          <span className="text-slate-800 dark:text-slate-200 font-bold">{batch.brand || 'N/A'}</span>
-                                                        </div>
-                                                        <div className="flex justify-between py-0.5 border-b border-slate-100 dark:border-slate-900">
-                                                          <span className="text-slate-500 font-semibold">QC Technician:</span>
-                                                          <span className="text-slate-800 dark:text-slate-200 font-bold">{batch.technician || 'N/A'}</span>
-                                                        </div>
-                                                        <div className="flex justify-between py-0.5 border-b border-slate-100 dark:border-slate-900">
-                                                          <span className="text-slate-500 font-semibold">Người gửi:</span>
-                                                          <span className="text-slate-800 dark:text-slate-200 font-mono select-all truncate max-w-[120px]">{batch.email || 'N/A'}</span>
-                                                        </div>
-                                                      </div>
-                                                    </div>
-
-                                                    {/* Multimedia links & Files */}
-                                                    <div className="space-y-1.5">
-                                                      <span className="font-bold text-slate-400 uppercase tracking-wider text-[9px]">Tài liệu & Hình ảnh (Drive)</span>
-                                                      <div className="flex flex-col gap-1.5 pt-1">
-                                                        {batch.bbntLink && renderDriveLink(batch.bbntLink, 'Biên bản nghiệm thu (BBNT)', <FileText className="h-3.5 w-3.5" />)}
-                                                        {batch.overviewLink && renderDriveLink(batch.overviewLink, 'Ảnh chụp Tổng quan', <Image className="h-3.5 w-3.5" />)}
-                                                        {batch.detailLink1 && renderDriveLink(batch.detailLink1, 'Ảnh chụp Chi tiết 1', <Image className="h-3.5 w-3.5" />)}
-                                                        {batch.detailLink2 && renderDriveLink(batch.detailLink2, 'Ảnh chụp Chi tiết 2', <Image className="h-3.5 w-3.5" />)}
-                                                        {batch.videoLink && renderDriveLink(batch.videoLink, 'Video nghiệm thu', <Play className="h-3.5 w-3.5 text-rose-500" />)}
-                                                        {(!batch.bbntLink && !batch.overviewLink && !batch.detailLink1 && !batch.detailLink2 && !batch.videoLink) && (
-                                                          <span className="text-slate-400 italic">Không có tài liệu đính kèm</span>
-                                                        )}
-                                                      </div>
-                                                    </div>
-
-                                                    {/* Stores allocated & Notes */}
-                                                    <div className="space-y-2">
-                                                      <span className="font-bold text-slate-400 uppercase tracking-wider text-[9px]">Danh sách Cửa hàng phân bổ</span>
-                                                      <div className="space-y-1 text-[10px] leading-relaxed">
-                                                        {batch.storesPass && (
-                                                          <div>
-                                                            <span className="font-bold text-emerald-600">Đạt ({batch.customer}):</span>
-                                                            <p className="bg-emerald-50/50 dark:bg-emerald-950/20 p-2 rounded border border-emerald-100 dark:border-emerald-900/30 text-slate-800 dark:text-slate-200 mt-0.5 leading-normal">
-                                                              {batch.storesPass}
-                                                            </p>
-                                                          </div>
-                                                        )}
-                                                        {batch.storesFail && (
-                                                          <div className="mt-1">
-                                                            <span className="font-bold text-rose-600">Không đạt:</span>
-                                                            <p className="bg-rose-50/50 dark:bg-rose-950/20 p-2 rounded border border-rose-100 dark:border-rose-900/30 text-slate-800 dark:text-slate-200 mt-0.5 leading-normal">
-                                                              {batch.storesFail}
-                                                            </p>
-                                                          </div>
-                                                        )}
-                                                        {batch.note && (
-                                                          <div className="mt-1.5">
-                                                            <span className="font-bold text-slate-400 uppercase tracking-wider text-[9px]">Ghi chú QC</span>
-                                                            <p className="bg-amber-50/50 dark:bg-amber-950/20 p-2 rounded border border-amber-100 dark:border-amber-900/30 text-amber-800 dark:text-amber-400 font-semibold mt-0.5 leading-relaxed">
-                                                              {batch.note}
-                                                            </p>
-                                                          </div>
-                                                        )}
-                                                        {(!batch.storesPass && !batch.storesFail) && (
-                                                          <div className="text-slate-400 italic">Không phân bổ cửa hàng cụ thể.</div>
-                                                        )}
-                                                      </div>
-                                                    </div>
-
-                                                  </div>
-                                                </td>
-                                              </tr>
-                                            )}
-                                          </React.Fragment>
-                                        );
-                                      })}
-                                    </tbody>
-                                  </table>
-                                </div>
-
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
+                        {/* Action Column */}
+                        <td className="px-6 py-4 text-right">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedDetailProject(project);
+                            }}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-sky-50 dark:hover:bg-sky-950/60 hover:text-sky-600 dark:hover:text-sky-400 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Chi tiết</span>
+                          </button>
+                        </td>
+                      </tr>
                     );
                   })}
 
@@ -969,4 +900,648 @@ export default function TrackingNtxx() {
       )}
     </div>
   );
+}
+
+{/* DEDICATED FULL-PAGE PROJECT DETAIL COMPONENT */}
+function NtxxProjectDetailView({ 
+  project, 
+  onBack,
+  onOpenStoreDrawer
+}: { 
+  project: GroupedNtxxProject; 
+  onBack: () => void; 
+  onOpenStoreDrawer: (config: {
+    type: 'PASS' | 'FAIL';
+    storesList: string[];
+    batchIndex: number;
+    projectCode: string;
+    supplierName: string;
+  }) => void;
+}) {
+  // Track open/collapsed state for each batch card inside this project view
+  // Default open all batch cards so user sees details right away, but can click to collapse/expand
+  const [openBatches, setOpenBatches] = useState<Record<number, boolean>>(() => {
+    const initial: Record<number, boolean> = {};
+    project.batches.forEach((_, idx) => {
+      initial[idx] = true; // Default expanded
+    });
+    return initial;
+  });
+
+  const toggleBatchCard = (idx: number) => {
+    setOpenBatches(prev => ({ ...prev, [idx]: !prev[idx] }));
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-200">
+      
+      {/* Top Back Navigation Bar */}
+      <div className="flex items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onBack}
+            className="flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer border border-slate-200/80 dark:border-slate-700"
+          >
+            <ArrowLeft className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+            <span>Quay lại Danh Sách Dự Án</span>
+          </button>
+          
+          <div className="h-4 w-px bg-slate-300 dark:bg-slate-700 hidden sm:block" />
+
+          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 hidden sm:inline-block">
+            Nghiệm Thu Xuất Xưởng / <strong className="text-slate-900 dark:text-slate-100 font-extrabold">Chi Tiết Dự Án #{project.projectCode}</strong>
+          </span>
+        </div>
+
+        <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950 dark:text-indigo-300 font-bold text-xs px-3 py-1">
+          {project.brand} ({project.category})
+        </Badge>
+      </div>
+
+      {/* Project Executive Summary Card */}
+      <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/60 dark:border-slate-800 pb-4">
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-2xl font-extrabold text-slate-900 dark:text-slate-100">
+                Chi Tiết Dự Án #{project.projectCode}
+              </h2>
+              <Badge variant="outline" className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono text-xs">
+                {project.batches.length} đợt NTXX tại xưởng
+              </Badge>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Hạng mục tiêu biểu: <strong className="text-slate-800 dark:text-slate-200 font-semibold">{project.item}</strong>
+            </p>
+          </div>
+
+          <div className="flex items-center gap-6">
+            <div className="text-right">
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Tổng số lượng POSM</span>
+              <span className="text-xl font-extrabold text-slate-900 dark:text-slate-100 mt-0.5 block">{project.stats.totalQty} cái</span>
+            </div>
+            <div className="h-8 w-px bg-slate-200 dark:bg-slate-800" />
+            <div className="text-right">
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Tỷ Lệ Đạt Xuất Xưởng</span>
+              <span className={`text-xl font-extrabold mt-0.5 block ${project.stats.passRate === 100 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                {project.stats.passRate}% ({project.stats.passedBatches}/{project.stats.totalBatches} Đạt)
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Executive Visual Progress Bar */}
+        <div className="space-y-1.5">
+          <div className="flex justify-between text-xs font-semibold text-slate-500 dark:text-slate-400">
+            <span>Tiến Độ Đạt Chuẩn Nghiệm Thu</span>
+            <span>{project.stats.passedBatches} / {project.stats.totalBatches} đợt Đạt</span>
+          </div>
+          <div className="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden border border-slate-200/40">
+            <div 
+              className={`h-full rounded-full transition-all duration-300 ${project.stats.passRate === 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`}
+              style={{ width: `${project.stats.passRate}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* LIST OF INSPECTION BATCHES (CARDS WITH CLICK TO EXPAND/COLLAPSE - XỔ XUỐNG) */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+            <Factory className="w-4 h-4 text-emerald-600" />
+            <span>Danh Sách Các Đợt Nghiệm Thu Tại Xưởng ({project.batches.length} đợt)</span>
+          </h3>
+          <span className="text-xs text-slate-400">Bấm vào từng đợt bên dưới để đóng/mở (xổ xuống) xem chi tiết</span>
+        </div>
+
+        <div className="space-y-3">
+          {project.batches.map((batch, bIdx) => {
+            const isOpen = !!openBatches[bIdx];
+            const resLower = (batch.result || '').toLowerCase();
+            const isPass = resLower.includes('đạt') && !resLower.includes('không');
+            const isFail = resLower.includes('không');
+
+            const passStoresCount = batch.storesPass ? batch.storesPass.split(',').map(s => s.trim()).filter(Boolean).length : 0;
+            const failStoresCount = batch.storesFail ? batch.storesFail.split(',').map(s => s.trim()).filter(Boolean).length : 0;
+
+            return (
+              <div 
+                key={bIdx}
+                className={`bg-white dark:bg-slate-900 rounded-2xl border transition-all shadow-xs overflow-hidden ${
+                  isFail 
+                    ? 'border-rose-200 dark:border-rose-900/60' 
+                    : isPass 
+                      ? 'border-slate-200/80 dark:border-slate-800' 
+                      : 'border-amber-200 dark:border-amber-900/60'
+                }`}
+              >
+                {/* BATCH CARD HEADER BAR - CLICK TO TOGGLE EXPAND/COLLAPSE (XỔ XUỐNG) */}
+                <div 
+                  onClick={() => toggleBatchCard(bIdx)}
+                  className="p-4 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-50/80 dark:hover:bg-slate-850/60 transition-colors select-none"
+                >
+                  <div className="flex items-center gap-3.5 flex-wrap">
+                    <div className="p-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                      {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </div>
+
+                    <span className="text-xs font-extrabold px-3 py-1 rounded-lg bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900">
+                      Đợt #{bIdx + 1}
+                    </span>
+
+                    <div className="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-200">
+                      <span>Nhà thầu: <strong className="text-slate-900 dark:text-white">{batch.supplierName || 'Chưa gán'}</strong></span>
+                      <span className="text-slate-300 dark:text-slate-700">•</span>
+                      <span>Hạng mục: <strong>{batch.item}</strong></span>
+                      <span className="text-slate-300 dark:text-slate-700">•</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-bold">{batch.qty} {batch.unit || 'Cái'}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0">
+                    <div className="text-right hidden sm:block text-xs">
+                      <span className="text-slate-400 block text-[10px]">Ngày NTXX thực tế</span>
+                      <span className="font-bold text-slate-900 dark:text-slate-100">{batch.actualDate || 'Chưa thực hiện'}</span>
+                    </div>
+
+                    {isPass ? (
+                      <Badge className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs px-3 py-1">
+                        🟢 ĐẠT XUẤT XƯỞNG
+                      </Badge>
+                    ) : isFail ? (
+                      <Badge className="bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs px-3 py-1">
+                        🔴 KHÔNG ĐẠT
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950 dark:text-amber-300 font-bold text-xs px-3 py-1">
+                        🟡 KHÁC: {batch.result || 'Chưa cập nhật'}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                {/* BATCH EXPANDED BODY (XỔ XUỐNG CHI TIẾT) */}
+                {isOpen && (
+                  <div className="p-5 border-t border-slate-200/60 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-950/40 space-y-4 animate-in fade-in slide-in-from-top-1 duration-150">
+                    
+                    {/* Key Milestones & Personnel Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                      
+                      {/* Milestone 1: Ngày gửi lịch */}
+                      <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+                        <div className="flex items-center gap-1.5 text-slate-400 font-medium text-[11px]">
+                          <Calendar className="w-3.5 h-3.5 text-sky-500" />
+                          <span>Ngày gửi lịch NTXX</span>
+                        </div>
+                        <div className="text-sm font-extrabold text-slate-900 dark:text-slate-100 mt-1">
+                          {batch.scheduleDate || 'Chưa gửi lịch'}
+                        </div>
+                      </div>
+
+                      {/* Milestone 2: Ngày thực tế NTXX tại xưởng */}
+                      <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+                        <div className="flex items-center gap-1.5 text-slate-400 font-medium text-[11px]">
+                          <Factory className="w-3.5 h-3.5 text-emerald-500" />
+                          <span>Ngày thực tế NTXX</span>
+                        </div>
+                        <div className="text-sm font-extrabold text-slate-900 dark:text-slate-100 mt-1">
+                          {batch.actualDate || 'Chưa thực hiện'}
+                        </div>
+                      </div>
+
+                      {/* Supplier */}
+                      <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+                        <div className="text-[11px] font-medium text-slate-400">Nhà thầu (Supplier)</div>
+                        <div className="text-sm font-extrabold text-slate-900 dark:text-slate-100 mt-1">
+                          {batch.supplierName || 'Chưa gán'}
+                        </div>
+                      </div>
+
+                      {/* POSM QC Tech */}
+                      <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+                        <div className="flex items-center gap-1.5 text-slate-400 font-medium text-[11px]">
+                          <UserCheck className="w-3.5 h-3.5 text-indigo-500" />
+                          <span>POSM QC Technician</span>
+                        </div>
+                        <div className="text-xs font-bold text-slate-900 dark:text-slate-100 mt-1">
+                          {batch.technician || 'Chưa cập nhật'}
+                          {batch.email && <span className="text-[10px] text-slate-400 block font-normal truncate">{batch.email}</span>}
+                        </div>
+                      </div>
+
+                    </div>
+
+                    {/* Store Breakdowns Triggers (Cửa hàng Đạt & Không Đạt -> Click to open Sidebar Right Drawer) */}
+                    {(batch.storesPass || batch.storesFail) && (
+                      <div className="p-3.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 space-y-3 text-xs">
+                        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <Store className="w-3.5 h-3.5 text-slate-500" />
+                          <span>Danh Sách Cửa Hàng Phân Bổ ({passStoresCount + failStoresCount} store) — Bấm vào để xem chi tiết SR / VIS-Tech:</span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-3">
+                          {batch.storesPass && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenStoreDrawer({
+                                type: 'PASS',
+                                storesList: batch.storesPass.split(',').map(s => s.trim()).filter(Boolean),
+                                batchIndex: bIdx,
+                                projectCode: project.projectCode,
+                                supplierName: batch.supplierName
+                              })}
+                              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100/90 text-emerald-800 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 font-extrabold transition-all cursor-pointer shadow-2xs group"
+                            >
+                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                              <span>🟢 Cửa hàng Đạt ({passStoresCount} store)</span>
+                              <ChevronRight className="w-4 h-4 text-emerald-600 dark:text-emerald-400 group-hover:translate-x-1 transition-transform" />
+                            </button>
+                          )}
+
+                          {batch.storesFail && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenStoreDrawer({
+                                type: 'FAIL',
+                                storesList: batch.storesFail.split(',').map(s => s.trim()).filter(Boolean),
+                                batchIndex: bIdx,
+                                projectCode: project.projectCode,
+                                supplierName: batch.supplierName
+                              })}
+                              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100/90 text-rose-800 dark:bg-rose-950/60 dark:hover:bg-rose-900/60 dark:text-rose-300 border border-rose-200 dark:border-rose-900 font-extrabold transition-all cursor-pointer shadow-2xs group"
+                            >
+                              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
+                              <span>🔴 Cửa hàng Không Đạt ({failStoresCount} store)</span>
+                              <ChevronRight className="w-4 h-4 text-rose-600 dark:text-rose-400 group-hover:translate-x-1 transition-transform" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Drive Evidence Documents / Media Attachments */}
+                    <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800">
+                      <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">
+                        📂 Hồ Sơ Minh Chứng &amp; Tài Liệu Drive Đính Kèm
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {batch.bbntLink && (
+                          <a
+                            href={batch.bbntLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-900 transition-colors shadow-2xs"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            <span>Ảnh BBNT</span>
+                            <ExternalLink className="w-3 h-3 opacity-60" />
+                          </a>
+                        )}
+                        {batch.overviewLink && (
+                          <a
+                            href={batch.overviewLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-900 transition-colors shadow-2xs"
+                          >
+                            <Image className="w-3.5 h-3.5" />
+                            <span>Ảnh Tổng Quan</span>
+                            <ExternalLink className="w-3 h-3 opacity-60" />
+                          </a>
+                        )}
+                        {batch.detailLink1 && (
+                          <a
+                            href={batch.detailLink1}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 dark:bg-indigo-950 dark:text-indigo-300 dark:border-indigo-900 transition-colors shadow-2xs"
+                          >
+                            <Image className="w-3.5 h-3.5" />
+                            <span>Ảnh Chi Tiết 1</span>
+                            <ExternalLink className="w-3 h-3 opacity-60" />
+                          </a>
+                        )}
+                        {batch.detailLink2 && (
+                          <a
+                            href={batch.detailLink2}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 dark:bg-indigo-950 dark:text-indigo-300 dark:border-indigo-900 transition-colors shadow-2xs"
+                          >
+                            <Image className="w-3.5 h-3.5" />
+                            <span>Ảnh Chi Tiết 2</span>
+                            <ExternalLink className="w-3 h-3 opacity-60" />
+                          </a>
+                        )}
+                        {batch.videoLink && (
+                          <a
+                            href={batch.videoLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-900 transition-colors shadow-2xs"
+                          >
+                            <Play className="w-3.5 h-3.5" />
+                            <span>Video Chi Tiết</span>
+                            <ExternalLink className="w-3 h-3 opacity-60" />
+                          </a>
+                        )}
+                        {!batch.bbntLink && !batch.overviewLink && !batch.detailLink1 && !batch.detailLink2 && !batch.videoLink && (
+                          <span className="text-xs text-slate-400 italic">Chưa đính kèm link Drive</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* QC Comments / Note */}
+                    {batch.note && (
+                      <div className="p-3.5 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/60 text-xs">
+                        <span className="font-bold text-amber-900 dark:text-amber-200 block mb-0.5">💬 Ghi chú của QC Inspector:</span>
+                        <p className="text-amber-800 dark:text-amber-300 leading-relaxed font-medium">
+                          {batch.note}
+                        </p>
+                      </div>
+                    )}
+
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+{/* STORE LIST RIGHT SIDEBAR DRAWER COMPONENT */}
+function NtxxStoreListDrawer({
+  isOpen,
+  onClose,
+  type,
+  storesList,
+  batchIndex,
+  projectCode,
+  supplierName,
+  contactMap
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  type: 'PASS' | 'FAIL';
+  storesList: string[];
+  batchIndex: number;
+  projectCode: string;
+  supplierName: string;
+  contactMap: Map<string, MasterStoreContactInfo>;
+}) {
+  const [search, setSearch] = useState('');
+  const [selectedVisTech, setSelectedVisTech] = useState<string>('all');
+
+  // Compute VIS-Tech counts for stores in this list
+  const visTechOptions = useMemo(() => {
+    const counts: Record<string, number> = {};
+    storesList.forEach(sName => {
+      const info = findStoreContactInfo(sName, contactMap);
+      const name = info?.mer_name || info?.opsup_name || 'Chưa cập nhật VIS-Tech';
+      counts[name] = (counts[name] || 0) + 1;
+    });
+
+    const list = Object.entries(counts).map(([name, count]) => ({
+      name,
+      count
+    }));
+
+    list.sort((a, b) => {
+      if (a.name.includes('Chưa cập nhật')) return 1;
+      if (b.name.includes('Chưa cập nhật')) return -1;
+      return a.name.localeCompare(b.name, 'vi');
+    });
+
+    return list;
+  }, [storesList, contactMap]);
+
+  if (!isOpen) return null;
+
+  // Filter stores by search query & VIS-Tech
+  const filteredStores = storesList.filter(sName => {
+    const info = findStoreContactInfo(sName, contactMap);
+    const visTechName = info?.mer_name || info?.opsup_name || 'Chưa cập nhật VIS-Tech';
+
+    if (selectedVisTech !== 'all' && visTechName !== selectedVisTech) {
+      return false;
+    }
+
+    const term = search.trim().toLowerCase();
+    if (!term) return true;
+    
+    // Fuzzy lookup in contact map
+    const textToMatch = [
+      sName,
+      info?.store_code || '',
+      info?.store_name || '',
+      info?.sr_name || '',
+      info?.mer_name || '',
+      info?.opsup_name || '',
+      info?.address || ''
+    ].join(' ').toLowerCase();
+
+    return textToMatch.includes(term);
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+      {/* Click outside backdrop to close */}
+      <div className="absolute inset-0" onClick={onClose} />
+
+      <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl h-full flex flex-col z-10 animate-in slide-in-from-right duration-250">
+        
+        {/* Drawer Header */}
+        <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950 shrink-0">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className={`w-2.5 h-2.5 rounded-full ${type === 'PASS' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+              <h2 className="text-lg font-extrabold text-slate-900 dark:text-slate-100">
+                {type === 'PASS' ? `Cửa Hàng Đạt (${storesList.length} store)` : `Cửa Hàng Không Đạt (${storesList.length} store)`}
+              </h2>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Mã dự án <strong>#{projectCode}</strong> • Đợt #{batchIndex + 1} ({supplierName})
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Search & VIS-Tech Filter Bar */}
+        <div className="p-4 border-b border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 space-y-2.5">
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Tìm theo tên store, mã store, SR, VIS-Tech..."
+              className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs outline-none focus:ring-2 focus:ring-emerald-500/50 text-slate-900 dark:text-slate-100 font-medium"
+            />
+          </div>
+
+          {/* VIS-Tech Select Dropdown showing store counts */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <select
+                value={selectedVisTech}
+                onChange={(e) => setSelectedVisTech(e.target.value)}
+                className="w-full pl-3 pr-8 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/50 text-slate-900 dark:text-slate-100 cursor-pointer appearance-none"
+              >
+                <option value="all">🔍 Tất cả VIS-Tech ({storesList.length} Cửa hàng)</option>
+                {visTechOptions.map((v) => (
+                  <option key={v.name} value={v.name}>
+                    👤 {v.name} ({v.count} Cửa hàng)
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+
+            {selectedVisTech !== 'all' && (
+              <button
+                onClick={() => setSelectedVisTech('all')}
+                className="px-2.5 py-2 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 rounded-xl border border-rose-200 dark:border-rose-900 transition-colors shrink-0 cursor-pointer"
+              >
+                Bỏ lọc
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Scrollable List of Store Cards */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+          {filteredStores.map((sName, idx) => {
+            const info = findStoreContactInfo(sName, contactMap);
+
+            return (
+              <div 
+                key={idx}
+                className={`p-4 rounded-xl border transition-all ${
+                  type === 'FAIL' 
+                    ? 'bg-rose-50/20 dark:bg-rose-950/20 border-rose-200/80 dark:border-rose-900/60' 
+                    : 'bg-white dark:bg-slate-950 border-slate-200/80 dark:border-slate-800'
+                }`}
+              >
+                {/* Store Name & Code */}
+                <div className="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                  <div>
+                    <div className="font-extrabold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                      <Store className="w-4 h-4 text-slate-500 shrink-0" />
+                      <span>{info?.store_name || sName}</span>
+                    </div>
+                    {info?.store_code && (
+                      <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 font-bold block mt-0.5">
+                        Mã Store: {info.store_code}
+                      </span>
+                    )}
+                  </div>
+
+                  <Badge className={type === 'PASS' ? 'bg-emerald-500 text-white text-[10px]' : 'bg-rose-500 text-white text-[10px]'}>
+                    {type === 'PASS' ? '🟢 ĐẠT' : '🔴 KHÔNG ĐẠT'}
+                  </Badge>
+                </div>
+
+                {/* SR & VIS-Tech Info Grid */}
+                <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
+                  {/* SR Name & Phone */}
+                  <div className="p-2.5 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200/60 dark:border-slate-800">
+                    <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase">
+                      <User className="w-3 h-3 text-indigo-500" />
+                      <span>Sales Rep (SR)</span>
+                    </div>
+                    <div className="font-extrabold text-slate-900 dark:text-slate-100 mt-1">
+                      {info?.sr_name || 'Chưa cập nhật SR'}
+                    </div>
+                    {info?.sr_phone && (
+                      <div className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold mt-0.5 flex items-center gap-1">
+                        <Phone className="w-3 h-3" />
+                        <span>{info.sr_phone}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* VIS-Tech (Unilever Supervisor / MER) */}
+                  <div className="p-2.5 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200/60 dark:border-slate-800">
+                    <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase">
+                      <UserCheck className="w-3 h-3 text-emerald-500" />
+                      <span>VIS-Tech (Unilever)</span>
+                    </div>
+                    <div className="font-extrabold text-slate-900 dark:text-slate-100 mt-1">
+                      {info?.mer_name || info?.opsup_name || 'Chưa cập nhật VIS-Tech'}
+                    </div>
+                    {info?.opsup_phone && (
+                      <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5 flex items-center gap-1">
+                        <Phone className="w-3 h-3" />
+                        <span>{info.opsup_phone}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Address */}
+                {info?.address && (
+                  <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-start gap-1 text-[11px] text-slate-500 dark:text-slate-400">
+                    <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0 mt-0.5" />
+                    <span>{info.address} {info.district ? `, ${info.district}` : ''} {info.province ? `, ${info.province}` : ''}</span>
+                  </div>
+                )}
+
+              </div>
+            );
+          })}
+
+          {filteredStores.length === 0 && (
+            <div className="text-center py-12 text-slate-400 text-xs font-medium">
+              Không tìm thấy cửa hàng nào khớp với "{search}"
+            </div>
+          )}
+        </div>
+
+        {/* Drawer Footer */}
+        <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex justify-end shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+          >
+            Đóng Cửa Sổ
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+// Helper to find Store Contact Info from Master Directory
+function findStoreContactInfo(sNameRaw: string, contactMap: Map<string, MasterStoreContactInfo>): MasterStoreContactInfo | null {
+  if (!sNameRaw) return null;
+  const rawClean = sNameRaw.trim().toUpperCase();
+
+  if (contactMap.has(rawClean)) return contactMap.get(rawClean)!;
+
+  // Search by substring matching store_name or store_code
+  for (const info of contactMap.values()) {
+    if (info.store_name && info.store_name.toUpperCase().includes(rawClean)) {
+      return info;
+    }
+    if (info.store_name && rawClean.includes(info.store_name.toUpperCase())) {
+      return info;
+    }
+  }
+
+  return null;
 }

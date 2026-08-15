@@ -43,64 +43,27 @@ export const calculateInstallationResult = (
   statusStr?: string,
   existingResultSign?: string
 ): { sign: string; isOverdue: boolean; isLateOrFailed: boolean; failReason: 'LATE' | 'QC_FAIL' | 'NONE' } => {
-  const statusLower = (statusStr || '').toLowerCase().trim();
   const rawSign = (existingResultSign || '').trim();
 
-  const isQCFailed = statusLower.includes('installation qc failed') || statusLower.includes('failed') || statusLower.includes('lỗi');
+  // 1. STRICT 1:1 MAPPING WITH SHEET COLUMN X (><) FIRST
+  if (rawSign === '✔' || rawSign.toLowerCase().includes('pass') || rawSign === 'v') {
+    return { sign: '✔', isOverdue: false, isLateOrFailed: false, failReason: 'NONE' };
+  }
+  if (rawSign === '❌' || rawSign.toLowerCase().includes('fail') || rawSign === 'x') {
+    return { sign: '❌', isOverdue: false, isLateOrFailed: true, failReason: 'QC_FAIL' };
+  }
+
+  // 2. FALLBACK ONLY IF SHEET COLUMN X IS EMPTY
+  const statusLower = (statusStr || '').toLowerCase().trim();
+  const isQCFailed = statusLower.includes('installation qc failed') || statusLower.includes('qc failed') || statusLower.includes('failed') || statusLower.includes('lỗi');
   const isCompleted = statusLower.includes('completed') || statusLower.includes('hoàn thành') || statusLower.includes('qc passed');
 
   if (isQCFailed) {
     return { sign: '❌', isOverdue: false, isLateOrFailed: true, failReason: 'QC_FAIL' };
   }
 
-  // Parse deadline date from actualTime (e.g. "27/06 - 03/07/2026" or "04/08/2026")
-  let deadlineDate: Date | null = null;
-  if (actualTime && actualTime.trim() && actualTime !== '—' && actualTime !== 'Xem từng vị trí') {
-    const parts = actualTime.split(/[-–—]/).map(p => p.trim()).filter(Boolean);
-    const deadlineStr = parts[parts.length - 1];
-    const dParts = deadlineStr.split('/');
-    if (dParts.length >= 2) {
-      let d = parseInt(dParts[0], 10);
-      let m = parseInt(dParts[1], 10) - 1;
-      let y = dParts.length === 3 ? parseInt(dParts[2], 10) : new Date().getFullYear();
-      if (y < 100) y += 2000;
-      if (!isNaN(d) && !isNaN(m) && !isNaN(y)) {
-        deadlineDate = new Date(y, m, d, 23, 59, 59);
-      }
-    }
-  }
-
-  // Parse completion date
-  let compDate: Date | null = null;
-  if (completionTime && completionTime.trim()) {
-    const cParts = completionTime.trim().split('/');
-    if (cParts.length >= 2) {
-      let d = parseInt(cParts[0], 10);
-      let m = parseInt(cParts[1], 10) - 1;
-      let y = cParts.length === 3 ? parseInt(cParts[2], 10) : new Date().getFullYear();
-      if (y < 100) y += 2000;
-      if (!isNaN(d) && !isNaN(m) && !isNaN(y)) {
-        compDate = new Date(y, m, d, 0, 0, 0);
-      }
-    }
-  }
-
-  // 1. If completed (completionTime exists OR status is Completed)
-  if (compDate || isCompleted) {
-    if (deadlineDate && compDate && compDate.getTime() > deadlineDate.getTime()) {
-      // Completed, BUT completed late (compDate > deadlineDate) -> Fail ❌ (Trễ hạn)
-      return { sign: '❌', isOverdue: false, isLateOrFailed: true, failReason: 'LATE' };
-    }
-    // Completed on time -> Pass ✔
+  if (isCompleted || (completionTime && completionTime.trim())) {
     return { sign: '✔', isOverdue: false, isLateOrFailed: false, failReason: 'NONE' };
-  }
-
-  // 2. If Sheet explicitly has ✔ or ❌
-  if (rawSign === '✔') {
-    return { sign: '✔', isOverdue: false, isLateOrFailed: false, failReason: 'NONE' };
-  }
-  if (rawSign === '❌') {
-    return { sign: '❌', isOverdue: false, isLateOrFailed: true, failReason: 'QC_FAIL' };
   }
 
   return { sign: '', isOverdue: false, isLateOrFailed: false, failReason: 'NONE' };
@@ -258,9 +221,13 @@ export const getActualTimeAlert = (
   status?: string,
   isFullyCompleted?: boolean
 ): ActualTimeAlert => {
+  const statusLower = (status || '').toLowerCase().trim();
   const isCompleted = isFullyCompleted ||
-                      (status || '').toLowerCase().includes('completed') || 
-                      (status || '').toLowerCase().includes('qc passed') ||
+                      statusLower.includes('completed') || 
+                      statusLower.includes('qc passed') ||
+                      statusLower.includes('cancelled') ||
+                      statusLower.includes('cancel') ||
+                      statusLower.includes('hủy') ||
                       Boolean(completionTime && completionTime.trim());
 
   if (isCompleted) {

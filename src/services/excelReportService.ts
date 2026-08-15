@@ -11,11 +11,27 @@ import type { WarrantyItem } from '@/types/warranty';
 export const exportAnalystExecutiveReport = (
   _requests: RawRequestRecord[],
   warrantyItems: WarrantyItem[],
-  filenamePrefix = 'POSM_Warranty_Executive_Report'
+  filenamePrefix = 'POSM_Warranty_Executive_Report',
+  targetProjectCode?: string
 ) => {
   const wb = XLSX.utils.book_new();
   const dateStr = new Date().toISOString().slice(0, 10);
-  const totalWarranty = warrantyItems.length;
+
+  // Filter dataset strictly by project code if requested
+  const isFilteredByProject = Boolean(targetProjectCode && targetProjectCode.trim() && targetProjectCode.trim() !== 'all');
+  const cleanProjectCode = isFilteredByProject ? targetProjectCode!.trim() : '';
+
+  const activeItems = isFilteredByProject
+    ? warrantyItems.filter(item => {
+        const prj = (item.projectCode || '').trim();
+        return prj.toLowerCase() === cleanProjectCode.toLowerCase() || prj.toLowerCase().includes(cleanProjectCode.toLowerCase());
+      })
+    : warrantyItems;
+
+  const totalWarranty = activeItems.length;
+  const finalFilename = isFilteredByProject
+    ? `POSM_Warranty_Report_Project_${cleanProjectCode.replace(/[^a-zA-Z0-9_-]/g, '_')}`
+    : filenamePrefix;
 
   // ==========================================
   // TAB 1: Warranty Analytics (Báo Cáo Phân Tích Tổng Quan)
@@ -38,7 +54,7 @@ export const exportAnalystExecutiveReport = (
   let totalDaysToFail = 0;
   let countFailDate = 0;
 
-  warrantyItems.forEach(item => {
+  activeItems.forEach(item => {
     const sup = item.supplier?.trim() || 'Chưa gán thầu';
     if (!wSupplierMap[sup]) wSupplierMap[sup] = { total: 0, done: 0, overdue: 0 };
     wSupplierMap[sup].total++;
@@ -115,7 +131,7 @@ export const exportAnalystExecutiveReport = (
   }>();
 
   const parentChildMap = new Map<string, string>();
-  warrantyItems.forEach(item => {
+  activeItems.forEach(item => {
     const precId = (item.precedingRequestId || (item as any).preceding_request_id || '').trim();
     const currentReqId = (item.requestId || `BH-${item.rowId}`).trim();
     if (precId && currentReqId && precId !== currentReqId) {
@@ -123,7 +139,7 @@ export const exportAnalystExecutiveReport = (
     }
   });
 
-  warrantyItems.forEach(item => {
+  activeItems.forEach(item => {
     const currentReqId = (item.requestId || `BH-${item.rowId}`).trim();
     const storeKey = item.storeCode?.trim() || item.storeName?.trim() || 'STORE_UNKNOWN';
     const posmKey = item.posmType?.trim() || 'POSM_UNKNOWN';
@@ -171,11 +187,15 @@ export const exportAnalystExecutiveReport = (
   const recurrentPosmCount = recurrentGroups.length;
   const recurrentRatePct = totalPosmLocations > 0 ? `${((recurrentPosmCount / totalPosmLocations) * 100).toFixed(1)}%` : '0%';
 
+  const reportHeaderTitle = isFilteredByProject
+    ? `BÁO CÁO CHI TIẾT BẢO HÀNH & ĐỘ BỀN POSM - DỰ ÁN ${cleanProjectCode}`
+    : 'BÁO CÁO CHI TIẾT BẢO HÀNH & ĐỘ BỀN THIẾT BỊ (WARRANTY ANALYTICS)';
+
   const warrantyAnalyticsRows: (string | number)[][] = [
-    ['BÁO CÁO CHI TIẾT BẢO HÀNH & ĐỘ BỀN THIẾT BỊ (WARRANTY ANALYTICS)'],
-    [`Ngày xuất báo cáo: ${new Date().toLocaleString('vi-VN')}`],
+    [reportHeaderTitle],
+    [`Mã Dự Án: ${isFilteredByProject ? cleanProjectCode : 'Tất cả dự án'} | Ngày xuất báo cáo: ${new Date().toLocaleString('vi-VN')} | Tổng số ca bảo hành: ${totalWarranty} ca`],
     [''],
-    ['1. KPIS TỔNG QUAN BẢO HÀNH'],
+    ['1. KPIS TỔNG QUAN BẢO HÀNH DỰ ÁN'],
     ['Chỉ Số', 'Giá Trị', 'Tỷ Lệ %', 'Ghi Chú Vận Hành'],
     ['Tổng Số Ca Bảo Hành (BaoHanh_Model)', totalWarranty, '100%', 'Tất cả các ca sự cố ghi nhận'],
     ['Ca Đang Tiếp Nhận / Xử Lý', activeCount, totalWarranty > 0 ? `${((activeCount / totalWarranty) * 100).toFixed(1)}%` : '0%', 'Đang làm việc với Supplier'],
@@ -225,12 +245,12 @@ export const exportAnalystExecutiveReport = (
   warrantyAnalyticsRows.push(['Mã Dự Án (Project Code)', 'Số Ca Sự Cố', 'Tỷ Lệ %', 'Nhà Thầu Phụ Trách & Phân Bổ Ca (Supplier Breakdown)', 'Danh Sách Mã Request Dẫn Chứng']);
 
   const topProjectsList = Object.entries(projectMap)
-    .filter(([_, data]) => data.count > 1)
+    .filter(([_, data]) => isFilteredByProject || data.count > 1)
     .sort((a, b) => b[1].count - a[1].count)
     .slice(0, 10);
 
   if (topProjectsList.length === 0) {
-    warrantyAnalyticsRows.push(['Không có dự án phát sinh >= 2 ca', 0, '0%', 'N/A', 'N/A']);
+    warrantyAnalyticsRows.push(['Không có dự án phát sinh ca bảo hành', 0, '0%', 'N/A', 'N/A']);
   } else {
     topProjectsList.forEach(([projectCode, data]) => {
       const supplierBreakdown = Object.entries(data.supplierMap)
@@ -278,21 +298,43 @@ export const exportAnalystExecutiveReport = (
     { wch: 20 },
     { wch: 45 }
   ];
-  XLSX.utils.book_append_sheet(wb, wsWarrantyAnalytics, 'Warranty Analytics');
+
+  // Only append Warranty Analytics tab for Consolidated All-Projects Executive Export
+  if (!isFilteredByProject) {
+    XLSX.utils.book_append_sheet(wb, wsWarrantyAnalytics, 'Warranty Analytics');
+  }
+
+  // Helper to extract true Raise Mail date (actual email timestamp to supplier)
+  const getRaiseMailDate = (item: WarrantyItem): string => {
+    if (item.raiseMailTime && item.raiseMailTime.trim() && item.raiseMailTime.trim() !== '-' && item.raiseMailTime.trim().toLowerCase() !== 'null' && item.raiseMailTime.trim().toLowerCase() !== 'undefined') {
+      return item.raiseMailTime.trim();
+    }
+    if ((item as any).raiseMailTime && String((item as any).raiseMailTime).trim()) {
+      return String((item as any).raiseMailTime).trim();
+    }
+    if ((item as any).raise_mail_time && String((item as any).raise_mail_time).trim()) {
+      return String((item as any).raise_mail_time).trim();
+    }
+    return item.sentDate || '-';
+  };
 
   // ==========================================
-  // TAB 2: Analyst Drilldown Detail (Chi Tiết Dẫn Chứng Cho Các Mục Báo Cáo)
+  // TAB: Analyst Drilldown Detail (Chi Tiết Dẫn Chứng Cho Các Mục Báo Cáo)
   // ==========================================
+  const drilldownHeaderTitle = isFilteredByProject
+    ? `BÁO CÁO DẪN CHỨNG CHI TIẾT CA BẢO HÀNH DỰ ÁN ${cleanProjectCode}`
+    : 'BÁO CÁO DẪN CHỨNG CHI TIẾT CHO CÁC MỤC BẢO HÀNH (ANALYST DRILLDOWN DETAIL)';
+
   const drilldownRows: (string | number)[][] = [
-    ['BÁO CÁO DẪN CHỨNG CHI TIẾT CHO CÁC MỤC BẢO HÀNH (ANALYST DRILLDOWN DETAIL)'],
-    [`Ngày khởi tạo: ${new Date().toLocaleString('vi-VN')} | Tổng số ca bảo hành: ${totalWarranty} ca`],
-    [''],
-    ['MỤC 2: CHI TIẾT CÁC CA BẢO HÀNH TỒN ĐỌNG QUÁ HẠN XỬ LÝ'],
-    ['STT', 'Mã Request ID', 'Mã Dự Án', 'Tên Cửa Hàng', 'Mã Store', 'Nhà Thầu Supplier', 'Loại POSM', 'Ngày Yêu Cầu', 'Hạn Cần Xử Lý', 'Số Ngày Quá Hạn', 'Mức Độ Tồn Đọng', 'Tiến Độ Vận Hành', 'Ghi Chú Lỗi']
+    [drilldownHeaderTitle],
+    [`Mã Dự Án: ${isFilteredByProject ? cleanProjectCode : 'Tất cả dự án'} | Ngày khởi tạo: ${new Date().toLocaleString('vi-VN')} | Tổng số ca: ${totalWarranty} ca`],
+    ['']
   ];
 
+  // 1. CHI TIẾT CÁC CA BẢO HÀNH TỒN ĐỌNG QUÁ HẠN XỬ LÝ
   let sttA = 1;
-  warrantyItems.forEach(item => {
+  const overdueRows: (string | number)[][] = [];
+  activeItems.forEach(item => {
     const pLower = (item.progress || '').toLowerCase();
     const isDone = pLower.includes('hoàn thành') || pLower.includes('cancel');
     const pExp = parseDateToMs(item.expectedDate || item.requestDeadline);
@@ -303,7 +345,7 @@ export const exportAnalystExecutiveReport = (
       if (overdueDays >= 8 && overdueDays <= 14) bucket = 'Quá hạn 8 - 14 ngày';
       else if (overdueDays > 14) bucket = 'Quá hạn > 14 ngày (Cảnh báo đỏ)';
 
-      drilldownRows.push([
+      overdueRows.push([
         sttA++,
         item.requestId || `BH-${item.rowId}`,
         item.projectCode || '-',
@@ -311,7 +353,7 @@ export const exportAnalystExecutiveReport = (
         item.storeCode || '-',
         item.supplier || 'Chưa gán thầu',
         item.posmType || '-',
-        item.sentDate || '-',
+        getRaiseMailDate(item),
         item.requestDeadline || item.expectedDate || '-',
         `${overdueDays} ngày`,
         bucket,
@@ -320,18 +362,26 @@ export const exportAnalystExecutiveReport = (
       ]);
     }
   });
-  if (sttA === 1) {
-    drilldownRows.push(['-', 'Không có ca tồn đọng quá hạn', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-']);
+
+  if (!isFilteredByProject || overdueRows.length > 0) {
+    drilldownRows.push(['CHI TIẾT CÁC CA BẢO HÀNH TỒN ĐỌNG QUÁ HẠN XỬ LÝ']);
+    drilldownRows.push(['STT', 'Mã Request ID', 'Mã Dự Án', 'Tên Cửa Hàng', 'Mã Store', 'Nhà Thầu Supplier', 'Loại POSM', 'Ngày Raise Mail', 'Hạn Cần Xử Lý', 'Số Ngày Quá Hạn', 'Mức Độ Tồn Đọng', 'Tiến Độ Vận Hành', 'Ghi Chú Lỗi']);
+    if (overdueRows.length > 0) {
+      drilldownRows.push(...overdueRows);
+    } else {
+      drilldownRows.push(['-', 'Không có ca tồn đọng quá hạn', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-']);
+    }
+    drilldownRows.push(['']);
   }
 
-  drilldownRows.push(['']);
-  drilldownRows.push(['MỤC 3: CHI TIẾT CÁC CA HỎNG SỚM (< 30 NGÀY TỪ KHI LẮP ĐẶT)']);
-  drilldownRows.push(['STT', 'Mã Request ID', 'Mã Dự Án', 'Tên Cửa Hàng', 'Mã Store', 'Nhà Thầu Supplier', 'Loại POSM', 'Ngày Lắp Đặt POSM', 'Ngày Phát Sinh Sự Cố', 'Tuổi Thọ (Số Ngày)', 'Đánh Giá Chất Lượng', 'Ghi Chú Lỗi']);
+  // 2. CHI TIẾT CÁC CA HỎNG SỚM (< 30 NGÀY TỪ KHI LẮP ĐẶT)
+  drilldownRows.push(['CHI TIẾT CÁC CA HỎNG SỚM (< 30 NGÀY TỪ KHI LẮP ĐẶT)']);
+  drilldownRows.push(['STT', 'Mã Request ID', 'Mã Dự Án', 'Tên Cửa Hàng', 'Mã Store', 'Nhà Thầu Supplier', 'Loại POSM', 'Ngày Lắp Đặt POSM', 'Ngày Raise Mail', 'Tuổi Thọ (Số Ngày)', 'Ghi Chú Lỗi']);
 
   let sttB = 1;
-  warrantyItems.forEach(item => {
+  activeItems.forEach(item => {
     const pInst = parseDateToMs(item.installationDate);
-    const pSent = parseDateToMs(item.sentDate);
+    const pSent = parseDateToMs(getRaiseMailDate(item));
     if (pInst) {
       const diffDays = pSent ? Math.abs(Math.round((pSent - pInst) / (1000 * 60 * 60 * 24))) : 0;
       if (diffDays < 30) {
@@ -344,21 +394,22 @@ export const exportAnalystExecutiveReport = (
           item.supplier || 'Chưa gán thầu',
           item.posmType || '-',
           item.installationDate || '-',
-          item.sentDate || '-',
+          getRaiseMailDate(item),
           `${diffDays} ngày`,
-          'Thi công ẩu / Vật tư kém (Hỏng sớm <30 ngày)',
           item.errorDetail || '-'
         ]);
       }
     }
   });
   if (sttB === 1) {
-    drilldownRows.push(['-', 'Không có ca hỏng sớm dưới 30 ngày', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-']);
+    drilldownRows.push(['-', 'Không có ca hỏng sớm dưới 30 ngày', '-', '-', '-', '-', '-', '-', '-', '-', '-']);
   }
 
   drilldownRows.push(['']);
-  drilldownRows.push(['MỤC 4: CHI TIẾT VỊ TRÍ POSM BỊ SỰ CỐ LẶP LẠI (>= 2 LẦN)']);
-  drilldownRows.push(['STT', 'Tên Cửa Hàng / Store Name', 'Mã Store', 'Mã Dự Án', 'Loại POSM', 'Brand', 'Nhà Thầu Supplier', 'Số Lần Lặp', 'Danh Sách Mã Request ID Bị Lặp', 'Ghi Chú Chi Tiết']);
+
+  // 3. CHI TIẾT VỊ TRÍ POSM BỊ SỰ CỐ LẶP LẠI (>= 2 LẦN)
+  drilldownRows.push(['CHI TIẾT VỊ TRÍ POSM BỊ SỰ CỐ LẶP LẠI (>= 2 LẦN)']);
+  drilldownRows.push(['STT', 'Tên Cửa Hàng / Store Name', 'Mã Store', 'Mã Dự Án', 'Loại POSM', 'Brand', 'Nhà Thầu Supplier', 'Số Lần Lặp', 'Danh Sách Mã Request ID Bị Lặp']);
 
   let sttC = 1;
   recurrentGroups.forEach(grp => {
@@ -372,51 +423,81 @@ export const exportAnalystExecutiveReport = (
       grp.brand,
       grp.supplier,
       grp.incidents.length,
-      reqIdList,
-      'Vị trí POSM phát sinh hỏng lặp lại n lần'
+      reqIdList
     ]);
   });
   if (sttC === 1) {
-    drilldownRows.push(['-', 'Không có vị trí POSM bị hỏng lặp lại', '-', '-', '-', '-', '-', '-', '-', '-']);
+    drilldownRows.push(['-', 'Không có vị trí POSM bị hỏng lặp lại', '-', '-', '-', '-', '-', '-', '-']);
   }
 
   drilldownRows.push(['']);
-  drilldownRows.push(['MỤC 5: CHI TIẾT CÁC CA SỰ CỐ THUỘC TOP DỰ ÁN LỖI NHIỀU NHẤT (>= 2 CA)']);
-  drilldownRows.push(['STT', 'Mã Dự Án', 'Mã Request ID', 'Tên Cửa Hàng', 'Mã Store', 'Nhà Thầu Supplier', 'Loại POSM', 'Ngày Lắp Đặt', 'Ngày Yêu Cầu', 'Hạn Cần Xử Lý', 'Ngày Hoàn Thành', 'Tiến Độ Vận Hành']);
 
-  const topProjectCodes = topProjectsList.map(([p]) => p);
+  // 4. CHI TIẾT CÁC CA SỰ CỐ THUỘC DỰ ÁN
+  const section4Title = isFilteredByProject
+    ? `CHI TIẾT CÁC CA SỰ CỐ THUỘC DỰ ÁN`
+    : `CHI TIẾT CÁC CA SỰ CỐ THUỘC TOP DỰ ÁN LỖI NHIỀU NHẤT`;
+
+  drilldownRows.push([section4Title]);
+  drilldownRows.push(['STT', 'Mã Dự Án', 'Mã Request ID', 'Tên Cửa Hàng', 'Mã Store', 'Nhà Thầu Supplier', 'Loại POSM', 'Ngày Lắp Đặt', 'Ngày Raise Mail', 'Hạn Cần Xử Lý', 'Ngày Hoàn Thành', 'Tiến Độ Vận Hành', 'Lỗi Chi Tiết']);
+
   let sttD = 1;
-  topProjectCodes.forEach(targetProjCode => {
-    warrantyItems.forEach(item => {
+  if (isFilteredByProject) {
+    activeItems.forEach(item => {
       const prj = item.projectCode?.trim() || 'Chưa gán mã dự án';
-      if (prj === targetProjCode) {
-        drilldownRows.push([
-          sttD++,
-          prj,
-          item.requestId || `BH-${item.rowId}`,
-          item.storeName || '-',
-          item.storeCode || '-',
-          item.supplier || 'Chưa gán thầu',
-          item.posmType || '-',
-          item.installationDate || '-',
-          item.sentDate || '-',
-          item.requestDeadline || item.expectedDate || '-',
-          item.completedDate || '-',
-          item.progress || 'Not started'
-        ]);
-      }
+      drilldownRows.push([
+        sttD++,
+        prj,
+        item.requestId || `BH-${item.rowId}`,
+        item.storeName || '-',
+        item.storeCode || '-',
+        item.supplier || 'Chưa gán thầu',
+        item.posmType || '-',
+        item.installationDate || '-',
+        getRaiseMailDate(item),
+        item.requestDeadline || item.expectedDate || '-',
+        item.completedDate || '-',
+        item.progress || 'Not started',
+        item.errorDetail || '-'
+      ]);
     });
-  });
+  } else {
+    const topProjectCodes = topProjectsList.map(([p]) => p);
+    topProjectCodes.forEach(targetProjCode => {
+      activeItems.forEach(item => {
+        const prj = item.projectCode?.trim() || 'Chưa gán mã dự án';
+        if (prj.toLowerCase() === targetProjCode.toLowerCase()) {
+          drilldownRows.push([
+            sttD++,
+            prj,
+            item.requestId || `BH-${item.rowId}`,
+            item.storeName || '-',
+            item.storeCode || '-',
+            item.supplier || 'Chưa gán thầu',
+            item.posmType || '-',
+            item.installationDate || '-',
+            getRaiseMailDate(item),
+            item.requestDeadline || item.expectedDate || '-',
+            item.completedDate || '-',
+            item.progress || 'Not started',
+            item.errorDetail || '-'
+          ]);
+        }
+      });
+    });
+  }
+
   if (sttD === 1) {
-    drilldownRows.push(['-', 'Không có dữ liệu sự cố thuộc Top Dự Án', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-']);
+    drilldownRows.push(['-', 'Không có dữ liệu sự cố thuộc Dự Án', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-']);
   }
 
   drilldownRows.push(['']);
-  drilldownRows.push(['MỤC 6: CHI TIẾT CÁC CA TRỄ THỜI HẠN XỬ LÝ CỦA NHÀ THẦU']);
-  drilldownRows.push(['STT', 'Nhà Thầu Supplier', 'Mã Request ID', 'Mã Dự Án', 'Tên Cửa Hàng', 'Mã Store', 'Loại POSM', 'Hạn Cần Xử Lý', 'Ngày Hoàn Thành Thực Tế', 'Số Ngày Trễ', 'Trạng Thái Thời Hạn', 'Tiến Độ Vận Hành']);
+
+  // 5. CHI TIẾT CÁC CA TRỄ THỜI HẠN XỬ LÝ CỦA NHÀ THẦU
+  drilldownRows.push(['CHI TIẾT CÁC CA TRỄ THỜI HẠN XỬ LÝ CỦA NHÀ THẦU']);
+  drilldownRows.push(['STT', 'Nhà Thầu Supplier', 'Mã Request ID', 'Mã Dự Án', 'Tên Cửa Hàng', 'Mã Store', 'Loại POSM', 'Hạn Cần Xử Lý', 'Ngày Hoàn Thành Thực Tế', 'Số Ngày Trễ', 'Tiến Độ Vận Hành']);
 
   let sttE = 1;
-  warrantyItems.forEach(item => {
+  activeItems.forEach(item => {
     const pLower = (item.progress || '').toLowerCase();
     const isDone = pLower.includes('hoàn thành');
     const pExp = parseDateToMs(item.expectedDate || item.requestDeadline);
@@ -445,36 +526,40 @@ export const exportAnalystExecutiveReport = (
         item.requestDeadline || item.expectedDate || '-',
         item.completedDate || (isDone ? 'Đã xong' : 'Chưa xong'),
         `${overdueDays} ngày`,
-        isDone ? 'Nghiệm thu trễ thời hạn' : 'Đang xử lý nhưng đã quá thời hạn xử lý',
         item.progress || 'Not started'
       ]);
     }
   });
   if (sttE === 1) {
-    drilldownRows.push(['-', 'Không có nhà thầu trễ thời hạn xử lý', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-']);
+    drilldownRows.push(['-', 'Không có nhà thầu trễ thời hạn xử lý', '-', '-', '-', '-', '-', '-', '-', '-', '-']);
   }
 
   const wsDrilldown = XLSX.utils.aoa_to_sheet(drilldownRows);
   wsDrilldown['!cols'] = [
     { wch: 8 },  // STT
-    { wch: 18 }, // Mã Request
-    { wch: 16 }, // Mã Dự Án
+    { wch: 18 }, // Mã Request / Mã Dự Án
+    { wch: 18 }, // Mã Request ID / Mã Dự Án
     { wch: 28 }, // Store Name
     { wch: 16 }, // Store Code
     { wch: 22 }, // Supplier
     { wch: 22 }, // POSM Type
-    { wch: 16 }, // Date 1
-    { wch: 18 }, // Date 2
-    { wch: 16 }, // Overdue days / MTBF
-    { wch: 28 }, // Status / Bucket
-    { wch: 22 }, // Progress
-    { wch: 35 }  // Error / Note
+    { wch: 16 }, // Ngày Lắp Đặt
+    { wch: 18 }, // Ngày Raise Mail
+    { wch: 16 }, // Hạn Cần Xử Lý
+    { wch: 18 }, // Ngày Hoàn Thành
+    { wch: 22 }, // Tiến Độ Vận Hành
+    { wch: 45 }, // Lỗi Chi Tiết / Ghi Chú Lỗi
+    { wch: 35 }
   ];
   XLSX.utils.book_append_sheet(wb, wsDrilldown, 'Analyst Drilldown Detail');
 
   // ==========================================
   // TAB 3: Checklist Bảo Hành (Operational Raw Data 100%)
   // ==========================================
+  const checklistHeaderTitle = isFilteredByProject
+    ? `CHECKLIST BẢO HÀNH CHI TIẾT DỰ ÁN ${cleanProjectCode}`
+    : 'CHECKLIST CHI TIẾT 100% CA BẢO HÀNH POSM (WARRANTY OPERATIONAL CHECKLIST)';
+
   const checklistHeader = [
     'STT / Row ID',
     'Mã Request (BH ID)',
@@ -488,7 +573,7 @@ export const exportAnalystExecutiveReport = (
     'Nhà Thầu / Supplier',
     'Chi Tiết Sự Cố POSM',
     'Ngày Lắp Đặt POSM',
-    'Ngày Yêu Cầu BH',
+    'Ngày Raise Mail',
     'Hạn Cần Xử Lý (Deadline)',
     'Ngày Xử Lý Dự Kiến',
     'Ngày Hoàn Thành Thực Tế',
@@ -500,15 +585,15 @@ export const exportAnalystExecutiveReport = (
   ];
 
   const checklistRows: (string | number)[][] = [
-    ['CHECKLIST CHI TIẾT 100% CA BẢO HÀNH POSM (WARRANTY OPERATIONAL CHECKLIST)'],
-    [`Tổng số ca bảo hành: ${totalWarranty} ca | Ngày xuất: ${new Date().toLocaleString('vi-VN')}`],
+    [checklistHeaderTitle],
+    [`Mã Dự Án: ${isFilteredByProject ? cleanProjectCode : 'Tất cả dự án'} | Tổng số ca bảo hành: ${totalWarranty} ca | Ngày xuất: ${new Date().toLocaleString('vi-VN')}`],
     [''],
     checklistHeader
   ];
 
-  warrantyItems.forEach((item, idx) => {
+  activeItems.forEach((item, idx) => {
     const pInst = parseDateToMs(item.installationDate);
-    const pSent = parseDateToMs(item.sentDate);
+    const pSent = parseDateToMs(getRaiseMailDate(item));
     const pExp = parseDateToMs(item.expectedDate || item.requestDeadline);
     const pComp = parseDateToMs(item.completedDate);
 
@@ -553,7 +638,7 @@ export const exportAnalystExecutiveReport = (
       item.supplier || 'Chưa gán thầu',
       item.errorDetail || '-',
       item.installationDate || '-',
-      item.sentDate || '-',
+      getRaiseMailDate(item),
       item.requestDeadline || item.expectedDate || '-',
       item.expectedDate || '-',
       item.completedDate || '-',
@@ -593,7 +678,7 @@ export const exportAnalystExecutiveReport = (
   XLSX.utils.book_append_sheet(wb, wsChecklist, 'Checklist Bảo Hành');
 
   // Export File
-  XLSX.writeFile(wb, `${filenamePrefix}_${dateStr}.xlsx`);
+  XLSX.writeFile(wb, `${finalFilename}_${dateStr}.xlsx`);
 };
 
 // Helper parsing date string to ms

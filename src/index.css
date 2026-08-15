@@ -196,3 +196,40 @@
   scrollbar-width: auto;
   scrollbar-color: rgba(148, 163, 184, 0.8) rgba(226, 232, 240, 0.9);
 }
+
+/* Email Rich Content Formatting */
+.email-rich-content {
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+.email-rich-content img {
+  max-width: 100% !important;
+  height: auto !important;
+  border-radius: 6px;
+  display: block;
+  margin: 6px 0;
+  cursor: pointer;
+}
+.email-rich-content table {
+  max-width: 100% !important;
+  border-collapse: collapse !important;
+  margin: 8px 0;
+  font-size: 11px;
+}
+.email-rich-content table td,
+.email-rich-content table th {
+  padding: 4px 8px;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+}
+.dark .email-rich-content table td,
+.dark .email-rich-content table th {
+  border-color: rgba(51, 65, 85, 0.8);
+}
+.email-rich-content blockquote {
+  border-left: 3px solid #6366f1;
+  padding-left: 10px;
+  margin: 6px 0;
+  color: #64748b;
+}

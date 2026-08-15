@@ -14,3 +14,4 @@ apply_*.cjs
 .DS_Store
 
 .vercel
+.env*

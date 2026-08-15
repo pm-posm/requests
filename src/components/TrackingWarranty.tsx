@@ -13,6 +13,7 @@ import type { WarrantyItem, WarrantyStats } from '@/types/warranty';
 import toast from 'react-hot-toast';
 import { useDashboardStore } from '@/stores/useDashboardStore';
 import { exportAnalystExecutiveReport } from '@/services/excelReportService';
+import { WarrantyInboxView } from './warranty/WarrantyInboxView';
 
 // Official Public Google Sheet CSV URL for BaoHanh_Model
 const DEFAULT_WARRANTY_SHEET_CSV = 'https://docs.google.com/spreadsheets/d/119LpiU1XheXgOxKWxw17E_u4vgRTBPhc-4FADDS8B1Q/export?format=csv&gid=2053849390';
@@ -133,7 +134,7 @@ const INITIAL_REAL_WARRANTY_ITEMS: WarrantyItem[] = [
 
 export default function TrackingWarranty() {
   const { isAdmin } = useDashboardStore();
-  const [activeModuleTab, setActiveModuleTab] = useState<'DATA_LIST' | 'ANALYST'>('DATA_LIST');
+  const [activeModuleTab, setActiveModuleTab] = useState<'DATA_LIST' | 'ANALYST' | 'INBOX'>('DATA_LIST');
   const [sheetUrl, setSheetUrl] = useState<string>(() => {
     return localStorage.getItem('warranty_sheet_url') || DEFAULT_WARRANTY_SHEET_CSV;
   });
@@ -161,6 +162,7 @@ export default function TrackingWarranty() {
   const [selectedVisTech, setSelectedVisTech] = useState('all');
   const [selectedBrand, setSelectedBrand] = useState('all');
   const [selectedYear, setSelectedYear] = useState('2026');
+  const [selectedProject, setSelectedProject] = useState('all');
 
   // Drawer selected item & Edit Form State
   const [selectedItem, setSelectedItem] = useState<WarrantyItem | null>(null);
@@ -272,7 +274,7 @@ export default function TrackingWarranty() {
       setEditCompletedDate(selectedItem.completedDate || '');
       setEditNote(selectedItem.note || '');
       setEditTitleMail(selectedItem.mailTitle || (selectedItem as any).titleEmail || '');
-      setEditRaiseMailTime(selectedItem.sentDate || (selectedItem as any).raiseMailTime || '');
+      setEditRaiseMailTime(selectedItem.raiseMailTime || '');
       setEditPrecedingRequestId(selectedItem.precedingRequestId || (selectedItem as any).preceding_request_id || '');
       setDrawerSaveSuccess(null);
     }
@@ -393,7 +395,7 @@ export default function TrackingWarranty() {
       completedDate: editCompletedDate.trim(),
       note: editNote.trim(),
       mailTitle: editTitleMail.trim(),
-      sentDate: editRaiseMailTime.trim(),
+      raiseMailTime: editRaiseMailTime.trim(),
       precedingRequestId: editPrecedingRequestId.trim()
     };
 
@@ -410,7 +412,7 @@ export default function TrackingWarranty() {
           supplier: editSupplier.trim() || null,
           tien_do: editProgress.trim(),
           title_email_request: editTitleMail.trim() || null,
-          date_of_rq: editRaiseMailTime.trim() || null,
+          raise_mail_time: editRaiseMailTime.trim() || null,
           ngay_quick_fix: editExpectedDate.trim() || null,
           expected_date: editExpectedDate.trim() || null,
           completed_date: editCompletedDate.trim() || null,
@@ -436,7 +438,7 @@ export default function TrackingWarranty() {
         if (editSupplier.trim()) payload.supplier = editSupplier.trim();
         if (editProgress.trim()) payload.progress = editProgress.trim();
         if (editTitleMail.trim()) payload.titleMail = editTitleMail.trim();
-        if (editRaiseMailTime.trim()) payload.raiseMailTime = editRaiseMailTime.trim();
+        payload.raiseMailTime = editRaiseMailTime.trim();
         if (editInstallationDate.trim()) payload.installationDate = editInstallationDate.trim();
         if (editExpectedDate.trim()) payload.expectedDate = editExpectedDate.trim();
         if (editCompletedDate.trim()) payload.completedDate = editCompletedDate.trim();
@@ -536,9 +538,37 @@ export default function TrackingWarranty() {
               const expectedDate = getFlexibleVal(row, ['Ngày xử lý dự kiến', 'expected_date']) || (Array.isArray(row) ? row[15] : '') || '';
               const completedDate = getFlexibleVal(row, ['Ngày hoàn thành thực tế', 'completed_date']) || (Array.isArray(row) ? row[16] : '') || '';
               const proofImage = getFlexibleVal(row, ['Hình ảnh nghiệm thu', 'proof_image']) || (Array.isArray(row) ? row[17] : '') || '';
+              const objVals = typeof row === 'object' && row ? Object.values(row) : [];
+              const col19Val = (objVals[19] !== undefined && objVals[19] !== null) ? String(objVals[19]).trim() : '';
+              const col20Val = (objVals[20] !== undefined && objVals[20] !== null) ? String(objVals[20]).trim() : '';
+              const col21Val = (objVals[21] !== undefined && objVals[21] !== null) ? String(objVals[21]).trim() : '';
+
+              const raiseMailTime = getFlexibleVal(row, [
+                'Ngày Rasie Mail',
+                'Ngày raise mail', 
+                'Ngày Raise Mail', 
+                'raise_mail_time', 
+                'rasie_mail_time', 
+                'Raise Mail', 
+                'Rasie Mail',
+                'raiseMailTime'
+              ]) || (Array.isArray(row) ? row[19] : '') || col19Val || '';
+
+              const installationDate = getFlexibleVal(row, [
+                'Ngày lắp đặt', 
+                'Ngày lắp đặt POSM', 
+                'Ngày Lắp Đặt', 
+                'ngay_lap_dat', 
+                'installation_date'
+              ]) || (Array.isArray(row) ? row[20] : '') || col20Val || '';
+
+              const precedingRequestId = getFlexibleVal(row, [
+                'Mã bảo hành lần trước', 
+                'preceding_request_id', 
+                'precedingRequestId'
+              ]) || (Array.isArray(row) ? row[21] : '') || col21Val || '';
+
               const note = getFlexibleVal(row, ['Note', 'Ghi chú', 'vis_note', 'mer_note']) || (Array.isArray(row) ? row[18] : '') || '';
-              const raiseMailTime = getFlexibleVal(row, ['Ngày raise mail', 'raise_mail_time']) || (Array.isArray(row) ? row[19] : '') || '';
-              const installationDate = getFlexibleVal(row, ['Ngày lắp đặt', 'Ngày lắp đặt POSM', 'Ngày Lắp Đặt', 'ngay_lap_dat', 'installation_date']) || (Array.isArray(row) ? row[20] : '') || '';
               const requestDeadline = getFlexibleVal(row, ['Deadline', 'Deadline request', 'Deadline RQ', 'deadline']) || '';
 
               return {
@@ -552,7 +582,8 @@ export default function TrackingWarranty() {
                 posmType: posmType.trim(),
                 category: category.trim(),
                 brand: brand.trim(),
-                sentDate: sentDate.trim() || raiseMailTime.trim(),
+                sentDate: sentDate.trim(),
+                raiseMailTime: raiseMailTime.trim(),
                 requestDeadline: requestDeadline.trim(),
                 installationDate: installationDate.trim(),
                 projectCode: projectCode.trim(),
@@ -563,7 +594,8 @@ export default function TrackingWarranty() {
                 expectedDate: expectedDate.trim(),
                 completedDate: completedDate.trim(),
                 proofImage: proofImage.trim(),
-                note: note.trim()
+                note: note.trim(),
+                precedingRequestId: precedingRequestId.trim()
               };
             });
             setWarrantyItems(parsedItems);
@@ -614,9 +646,29 @@ export default function TrackingWarranty() {
     return Array.from(new Set(warrantyItems.map(i => i.brand).filter(Boolean))).sort();
   }, [warrantyItems]);
 
+  const uniqueProjects = useMemo(() => {
+    const map = new Map<string, number>();
+    warrantyItems.forEach(i => {
+      const prj = i.projectCode?.trim();
+      if (prj) {
+        map.set(prj, (map.get(prj) || 0) + 1);
+      }
+    });
+    return Array.from(map.entries())
+      .map(([code, count]) => ({ code, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [warrantyItems]);
+
   // Filtered dataset
   const filteredItems = useMemo(() => {
     return warrantyItems.filter(item => {
+      // Project Filter
+      if (selectedProject !== 'all') {
+        const itemPrj = (item.projectCode || '').trim().toLowerCase();
+        const targetPrj = selectedProject.trim().toLowerCase();
+        if (itemPrj !== targetPrj && !itemPrj.includes(targetPrj)) return false;
+      }
+
       // Year Filter
       if (selectedYear !== 'all') {
         const itemYearMatch = (item.sentDate || item.installationDate || '').match(/\b(202[0-9]|201[0-9])\b/);
@@ -674,7 +726,7 @@ export default function TrackingWarranty() {
 
       return true;
     });
-  }, [warrantyItems, selectedYear, searchTerm, selectedProgress, selectedSupplier, selectedVisTech, selectedBrand]);
+  }, [warrantyItems, selectedProject, selectedYear, searchTerm, selectedProgress, selectedSupplier, selectedVisTech, selectedBrand]);
 
   // Metrics (tính trên dataset đã lọc theo Năm & Filters để Analyst phản ánh dữ liệu thực tế)
   const stats: WarrantyStats = useMemo(() => {
@@ -1042,36 +1094,17 @@ export default function TrackingWarranty() {
     toast.success(`🔍 Đã áp dụng bộ lọc "${val}" & chuyển sang Tab Danh Sách Dữ Liệu!`);
   };
 
-  // Export CSV
-  const handleExportCsv = () => {
-    const csvData = filteredItems.map(i => ({
-      'Row_ID': i.rowId,
-      'Request ID': i.requestId,
-      'Store Name': i.storeName,
-      'Store Code': i.storeCode,
-      'SR': i.srName,
-      'VIS-Tech (Unilever)': i.visTech,
-      'POSM': i.posmType,
-      'CAT': i.category,
-      'BRAND': i.brand,
-      'Ngày Gửi': i.sentDate,
-      'Mã Dự Án': i.projectCode || '',
-      'Supplier (Thầu SX)': i.supplier || '',
-      'Title Mail': i.mailTitle || '',
-      'Chi Tiết Lỗi': i.errorDetail,
-      'Tiến Độ': i.progress,
-      'Ngày Dự Dự Kiến Xử Lý': i.expectedDate || '',
-      'Ngày Hoàn Thành Thực Tế': i.completedDate || '',
-      'Hình Ảnh Nghiệm Thu': i.proofImage || '',
-      'Note': i.note || ''
-    }));
-
-    const csv = Papa.unparse(csvData);
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `baohanh_model_export_${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
+  // Export Excel 3-Tab BI Workbook (.xlsx) with Project Code Filter Support
+  const handleExportExcel = (targetProjCode?: string) => {
+    const projToExport = targetProjCode || (selectedProject !== 'all' ? selectedProject : undefined);
+    if (projToExport) {
+      exportAnalystExecutiveReport([], warrantyItems, `POSM_Warranty_Report_${projToExport}`, projToExport);
+      const count = warrantyItems.filter(i => (i.projectCode || '').trim().toLowerCase().includes(projToExport.toLowerCase())).length;
+      toast.success(`🟢 Đã xuất Báo Cáo Excel DỰ ÁN "${projToExport}" thành công! (${count} ca)`);
+    } else {
+      exportAnalystExecutiveReport([], filteredItems, 'POSM_Warranty_Executive_Report');
+      toast.success(`🟢 Đã xuất Báo Cáo Excel 3-Tab toàn bộ hệ thống! (${filteredItems.length} ca)`);
+    }
   };
 
   const handleSaveSheetUrl = () => {
@@ -1115,120 +1148,117 @@ export default function TrackingWarranty() {
 
   return (
     <div className="space-y-6 pb-12">
-      {/* HEADER SECTION */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-card p-5 rounded-xl border border-border shadow-sm">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="p-2.5 bg-sky-500/10 text-sky-600 dark:text-sky-400 rounded-xl">
-              <ShieldCheck className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                Quản Lý Bảo Hành & Đổi Trả POSM (BaoHanh_Model)
-                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 text-[11px]">
-                  Live Google Sheet
-                </Badge>
+      {/* HEADER SECTION - UNIFIED WITH INSTALLATION HEADER DESIGN */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+        <div className="flex items-center gap-3.5">
+          <div className="p-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl border border-slate-200 dark:border-slate-700">
+            <ShieldCheck className="w-5 h-5 text-sky-600 dark:text-sky-400" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
+                Điều Hành &amp; Phân Tích Bảo Hành POSM
               </h1>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Giám sát sự cố POSM tại cửa hàng, lịch xử lý nhà thầu (Supplier) & đồng bộ trạng thái Real-time về Master Data
-              </p>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-900/60">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                Live Sync Active
+              </span>
+              <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded text-xs flex items-center gap-1.5">
+                <span>Sync: {new Date().toLocaleTimeString('vi-VN')}</span>
+              </span>
             </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Google Sheet BAOHANH_MODEL • <strong className="text-slate-800 dark:text-slate-200 font-semibold">{filteredItems.length} Ca Yêu Cầu Bảo Hành</strong>
+            </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0">
-          <button
-            onClick={() => {
-              setTempUrlInput(sheetUrl);
-              setTempWebAppInput(webAppUrl);
-              setIsUrlModalOpen(true);
-            }}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-secondary hover:bg-secondary/80 rounded-lg border border-border transition-colors cursor-pointer shadow-sm"
-            title="Cấu hình Google Sheet URL & Web App Sync"
-          >
-            <Settings className="w-4 h-4 text-sky-600" />
-            <span>Nguồn & Web App API</span>
-          </button>
+        {/* TOP MODULE TABS & QUICK CONTROLS */}
+        <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap self-start xl:self-auto">
+          <div className="bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl flex items-center gap-1 border border-slate-200/60 dark:border-slate-700 shrink-0">
+            <button
+              onClick={() => setActiveModuleTab('DATA_LIST')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                activeModuleTab === 'DATA_LIST'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              <Table className="w-3.5 h-3.5" />
+              <span>Danh Sách Bảo Hành</span>
+            </button>
 
-          <button
-            onClick={() => fetchSheetData(sheetUrl)}
-            disabled={isRefreshing}
-            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/60 hover:bg-sky-100 rounded-lg border border-sky-200 dark:border-sky-800 transition-colors disabled:opacity-50 cursor-pointer"
-          >
-            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span>{isRefreshing ? 'Đang đồng bộ...' : 'Đồng bộ Sheet'}</span>
-          </button>
+            <button
+              onClick={() => setActiveModuleTab('ANALYST')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                activeModuleTab === 'ANALYST'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              <span>Báo Cáo Tiến Độ &amp; Phân Tích</span>
+            </button>
 
-          <button
-            onClick={handleExportCsv}
-            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 bg-card hover:bg-secondary rounded-lg border border-border shadow-sm transition-colors cursor-pointer"
-          >
-            <Download className="w-4 h-4" />
-            <span>Xuất Excel</span>
-          </button>
-        </div>
-      </div>
-
-      {error && (
-        <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 rounded-xl text-xs flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-            <span>{error}</span>
+            <button
+              onClick={() => setActiveModuleTab('INBOX')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                activeModuleTab === 'INBOX'
+                  ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-2xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              <Mail className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              <span>Hộp Thư Bảo Hành</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-mono">
+                Live
+              </span>
+            </button>
           </div>
-          <button
-            onClick={() => {
-              setTempUrlInput(sheetUrl);
-              setTempWebAppInput(webAppUrl);
-              setIsUrlModalOpen(true);
-            }}
-            className="underline font-semibold hover:text-amber-900 cursor-pointer"
-          >
-            Cấu hình lại Sheet URL
-          </button>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            {selectedProject !== 'all' ? (
+              <button
+                onClick={() => handleExportExcel(selectedProject)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 rounded-xl shadow-xs transition-all cursor-pointer border border-amber-400/40"
+                title={`Xuất file báo cáo Excel 3-Tab riêng cho Dự Án ${selectedProject}`}
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Xuất Excel ({filteredItems.length})</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => handleExportExcel()}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl shadow-xs transition-all cursor-pointer border border-emerald-400/40"
+                title="Xuất file báo cáo Excel 3-Tab BI (.xlsx) cho tất cả dự án"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Xuất Excel</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => fetchSheetData(sheetUrl)}
+              disabled={isRefreshing}
+              className="p-1.5 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-800 rounded-xl transition-colors cursor-pointer"
+              title="Đồng bộ dữ liệu từ Sheet"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            </button>
+
+            <button
+              onClick={() => {
+                setTempUrlInput(sheetUrl);
+                setTempWebAppInput(webAppUrl);
+                setIsUrlModalOpen(true);
+              }}
+              className="p-1.5 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-800 rounded-xl transition-colors cursor-pointer"
+              title="Cấu hình Google Sheet URL & Web App API"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+          </div>
         </div>
-      )}
-
-      {/* MODULE INTERNAL NAVIGATION SUB-TABS */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 w-fit">
-          <button
-            onClick={() => setActiveModuleTab('DATA_LIST')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-              activeModuleTab === 'DATA_LIST'
-                ? 'bg-white dark:bg-slate-900 text-sky-600 dark:text-sky-400 shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <Table className="w-4 h-4" />
-            <span>Danh Sách Dữ Liệu</span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 font-mono">
-              {filteredItems.length}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveModuleTab('ANALYST')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-              activeModuleTab === 'ANALYST'
-                ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <BarChart3 className="w-4 h-4" />
-            <span>Báo Cáo & Thống Kê (Analyst)</span>
-          </button>
-        </div>
-
-        {activeModuleTab === 'ANALYST' && (
-          <button
-            onClick={() => exportAnalystExecutiveReport([], warrantyItems, 'POSM_Warranty_Executive_Report')}
-            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl shadow-sm transition-all cursor-pointer border border-emerald-400/40"
-            title="Tải về file Excel BI Analytics 3 Sheet (.xlsx)"
-          >
-            <Download className="w-4 h-4" />
-            <span>📥 Xuất Analyst Excel (.xlsx)</span>
-          </button>
-        )}
       </div>
 
       {/* TAB 1: DEDICATED ANALYST / REPORTS WORKSPACE */}
@@ -1350,9 +1380,24 @@ export default function TrackingWarranty() {
                             ))}
                           </div>
                         </div>
-                        <span className="font-mono font-bold text-amber-600 dark:text-amber-400 shrink-0">
-                          {p.count} ca ({p.percentage}%)
-                        </span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="font-mono font-bold text-amber-600 dark:text-amber-400">
+                            {p.count} ca ({p.percentage}%)
+                          </span>
+                          {p.projectCode !== 'Chưa gán mã dự án' && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleExportExcel(p.projectCode);
+                              }}
+                              className="px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950 dark:hover:bg-emerald-900 rounded border border-emerald-300 dark:border-emerald-700 flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                              title={`Xuất Báo Cáo Excel 3-Tab riêng cho Dự Án ${p.projectCode}`}
+                            >
+                              <Download className="w-3 h-3" />
+                              <span>Xuất Excel</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                         <div className="h-full bg-amber-500 rounded-full transition-all" style={{ width: `${p.percentage}%` }} />
@@ -1554,13 +1599,13 @@ export default function TrackingWarranty() {
           </div>
 
           {/* SECTION 1.5: BÁO CÁO PHÂN TÍCH BẢO HÀNH LẶP LẠI (RECURRENT WARRANTY ANALYTICS) */}
-          <div className="p-5 bg-card rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/20 dark:bg-amber-950/10 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-amber-200/80 dark:border-amber-900 pb-3">
+          <div className="p-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-amber-600" />
+                <ShieldCheck className="w-5 h-5 text-amber-500" />
                 <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
                   🔄 Báo Cáo Phân Tích Sự Cố Bảo Hành Lặp Lại (Recurrent Warranty Lifecycle)
-                  <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                  <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-900/60">
                     {recurrentWarrantyAnalytics.recurrentCount} POSM bị hỏng lặp
                   </span>
                 </h4>
@@ -1569,8 +1614,8 @@ export default function TrackingWarranty() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Card 1: Metric */}
-              <div className="p-4 bg-white dark:bg-slate-900 rounded-xl border border-amber-200 dark:border-amber-900 shadow-2xs space-y-1">
-                <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider block">
+              <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200/80 dark:border-slate-800 space-y-1">
+                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
                   POSM Bảo Hành Lặp (&gt;1 Lần)
                 </span>
                 <div className="flex items-baseline gap-2">
@@ -1581,12 +1626,12 @@ export default function TrackingWarranty() {
                     / {recurrentWarrantyAnalytics.totalItems} mã POSM
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-500">POSM bị sự cố tái diễn nhiều lần tại cùng 1 siêu thị</p>
+                <p className="text-[11px] text-slate-400">POSM bị sự cố tái diễn nhiều lần tại cùng 1 siêu thị</p>
               </div>
 
               {/* Card 2: Metric */}
-              <div className="p-4 bg-white dark:bg-slate-900 rounded-xl border border-rose-200 dark:border-rose-900 shadow-2xs space-y-1">
-                <span className="text-[11px] font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wider block">
+              <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200/80 dark:border-slate-800 space-y-1">
+                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
                   Tỷ Lệ Tái Hỏng POSM
                 </span>
                 <div className="flex items-baseline gap-2">
@@ -1596,21 +1641,22 @@ export default function TrackingWarranty() {
                       : '0'}%
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-500">Tỷ lệ POSM phát sinh hỏng hóc sau lần sửa đầu</p>
+                <p className="text-[11px] text-slate-400">Tỷ lệ POSM phát sinh hỏng hóc sau lần sửa đầu</p>
               </div>
 
               {/* Card 3: Metric */}
-              <div className="p-4 bg-white dark:bg-slate-900 rounded-xl border border-sky-200 dark:border-sky-900 shadow-2xs space-y-1">
-                <span className="text-[11px] font-bold text-sky-700 dark:text-sky-400 uppercase tracking-wider block">
+              <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200/80 dark:border-slate-800 space-y-1">
+                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
                   Trạng Thái Kiểm Soát Chất Lượng
                 </span>
                 <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 pt-1">
                   {recurrentWarrantyAnalytics.recurrentCount > 0 ? (
-                    <span className="text-amber-700 dark:text-amber-400 font-bold flex items-center gap-1">
+                    <span className="text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1">
                       <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
                       Cần rà soát Supplier thi công các ca lặp
                     </span>
                   ) : (
+
                     <span className="text-emerald-600 font-bold flex items-center gap-1">
                       <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                       Không có ca bảo hành lặp lặp lại
@@ -1843,17 +1889,34 @@ export default function TrackingWarranty() {
         </div>
       )}
 
+      {/* TAB 3: DEDICATED WARRANTY GMAIL INBOX WORKSPACE */}
+      {activeModuleTab === 'INBOX' && (
+        <div className="animate-in fade-in duration-200">
+          <WarrantyInboxView
+            warrantyItems={warrantyItems}
+            webAppUrl={webAppUrl}
+            onOpenWarrantyDrawer={(item) => setSelectedItem(item)}
+          />
+        </div>
+      )}
+
       {/* TAB 2: CLEAN OPERATIONAL DATA LIST & FILTER GRID */}
       {activeModuleTab === 'DATA_LIST' && (
       <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
         {/* Active Filter Notification Bar */}
-        {(selectedSupplier !== 'all' || selectedBrand !== 'all' || selectedProgress !== 'all' || selectedVisTech !== 'all' || searchTerm) && (
+        {(selectedProject !== 'all' || selectedSupplier !== 'all' || selectedBrand !== 'all' || selectedProgress !== 'all' || selectedVisTech !== 'all' || searchTerm) && (
           <div className="px-4 py-2 bg-sky-50 dark:bg-sky-950/60 border-b border-sky-200 dark:border-sky-800 flex items-center justify-between gap-2 text-xs">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-bold text-sky-900 dark:text-sky-200 flex items-center gap-1">
                 <Filter className="w-3.5 h-3.5 text-sky-600" />
                 Đang lọc theo Report:
               </span>
+              {selectedProject !== 'all' && (
+                <Badge variant="secondary" className="bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200 flex items-center gap-1 font-bold border border-amber-300 dark:border-amber-800">
+                  📌 Dự án: {selectedProject}
+                  <X className="w-3 h-3 cursor-pointer hover:text-amber-950" onClick={() => setSelectedProject('all')} />
+                </Badge>
+              )}
               {selectedSupplier !== 'all' && (
                 <Badge variant="secondary" className="bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-200 flex items-center gap-1">
                   Nhà thầu: {selectedSupplier}
@@ -1887,6 +1950,7 @@ export default function TrackingWarranty() {
             </div>
             <button
               onClick={() => {
+                setSelectedProject('all');
                 setSelectedSupplier('all');
                 setSelectedBrand('all');
                 setSelectedProgress('all');
@@ -1930,6 +1994,25 @@ export default function TrackingWarranty() {
                 <Filter className="w-3.5 h-3.5 text-muted-foreground" />
                 <span className="text-muted-foreground font-medium">Bộ lọc:</span>
               </div>
+
+              {/* Project Filter */}
+              <select
+                value={selectedProject}
+                onChange={(e) => {
+                  setSelectedProject(e.target.value);
+                  if (e.target.value !== 'all') {
+                    toast.success(`📌 Đã lọc ca bảo hành theo Mã Dự Án "${e.target.value}"`);
+                  }
+                }}
+                className="bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 font-bold text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 max-w-[190px] truncate cursor-pointer shadow-2xs"
+              >
+                <option value="all">📂 Tất cả Mã Dự Án ({uniqueProjects.length})</option>
+                {uniqueProjects.map(({ code, count }) => (
+                  <option key={code} value={code}>
+                    📌 Dự án: {code} ({count} ca)
+                  </option>
+                ))}
+              </select>
 
               {/* Year Filter */}
               <select
@@ -2216,9 +2299,9 @@ export default function TrackingWarranty() {
               </div>
 
               {/* INLINE EDIT FORM SECTION 1: DỰ ÁN & NHÀ THẦU & TIẾN ĐỘ */}
-              <div className="space-y-3 p-4 border border-sky-200/80 dark:border-sky-800/80 rounded-xl bg-sky-50/40 dark:bg-sky-950/20">
-                <h4 className="font-bold text-xs text-sky-900 dark:text-sky-200 uppercase tracking-wider flex items-center gap-1.5">
-                  <Edit3 className="w-3.5 h-3.5 text-sky-600" />
+              <div className="space-y-3 p-4 border border-slate-200/80 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950">
+                <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-200 dark:border-slate-800 pb-2">
+                  <Edit3 className="w-3.5 h-3.5 text-sky-500" />
                   Chỉnh Sửa Mã Dự Án, Supplier & Tiến Độ (Sync 2 Chiều)
                 </h4>
 
@@ -2231,7 +2314,7 @@ export default function TrackingWarranty() {
                       value={editProjectCode}
                       onChange={(e) => setEditProjectCode(e.target.value)}
                       placeholder="Nhập mã dự án đầy đủ..."
-                      className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500/20 font-mono text-xs"
+                      className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl font-mono text-xs outline-none focus:border-sky-500"
                     />
                   </div>
 
@@ -2243,7 +2326,7 @@ export default function TrackingWarranty() {
                       value={editSupplier}
                       onChange={(e) => setEditSupplier(e.target.value)}
                       placeholder="Link4, Smart, SDC..."
-                      className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500/20 text-xs font-bold text-sky-800 dark:text-sky-300"
+                      className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:border-sky-500"
                     />
                   </div>
                 </div>
@@ -2254,7 +2337,7 @@ export default function TrackingWarranty() {
                   <select
                     value={editProgress}
                     onChange={(e) => setEditProgress(e.target.value)}
-                    className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500/20 text-xs font-semibold text-foreground cursor-pointer"
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 cursor-pointer outline-none focus:border-sky-500"
                   >
                     <option value="Not Started">⚪ Not Started (Mới tạo)</option>
                     <option value="Vis - Đã gửi RQ tới Agency">🔵 Vis - Đã gửi RQ tới Agency (Đã gửi mail)</option>
@@ -2266,24 +2349,24 @@ export default function TrackingWarranty() {
                 </div>
 
                 {/* Edit Preceding Request ID (Mã BH Lần Trước) */}
-                <div className="space-y-1 bg-amber-50/50 dark:bg-amber-950/20 p-2.5 rounded-lg border border-amber-200 dark:border-amber-800">
-                  <label className="font-semibold text-xs text-amber-900 dark:text-amber-200 flex items-center justify-between">
+                <div className="space-y-1 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <label className="font-semibold text-xs text-slate-700 dark:text-slate-300 flex items-center justify-between">
                     <span className="flex items-center gap-1.5">
-                      <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+                      <ShieldCheck className="w-3.5 h-3.5 text-amber-500" />
                       Mã Bảo Hành Lần Trước (Preceding Request ID):
                     </span>
-                    <span className="text-[10px] text-amber-700 dark:text-amber-400 font-normal">Chỉ điền nếu là ca bảo hành lặp lại</span>
+                    <span className="text-[10px] text-slate-400 font-normal">Chỉ điền nếu là ca bảo hành lặp lại</span>
                   </label>
                   <input
                     type="text"
                     value={editPrecedingRequestId}
                     onChange={(e) => setEditPrecedingRequestId(e.target.value)}
                     placeholder="Nhập hoặc chọn mã BH lần trước (ví dụ: BH-586)..."
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/30 font-mono text-xs font-bold text-amber-900 dark:text-amber-200"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl font-mono text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:border-sky-500"
                   />
                 </div>
 
-                {/* Edit Title Mail & Raise Mail Date */}
+                {/* Edit Title Mail & Raise Mail Date (DD/MM/YYYY FORMAT) */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
                   <div className="md:col-span-2 space-y-1">
                     <label className="font-semibold text-slate-700 dark:text-slate-300">✉️ Tiêu Đề Email Raise (Title Mail):</label>
@@ -2292,94 +2375,218 @@ export default function TrackingWarranty() {
                       value={editTitleMail}
                       onChange={(e) => setEditTitleMail(e.target.value)}
                       placeholder="[Bảo hành]-[BH-xxx]: mã dự án + tên dự án..."
-                      className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500/20 font-mono text-xs font-bold text-sky-800 dark:text-sky-300"
+                      className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl font-mono text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:border-sky-500"
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="font-semibold text-slate-700 dark:text-slate-300">📅 Ngày Raise Mail:</label>
-                    <input
-                      type="date"
-                      value={toHtmlDateStr(editRaiseMailTime)}
-                      onChange={(e) => setEditRaiseMailTime(fromHtmlDateStr(e.target.value))}
-                      className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500/20 text-xs font-bold text-sky-800 dark:text-sky-300 cursor-pointer"
-                    />
+                    <label className="font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                      <span>📅 Ngày Raise Mail:</span>
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        type="text"
+                        placeholder="dd/mm/yyyy"
+                        value={editRaiseMailTime || ''}
+                        onChange={(e) => setEditRaiseMailTime(e.target.value)}
+                        className="w-full pl-3 pr-9 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl font-mono text-xs text-slate-800 dark:text-slate-200 outline-none focus:border-sky-500"
+                      />
+                      <input
+                        type="date"
+                        id="hidden-raise-mail-picker"
+                        value={toHtmlDateStr(editRaiseMailTime)}
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            setEditRaiseMailTime(fromHtmlDateStr(e.target.value));
+                          }
+                        }}
+                        className="opacity-0 absolute w-0 h-0 pointer-events-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const el = document.getElementById('hidden-raise-mail-picker') as HTMLInputElement;
+                          if (el) {
+                            if ('showPicker' in el) (el as any).showPicker();
+                            else { el.focus(); el.click(); }
+                          }
+                        }}
+                        className="absolute right-2 p-1 text-slate-400 hover:text-sky-600 rounded cursor-pointer"
+                        title="Bấm để chọn ngày"
+                      >
+                        <Calendar className="w-3.5 h-3.5 text-sky-500" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* INLINE EDIT FORM SECTION 2: THEO DÕI MỐC THỜI GIAN */}
-              <div className="space-y-3 p-4 border border-border rounded-xl bg-card">
-                <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+              {/* INLINE EDIT FORM SECTION 2: THEO DÕI MỐC THỜI GIAN (STRICT DD/MM/YYYY FORMAT) */}
+              <div className="space-y-3 p-4 border border-slate-200/80 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950">
+                <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-200 dark:border-slate-800 pb-2">
                   <Calendar className="w-3.5 h-3.5 text-sky-500" />
                   Theo Dõi & Cập Nhật Mốc Thời Gian Xử Lý
                 </h4>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {/* Ngày gửi request */}
-                  <div className="space-y-1 bg-slate-50 dark:bg-slate-900 p-2.5 rounded-lg border border-border">
-                    <label className="text-muted-foreground flex items-center gap-1 font-semibold text-[11px]">
+                  {/* Ngày gửi request (Read-only) */}
+                  <div className="space-y-1 bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <label className="text-slate-500 flex items-center gap-1 font-semibold text-[11px]">
                       <Calendar className="w-3 h-3 text-slate-400" />
                       Ngày gửi request (SR/Docs):
                     </label>
-                    <span className="font-bold text-foreground block text-xs">
+                    <span className="font-bold text-slate-800 dark:text-slate-200 block text-xs font-mono">
                       {selectedItem.sentDate || 'Chưa ghi nhận'}
                     </span>
                   </div>
 
-                  {/* Deadline hoàn thành request */}
-                  <div className="space-y-1 bg-slate-50 dark:bg-slate-900 p-2.5 rounded-lg border border-border">
-                    <label className="text-muted-foreground flex items-center gap-1 font-semibold text-[11px]">
+                  {/* Deadline hoàn thành request (Read-only) */}
+                  <div className="space-y-1 bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <label className="text-slate-500 flex items-center gap-1 font-semibold text-[11px]">
                       <Clock className="w-3 h-3 text-indigo-500" />
                       Deadline request:
                     </label>
-                    <span className="font-bold text-indigo-700 dark:text-indigo-300 block text-xs">
+                    <span className="font-bold text-indigo-600 dark:text-indigo-400 block text-xs font-mono">
                       {mappedDeadline || 'Chưa có deadline'}
                     </span>
                   </div>
 
-                  {/* Ngày lắp đặt POSM */}
+                  {/* Ngày lắp đặt POSM (Format dd/mm/yyyy) */}
                   <div className="space-y-1">
-                    <label className="text-muted-foreground flex items-center gap-1 font-semibold text-[11px]">
-                      <Wrench className="w-3 h-3 text-sky-500" />
-                      Ngày lắp đặt POSM:
+                    <label className="text-slate-600 dark:text-slate-300 flex items-center justify-between font-semibold text-[11px]">
+                      <span className="flex items-center gap-1">
+                        <Wrench className="w-3 h-3 text-sky-500" />
+                        Ngày lắp đặt POSM:
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">dd/mm/yyyy</span>
                     </label>
-                    <input
-                      type="date"
-                      value={toHtmlDateStr(editInstallationDate)}
-                      onChange={(e) => setEditInstallationDate(fromHtmlDateStr(e.target.value))}
-                      className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500/20 text-xs font-semibold text-sky-700 dark:text-sky-300 cursor-pointer"
-                    />
+                    <div className="relative flex items-center">
+                      <input
+                        type="text"
+                        placeholder="dd/mm/yyyy (VD: 15/05/2025)"
+                        value={editInstallationDate || ''}
+                        onChange={(e) => setEditInstallationDate(e.target.value)}
+                        className="w-full pl-3 pr-9 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl font-mono text-xs text-slate-800 dark:text-slate-200 outline-none focus:border-sky-500"
+                      />
+                      <input
+                        type="date"
+                        id="hidden-installation-date-picker"
+                        value={toHtmlDateStr(editInstallationDate)}
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            setEditInstallationDate(fromHtmlDateStr(e.target.value));
+                          }
+                        }}
+                        className="opacity-0 absolute w-0 h-0 pointer-events-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const el = document.getElementById('hidden-installation-date-picker') as HTMLInputElement;
+                          if (el) {
+                            if ('showPicker' in el) (el as any).showPicker();
+                            else { el.focus(); el.click(); }
+                          }
+                        }}
+                        className="absolute right-2 p-1 text-slate-400 hover:text-sky-600 rounded cursor-pointer"
+                        title="Bấm để chọn ngày"
+                      >
+                        <Calendar className="w-3.5 h-3.5 text-sky-500" />
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Ngày hẹn xử lý dự kiến */}
+                  {/* Ngày hẹn xử lý dự kiến (Format dd/mm/yyyy) */}
                   <div className="space-y-1">
-                    <label className="text-muted-foreground flex items-center gap-1 font-semibold text-[11px]">
-                      <Clock className="w-3 h-3 text-amber-500" />
-                      Ngày hẹn xử lý dự kiến:
+                    <label className="text-slate-600 dark:text-slate-300 flex items-center justify-between font-semibold text-[11px]">
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-amber-500" />
+                        Ngày hẹn xử lý dự kiến:
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">dd/mm/yyyy</span>
                     </label>
-                    <input
-                      type="date"
-                      value={toHtmlDateStr(editExpectedDate)}
-                      onChange={(e) => setEditExpectedDate(fromHtmlDateStr(e.target.value))}
-                      className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500/20 text-xs font-semibold text-amber-600 dark:text-amber-400 cursor-pointer"
-                    />
+                    <div className="relative flex items-center">
+                      <input
+                        type="text"
+                        placeholder="dd/mm/yyyy (VD: 20/07/2026)"
+                        value={editExpectedDate || ''}
+                        onChange={(e) => setEditExpectedDate(e.target.value)}
+                        className="w-full pl-3 pr-9 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl font-mono text-xs text-amber-600 dark:text-amber-400 font-bold outline-none focus:border-sky-500"
+                      />
+                      <input
+                        type="date"
+                        id="hidden-expected-date-picker"
+                        value={toHtmlDateStr(editExpectedDate)}
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            setEditExpectedDate(fromHtmlDateStr(e.target.value));
+                          }
+                        }}
+                        className="opacity-0 absolute w-0 h-0 pointer-events-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const el = document.getElementById('hidden-expected-date-picker') as HTMLInputElement;
+                          if (el) {
+                            if ('showPicker' in el) (el as any).showPicker();
+                            else { el.focus(); el.click(); }
+                          }
+                        }}
+                        className="absolute right-2 p-1 text-slate-400 hover:text-sky-600 rounded cursor-pointer"
+                        title="Bấm để chọn ngày"
+                      >
+                        <Calendar className="w-3.5 h-3.5 text-amber-500" />
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Ngày hoàn thành thực tế */}
+                  {/* Ngày hoàn thành thực tế (Format dd/mm/yyyy) */}
                   <div className="space-y-1 md:col-span-2">
-                    <label className="text-muted-foreground flex items-center gap-1 font-semibold text-[11px]">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                      Ngày hoàn thành thực tế:
+                    <label className="text-slate-600 dark:text-slate-300 flex items-center justify-between font-semibold text-[11px]">
+                      <span className="flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                        Ngày hoàn thành thực tế:
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">dd/mm/yyyy</span>
                     </label>
-                    <input
-                      type="date"
-                      value={toHtmlDateStr(editCompletedDate)}
-                      onChange={(e) => setEditCompletedDate(fromHtmlDateStr(e.target.value))}
-                      className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500/20 text-xs font-semibold text-emerald-600 dark:text-emerald-400 cursor-pointer"
-                    />
+                    <div className="relative flex items-center">
+                      <input
+                        type="text"
+                        placeholder="dd/mm/yyyy (VD: 25/07/2026)"
+                        value={editCompletedDate || ''}
+                        onChange={(e) => setEditCompletedDate(e.target.value)}
+                        className="w-full pl-3 pr-9 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400 outline-none focus:border-sky-500"
+                      />
+                      <input
+                        type="date"
+                        id="hidden-completed-date-picker"
+                        value={toHtmlDateStr(editCompletedDate)}
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            setEditCompletedDate(fromHtmlDateStr(e.target.value));
+                          }
+                        }}
+                        className="opacity-0 absolute w-0 h-0 pointer-events-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const el = document.getElementById('hidden-completed-date-picker') as HTMLInputElement;
+                          if (el) {
+                            if ('showPicker' in el) (el as any).showPicker();
+                            else { el.focus(); el.click(); }
+                          }
+                        }}
+                        className="absolute right-2 p-1 text-slate-400 hover:text-sky-600 rounded cursor-pointer"
+                        title="Bấm để chọn ngày"
+                      >
+                        <Calendar className="w-3.5 h-3.5 text-emerald-500" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
+
 
               {/* POSM & Technical Details (Read-only Info) */}
               <div className="space-y-2">

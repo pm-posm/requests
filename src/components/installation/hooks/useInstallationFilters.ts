@@ -122,24 +122,30 @@ export function useInstallationFilters(
         // Split comma-separated combined statuses from Sheet cells (e.g. "Installation QC Failed, Completed")
         st.split(',').forEach(part => {
           const cleanPart = part.trim();
-          if (cleanPart) statusSet.add(cleanPart);
+          if (cleanPart && cleanPart !== 'Warranty - Uninstall' && cleanPart !== 'Warranty-Uninstall') {
+            statusSet.add(cleanPart);
+          }
         });
       }
     });
 
-    // 2. Default Data Validation fallback statuses (ensures valid options exist even if sheet rows are new)
+    // 2. Default Data Validation fallback statuses (1:1 with Google Sheet Column Z validation rules)
     const DEFAULT_VALIDATION_STATUSES = [
-      'New',
-      'Pending Install',
       'Completed',
-      'Installation QC Failed',
-      'Supplier chưa gửi Report',
+      'Pending Install',
+      'New',
+      'QC Failed',
       'Cancelled',
-      'Warranty - Uninstall',
-      'QC Passed'
+      'Installation QC Failed',
+      'QC Passed',
+      'Supplier chưa gửi Report'
     ];
 
     DEFAULT_VALIDATION_STATUSES.forEach(st => statusSet.add(st));
+
+    // Ensure Warranty - Uninstall is NEVER included in Status options
+    statusSet.delete('Warranty - Uninstall');
+    statusSet.delete('Warranty-Uninstall');
 
     // Sort in Vietnamese alphabetical order
     return Array.from(statusSet).sort((a, b) => a.localeCompare(b, 'vi'));
@@ -209,30 +215,46 @@ export function useInstallationFilters(
       const brandCode = firstRow.brandCode || '';
 
       let completed = 0;
+      let failed = 0;
+      let cancelled = 0;
+      let processed = 0;
       let installing = 0;
       let qcFailed = 0;
       let lateCount = 0;
       let overdueCount = 0;
       let warranty = 0;
-      let cancelled = 0;
 
       stores.forEach(s => {
         const res = calculateInstallationResult(s.actualTime, s.completionTime, s.status, s.resultSign);
         const alert = getActualTimeAlert(s.actualTime, s.completionTime, s.status);
         if (alert.state === 'OVERDUE') overdueCount++;
 
-        if (res.sign === '✔') completed++;
-        else if (res.failReason === 'QC_FAIL') qcFailed++;
-        else if (res.failReason === 'LATE') lateCount++;
+        const st = (s.status || '').toLowerCase().trim();
+        const isCancelled = st.includes('cancelled') || st.includes('cancel') || st.includes('hủy');
 
-        const st = (s.status || '').toLowerCase();
-        if (st.includes('thi công') || st.includes('lắp đặt') || st.includes('progress')) installing++;
-        else if (st.includes('warranty') || st.includes('bảo hành') || st.includes('tháo dỡ')) warranty++;
-        else if (st.includes('cancel') || st.includes('hủy')) cancelled++;
+        if (res.sign === '✔') {
+          completed++;
+          processed++;
+        } else if (res.sign === '❌') {
+          failed++;
+          processed++;
+          if (res.failReason === 'QC_FAIL') qcFailed++;
+          else if (res.failReason === 'LATE') lateCount++;
+        } else if (isCancelled) {
+          cancelled++;
+          processed++;
+        } else if (st.includes('completed') || st.includes('qc passed') || s.completionTime) {
+          completed++;
+          processed++;
+        } else if (st.includes('thi công') || st.includes('lắp đặt') || st.includes('progress')) {
+          installing++;
+        } else if (st.includes('warranty') || st.includes('bảo hành') || st.includes('tháo dỡ')) {
+          warranty++;
+        }
       });
 
       const total = stores.length;
-      const completedRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+      const completedRate = total > 0 ? Math.round((processed / total) * 100) : 0;
 
       const timeSet = stores.map(s => s.actualTime).filter(t => t && t.trim());
       const actualTimeRange = timeSet.length > 0 ? timeSet[0] : 'Xem từng cửa hàng';
@@ -277,12 +299,14 @@ export function useInstallationFilters(
         stats: {
           total,
           completed,
+          failed,
+          cancelled,
+          processed,
           installing,
           qcFailed,
           lateCount,
           overdueCount,
           warranty,
-          cancelled,
           completedRate
         }
       });
@@ -427,6 +451,7 @@ export function useInstallationFilters(
 
     const catMap: Record<string, number> = {};
     const issueAuditList: InstallationItem[] = [];
+    const completedItems: InstallationItem[] = [];
     const noReportOrCancelledItems: InstallationItem[] = [];
 
     filteredAnalystRows.forEach(row => {
@@ -464,6 +489,7 @@ export function useInstallationFilters(
       const isCancelled = statusLower.includes('cancelled') || statusLower.includes('cancel') || statusLower.includes('hủy');
       const isNoReport = noteLower.includes('chưa gửi report') || statusLower.includes('chưa gửi report') || statusLower.includes('no report');
       const isQCFailed = statusLower.includes('installation qc failed') || statusLower.includes('qc failed') || statusLower.includes('failed') || statusLower.includes('lỗi');
+      const isNew = statusLower === 'new' || statusLower === 'mới' || statusLower === 'chưa thi công' || statusLower === 'chưa thực hiện';
 
       if (isCancelled) {
         cancelledCount++;
@@ -481,25 +507,24 @@ export function useInstallationFilters(
         noActualTimeTotalCount++;
         supplierMap[supplierKey].noActualTime++;
         supplierMap[supplierKey].noActualTimeItems.push(row);
+        if (!isNew) {
+          issueAuditList.push(row);
+        }
       } else {
         activeExecutedTotalCount++;
         supplierMap[supplierKey].activeExecuted++;
         supplierMap[supplierKey].activeExecutedItems.push(row);
 
-        if (res.isLateOrFailed || resultSign === '❌' || isQCFailed) {
-          issueCount++;
-          if (resultSign === 'OVERDUE_RED') overdueCount++;
-          supplierMap[supplierKey].issue++;
-          supplierMap[supplierKey].issueItems.push(row);
-          issueAuditList.push(row);
-        } else if (resultSign === '✔' || statusLower.includes('completed') || statusLower.includes('pass')) {
+        if (res.sign === '✔' || statusLower.includes('pass')) {
           completed++;
           supplierMap[supplierKey].success++;
           supplierMap[supplierKey].completedItems.push(row);
-        } else {
-          unupdatedCount++;
-          supplierMap[supplierKey].unupdated++;
-          supplierMap[supplierKey].unupdatedItems.push(row);
+          completedItems.push(row);
+        } else if (!isNew) {
+          issueCount++;
+          if (res.sign === '❌' || isQCFailed) supplierMap[supplierKey].issue++;
+          supplierMap[supplierKey].issueItems.push(row);
+          issueAuditList.push(row);
         }
       }
 
@@ -532,6 +557,8 @@ export function useInstallationFilters(
       unupdatedCount,
       completionRate,
       noReportOrCancelledItems,
+      completedItems,
+      allAnalystItems: filteredAnalystRows,
       supplierMap: Object.values(supplierMap).sort((a, b) => b.total - a.total),
       catMap: Object.entries(catMap).sort((a, b) => b[1] - a[1]),
       issueAuditList

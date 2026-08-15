@@ -2,969 +2,878 @@ import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import type { RawRequestRecord } from '@/services/sheetSyncService';
-import type { StoreItem, StorePhase } from '@/types';
-import { computePhaseStatus } from '@/hooks/useStorePhases';
+import { fetchInstallationItems, type InstallationItem } from '@/services/installationSyncService';
 import { normalizeDataResponser } from '@/services/sheetSyncService';
 import { useRawRequests } from '@/hooks/useRawRequests';
-import { StorePlanCommandCenterHeader } from '@/components/Dashboard/StorePlanCommandCenterHeader';
 import { 
-    Search, Store, FolderKanban, ArrowLeft, Hash, Copy, Check, Eye, ExternalLink, 
-    CheckCircle2, Clock, Building2, User, Layers, FileText, ArrowRight, ShieldCheck, Mail, Briefcase, MessageSquare, X, CheckSquare, Sparkles, Calendar, Tag, Table, BarChart3 
+  Search, Store, ArrowLeft, Building2, User, Layers, FileText, CheckCircle2, 
+  Clock, AlertTriangle, Eye, X, MessageSquare, Calendar, Tag, ShieldCheck, 
+  Wrench, RefreshCw, Filter, ExternalLink
 } from 'lucide-react';
 
-interface ProjectDetailItem {
-    id?: string;
-    project_code: string;
-    project_name: string;
-    source: 'MASTER_STORE' | 'RAW_REQUEST';
-    current_phase?: string;
-    supplier_name?: string;
-    vis_tech?: string;
-    category?: string;
-    expected_start?: string | null;
-    expected_end?: string | null;
-    status_label?: string;
-    status_color?: string;
-    requestCount: number;
+interface ProjectGroupInStore {
+  projectCode: string;
+  projectName: string;
+  installationItems: InstallationItem[];
+  completedCount: number;
+  failedCount: number;
 }
 
-interface StoreGroupedData {
-    store_code: string;
-    store_name: string;
-    customer: string;
-    ka: string;
-    region: string;
-    sr_name: string;
-    mer_name: string;
-    masterStoreProjects: ProjectDetailItem[];
-    requests: RawRequestRecord[];
-    totalRequests: number;
-    completedRequests: number;
-    inProgressRequests: number;
-    toDoRequests: number;
-    completionPercentage: number;
+interface StoreGroupData {
+  store_key: string;
+  store_code: string;
+  store_name: string;
+  customer: string;
+  region: string;
+  sr_name: string;
+  mer_name: string;
+
+  // 1. Data Tab Request (MER VIEW 2026)
+  requests: RawRequestRecord[];
+  requestCount: number;
+  completedRequestsCount: number;
+  inProgressRequestsCount: number;
+
+  // 2. Data Tab Theo Dõi Lắp Đặt (UPDATE TRACKING INSTALLATION)
+  installationItems: InstallationItem[];
+  installationCount: number;
+  projects: ProjectGroupInStore[];
+  projectCount: number;
+  completedInstallationsCount: number;
+  failedInstallationsCount: number;
+
+  // Combined Progress
+  totalItemsCount: number;
+  totalCompletedCount: number;
+  completionPercentage: number;
 }
 
 export function StorePlanBoardPage() {
-    const [activeModuleTab, setActiveModuleTab] = useState<'DATA_LIST' | 'ANALYST'>('DATA_LIST');
-    const [searchTerm, setSearchTerm] = useState('');
-    const [regionFilter, setRegionFilter] = useState('ALL');
-    const [customerFilter, setCustomerFilter] = useState('ALL');
-    const [statusFilter, setStatusFilter] = useState('ALL');
-    const [projectPhaseFilter, setProjectPhaseFilter] = useState('ALL');
-    const [activeQuickFilter, setActiveQuickFilter] = useState<'ALL' | 'COMPLETED' | 'IN_PROGRESS' | 'BEHIND_SCHEDULE'>('ALL');
-    
-    // State for viewing a specific Store Detail Component by Key
-    const [selectedStoreKey, setSelectedStoreKey] = useState<string | null>(null);
-    const [activeDetailTab, setActiveDetailTab] = useState<'PROJECTS' | 'REQUESTS'>('PROJECTS');
-    const [selectedDataResponserRecord, setSelectedDataResponserRecord] = useState<RawRequestRecord | null>(null);
-    const [selectedNotesRecord, setSelectedNotesRecord] = useState<RawRequestRecord | null>(null);
-
-    const { updateRequest } = useRawRequests();
-
-    // 1. Fetch raw requests from Supabase
-    const { data: requests = [], isLoading: isLoadingRequests } = useQuery<RawRequestRecord[]>({
-        queryKey: ['raw_requests_store_plan'],
-        queryFn: async () => {
-            const { data, error } = await supabase
-                .from('raw_requests')
-                .select('*')
-                .eq('is_deleted_in_sheet', false)
-                .order('sheet_row_index', { ascending: true });
-
-            if (error) throw error;
-            return data as RawRequestRecord[];
-        }
-    });
-
-    // 2. Fetch master store directory for metadata
-    const { data: masterStores = [] } = useQuery({
-        queryKey: ['master_stores_metadata'],
-        queryFn: async () => {
-            const { data, error } = await supabase
-                .from('master_stores_directory')
-                .select('store_code, store_name, customer, ka, region, mer_name, sr_name');
-            
-            if (error) return [];
-            return data || [];
-        },
-        staleTime: 5 * 60 * 1000
-    });
-
-    // 3. Fetch ONLY PUBLISHED projects from Master Store Items (`project_store_items` where is_published = true)
-    const { data: storeItems = [] } = useQuery<StoreItem[]>({
-        queryKey: ['project_store_items_master_published_only'],
-        queryFn: async () => {
-            const { data, error } = await supabase
-                .from('project_store_items')
-                .select('*')
-                .eq('is_published', true);
-            
-            if (error) {
-                console.error("Error fetching project_store_items:", error);
-                return [];
-            }
-            return data || [];
-        }
-    });
-
-    // 4. Fetch store phases for timelines
-    const { data: storePhases = [] } = useQuery<StorePhase[]>({
-        queryKey: ['project_store_phases_all'],
-        queryFn: async () => {
-            const { data, error } = await supabase
-                .from('project_store_phases')
-                .select('*');
-            if (error) return [];
-            return data || [];
-        }
-    });
-
-    // Fast lookup maps
-    const masterStoresMap = useMemo(() => {
-        const map = new Map<string, any>();
-        masterStores.forEach(s => {
-            if (s.store_code) map.set(s.store_code.toUpperCase().trim(), s);
-        });
-        return map;
-    }, [masterStores]);
-
-    // 5. Group requests & published master projects by Store
-    const storeGroups = useMemo<StoreGroupedData[]>(() => {
-        const map = new Map<string, StoreGroupedData>();
-
-        // Helper to get or create store entry
-        const getOrCreateStore = (storeCodeRaw: string, storeNameRaw?: string) => {
-            const storeCode = (storeCodeRaw || '').toUpperCase().trim() || 'NO_CODE';
-            const storeName = storeNameRaw?.trim() || 'Cửa hàng chưa xác định';
-            const storeKey = storeCode !== 'NO_CODE' ? storeCode : `NAME_${storeName}`;
-
-            const masterInfo = masterStoresMap.get(storeCode);
-
-            if (!map.has(storeKey)) {
-                map.set(storeKey, {
-                    store_code: storeCode !== 'NO_CODE' ? storeCode : '-',
-                    store_name: storeName,
-                    customer: masterInfo?.customer || '-',
-                    ka: masterInfo?.ka || '-',
-                    region: masterInfo?.region || '-',
-                    sr_name: masterInfo?.sr_name || '-',
-                    mer_name: masterInfo?.mer_name || '-',
-                    masterStoreProjects: [],
-                    requests: [],
-                    totalRequests: 0,
-                    completedRequests: 0,
-                    inProgressRequests: 0,
-                    toDoRequests: 0,
-                    completionPercentage: 0
-                });
-            }
-            return map.get(storeKey)!;
-        };
-
-        // A. Populate ONLY from Published Master Store Items (`project_store_items` where is_published = true)
-        storeItems.forEach(si => {
-            const group = getOrCreateStore(si.store_code, si.store_name);
-            if (si.customer && group.customer === '-') group.customer = si.customer;
-            if (si.ka && group.ka === '-') group.ka = si.ka;
-            if (si.region && group.region === '-') group.region = si.region;
-            if (si.sr && group.sr_name === '-') group.sr_name = si.sr;
-            if (si.vis_tech && group.mer_name === '-') group.mer_name = si.vis_tech;
-
-            const prjName = si.final_project || si.project_name || 'Dự án chưa đặt tên';
-            const existingPrj = group.masterStoreProjects.find(p => p.project_name === prjName);
-
-            if (!existingPrj) {
-                // Find matching phase data for timeline
-                const phaseData = storePhases.find(p => p.store_item_id === si.id && p.phase === (si.current_phase || 'Brief'));
-                const computed = computePhaseStatus(phaseData);
-
-                group.masterStoreProjects.push({
-                    id: si.id,
-                    project_code: prjName,
-                    project_name: prjName,
-                    source: 'MASTER_STORE',
-                    current_phase: si.current_phase || 'Brief',
-                    supplier_name: si.supplier_name || '-',
-                    vis_tech: si.vis_tech || '-',
-                    category: si.category || 'POSM',
-                    expected_start: phaseData?.expected_start,
-                    expected_end: phaseData?.expected_end,
-                    status_label: computed.label,
-                    status_color: computed.status === 'completed' ? 'emerald' : computed.status === 'late' ? 'rose' : computed.status === 'in_progress' ? 'indigo' : 'slate',
-                    requestCount: 0
-                });
-            }
-        });
-
-        // B. Populate from Raw Requests (`raw_requests`)
-        requests.forEach(r => {
-            const group = getOrCreateStore(r.ess_store_code, r.store_name);
-            group.requests.push(r);
-
-            if (r.customer && group.customer === '-') group.customer = r.customer;
-            if (r.sr && group.sr_name === '-') group.sr_name = r.sr;
-            if (r.mer && group.mer_name === '-') group.mer_name = r.mer;
-
-            // Increment requestCount for matching published projects
-            const prjCode = r.ma_du_an?.trim() || r.title_email_request?.trim();
-            if (prjCode) {
-                let prj = group.masterStoreProjects.find(p => p.project_code === prjCode || p.project_name === prjCode);
-                if (prj) {
-                    prj.requestCount++;
-                }
-            }
-
-            // Categorize completion status
-            const tienDo = (r.tien_do || '').toLowerCase();
-            const status = (r.status || '').toLowerCase();
-
-            if (status.includes('cancel') || status.includes('reject') || tienDo.includes('hoàn thành') || status.includes('approve')) {
-                group.completedRequests++;
-            } else if (tienDo.includes('vis') || tienDo.includes('supplier') || tienDo.includes('quick fix') || status.includes('review') || status.includes('sent')) {
-                group.inProgressRequests++;
-            } else {
-                group.toDoRequests++;
-            }
-        });
-
-        // Compute completion percentage
-        return Array.from(map.values()).map(group => {
-            group.totalRequests = group.requests.length;
-            group.completionPercentage = group.totalRequests > 0 
-                ? Math.round((group.completedRequests / group.totalRequests) * 100) 
-                : 0;
-            return group;
-        });
-    }, [requests, storeItems, storePhases, masterStoresMap]);
-
-    // Dynamic Filter Options
-    const regionsList = useMemo(() => {
-        const set = new Set<string>();
-        storeGroups.forEach(g => { if (g.region && g.region !== '-') set.add(g.region); });
-        return Array.from(set).sort();
-    }, [storeGroups]);
-
-    const customersList = useMemo(() => {
-        const set = new Set<string>();
-        storeGroups.forEach(g => { if (g.customer && g.customer !== '-') set.add(g.customer); });
-        return Array.from(set).sort();
-    }, [storeGroups]);
-
-    // Unique Project Phases for filter
-    const projectPhasesList = useMemo(() => {
-        const set = new Set<string>();
-        storeGroups.forEach(g => {
-            g.masterStoreProjects.forEach(p => {
-                if (p.current_phase) set.add(p.current_phase);
-            });
-        });
-        return Array.from(set).sort();
-    }, [storeGroups]);
-
-    // Filter Store Groups
-    const filteredStoreGroups = useMemo(() => {
-        return storeGroups.filter(g => {
-            const matchesSearch = !searchTerm.trim() || 
-                g.store_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                g.store_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                g.mer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                g.sr_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                g.masterStoreProjects.some(p => p.project_code.toLowerCase().includes(searchTerm.toLowerCase()) || p.project_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                g.requests.some(r => (r.request_id || '').toLowerCase().includes(searchTerm.toLowerCase()) || (r.posm || '').toLowerCase().includes(searchTerm.toLowerCase()));
-
-            const matchesRegion = regionFilter === 'ALL' || g.region === regionFilter;
-            const matchesCustomer = customerFilter === 'ALL' || g.customer === customerFilter;
-
-            let matchesStatus = true;
-            if (statusFilter === 'COMPLETED') matchesStatus = g.completionPercentage === 100;
-            else if (statusFilter === 'IN_PROGRESS') matchesStatus = g.inProgressRequests > 0 || (g.completionPercentage > 0 && g.completionPercentage < 100);
-            else if (statusFilter === 'TO_DO') matchesStatus = g.toDoRequests > 0 && g.completionPercentage === 0;
-
-            let matchesPhase = true;
-            if (projectPhaseFilter !== 'ALL') {
-                matchesPhase = g.masterStoreProjects.some(p => p.current_phase === projectPhaseFilter);
-            }
-
-            let matchesQuick = true;
-            if (activeQuickFilter === 'COMPLETED') matchesQuick = g.completionPercentage === 100;
-            else if (activeQuickFilter === 'IN_PROGRESS') matchesQuick = g.inProgressRequests > 0 || (g.completionPercentage > 0 && g.completionPercentage < 100);
-            else if (activeQuickFilter === 'BEHIND_SCHEDULE') matchesQuick = g.completionPercentage < 50;
-
-            return matchesSearch && matchesRegion && matchesCustomer && matchesStatus && matchesPhase && matchesQuick;
-        });
-    }, [storeGroups, searchTerm, regionFilter, customerFilter, statusFilter, projectPhaseFilter, activeQuickFilter]);
-
-    // Resolve currently selected store object safely
-    const selectedStore = useMemo(() => {
-        if (!selectedStoreKey) return null;
-        return storeGroups.find(g => (g.store_code !== '-' && g.store_code === selectedStoreKey) || g.store_name === selectedStoreKey) || null;
-    }, [selectedStoreKey, storeGroups]);
-
-    // Modals Component Renderer Helper
-    const renderSharedModals = () => (
-        <>
-            {/* Notes Viewer Modal for SR note, Vis note, Mer note */}
-            {selectedNotesRecord && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-                    <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col">
-                        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900">
-                            <div className="flex items-center gap-2">
-                                <MessageSquare className="w-5 h-5 text-blue-600" />
-                                <div>
-                                    <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                                        Chi Tiết 3 Ghi Chú Request
-                                    </h3>
-                                    <p className="text-[11px] text-slate-500">
-                                        Store: {selectedNotesRecord.store_name} ({selectedNotesRecord.ess_store_code})
-                                    </p>
-                                </div>
-                            </div>
-                            <button onClick={() => setSelectedNotesRecord(null)} className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-
-                        <div className="p-5 space-y-4 text-xs overflow-y-auto max-h-[70vh]">
-                            {/* 1. SR Note */}
-                            <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1">
-                                <span className="font-bold text-slate-800 dark:text-slate-200 block text-[11px]">
-                                    📌 SR Note:
-                                </span>
-                                <div className="text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
-                                    {selectedNotesRecord.sr_note || <span className="text-slate-400 italic">Chưa có ghi chú lỗi chi tiết từ SR</span>}
-                                </div>
-                            </div>
-
-                            {/* 2. Vis Note */}
-                            <div className="p-3 bg-sky-50/60 dark:bg-sky-950/40 rounded-xl border border-sky-200 dark:border-sky-800 space-y-1">
-                                <span className="font-bold text-sky-900 dark:text-sky-200 block text-[11px]">
-                                    🏢 Vis Note:
-                                </span>
-                                <div className="text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
-                                    {selectedNotesRecord.vis_note || <span className="text-slate-400 italic">Chưa có phản hồi từ Team Vis văn phòng</span>}
-                                </div>
-                            </div>
-
-                            {/* 3. Mer Note */}
-                            <div className="p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1.5">
-                                <div className="flex items-center justify-between">
-                                    <span className="font-bold text-slate-900 dark:text-slate-100 text-[11px] flex items-center gap-1.5">
-                                        🛠️ Mer Note:
-                                    </span>
-                                    <span className="text-[10px] font-bold text-sky-700 dark:text-sky-300 bg-sky-100 dark:bg-sky-900/60 px-2 py-0.5 rounded border border-sky-200 dark:border-sky-800">
-                                        ✍️ Tự động lưu & Auto-Push Sheet
-                                    </span>
-                                </div>
-                                <textarea
-                                    defaultValue={selectedNotesRecord.mer_note || ''}
-                                    placeholder="Nhập ghi chú xử lý của Mer tại đây..."
-                                    onBlur={(e) => {
-                                        const val = e.target.value;
-                                        if (val !== (selectedNotesRecord.mer_note || '')) {
-                                            updateRequest(selectedNotesRecord.id!, { mer_note: val });
-                                            setSelectedNotesRecord({ ...selectedNotesRecord, mer_note: val });
-                                        }
-                                    }}
-                                    className="w-full p-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 font-medium focus:ring-2 focus:ring-sky-500 outline-none resize-y min-h-[80px]"
-                                />
-                                <p className="text-[10px] text-slate-500 italic">
-                                    💡 Ghi chú sẽ tự động được lưu trên Dashboard & Auto-push về Google Sheet Source!
-                                </p>
-                            </div>
-
-                        </div>
-
-                        <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 flex justify-end">
-                            <button
-                                onClick={() => setSelectedNotesRecord(null)}
-                                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-xs cursor-pointer"
-                            >
-                                Đóng
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Data Responser Detail Modal */}
-            {selectedDataResponserRecord && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-                    <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[90vh]">
-                        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900">
-                            <div className="flex items-center gap-2">
-                                <Eye className="w-5 h-5 text-amber-600" />
-                                <div>
-                                    <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                                        Chi Tiết Data Responser
-                                    </h3>
-                                    <p className="text-[11px] text-slate-500">
-                                        Store: {selectedDataResponserRecord.store_name} ({selectedDataResponserRecord.ess_store_code})
-                                    </p>
-                                </div>
-                            </div>
-                            <button onClick={() => setSelectedDataResponserRecord(null)} className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-
-                        <div className="p-5 space-y-3 text-xs overflow-y-auto custom-scrollbar">
-                            <div className="p-3 bg-amber-50/60 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-800 font-mono text-slate-800 dark:text-slate-200 text-xs leading-relaxed select-all">
-                                {normalizeDataResponser(selectedDataResponserRecord.data_responser)}
-                            </div>
-                            <details className="pt-1">
-                                <summary className="text-[11px] text-slate-400 hover:text-slate-600 cursor-pointer font-mono">
-                                    ▶ Xem chuỗi JSON gốc từ SharePoint
-                                </summary>
-                                <div className="p-2.5 bg-slate-900 text-emerald-400 rounded-lg font-mono text-[11px] break-all mt-2 select-all overflow-x-auto">
-                                    {selectedDataResponserRecord.data_responser}
-                                </div>
-                            </details>
-                        </div>
-
-                        <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 flex justify-end">
-                            <button
-                                onClick={() => setSelectedDataResponserRecord(null)}
-                                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-xs cursor-pointer"
-                            >
-                                Đóng
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-        </>
-    );
-
-    // --- RENDER 1: DETAILED STORE COMPONENT (IF A STORE IS CLICKED) ---
-    if (selectedStore) {
-        return (
-            <div className="p-6 h-[calc(100vh-64px)] overflow-y-auto bg-slate-50 dark:bg-slate-900 custom-scrollbar">
-                <div className="max-w-7xl mx-auto space-y-6">
-                    
-                    {/* Top Bar with Back Button */}
-                    <div className="flex items-center justify-between">
-                        <button
-                            onClick={() => setSelectedStoreKey(null)}
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 rounded-xl font-bold text-xs text-slate-700 dark:text-slate-200 shadow-2xs transition-colors cursor-pointer"
-                        >
-                            <ArrowLeft className="w-4 h-4 text-indigo-600" />
-                            Quay lại danh sách Cửa hàng
-                        </button>
-                    </div>
-
-                    {/* Store Information Card Header */}
-                    <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
-                        <div className="space-y-2">
-                            <div className="flex flex-wrap items-center gap-2">
-                                <span className="font-mono text-xs font-black bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800">
-                                    {selectedStore.store_code}
-                                </span>
-                                <span className="text-xs font-bold text-slate-500">
-                                    Hệ thống: {selectedStore.customer} {selectedStore.ka !== '-' ? `/ ${selectedStore.ka}` : ''}
-                                </span>
-                            </div>
-                            <h1 className="text-2xl font-black text-slate-900 dark:text-white">
-                                {selectedStore.store_name}
-                            </h1>
-                            <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500">
-                                <span className="flex items-center gap-1.5 font-medium">
-                                    <User className="w-4 h-4 text-indigo-500" />
-                                    SR: <strong className="text-slate-800 dark:text-slate-200">{selectedStore.sr_name}</strong>
-                                </span>
-                                <span>•</span>
-                                <span className="flex items-center gap-1.5 font-medium">
-                                    <Building2 className="w-4 h-4 text-blue-500" />
-                                    Mer: <strong className="text-slate-800 dark:text-slate-200">{selectedStore.mer_name}</strong>
-                                </span>
-                            </div>
-                        </div>
-
-                        {/* Progress Stats Box */}
-                        <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
-                            <div>
-                                <span className="text-[10px] text-slate-400 font-bold block uppercase">Tiến Độ Store:</span>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                    <span className="text-xl font-black text-indigo-600 dark:text-indigo-400">
-                                        {selectedStore.completionPercentage}%
-                                    </span>
-                                    <span className="text-xs text-slate-500 font-semibold">
-                                        ({selectedStore.completedRequests}/{selectedStore.totalRequests} Xong)
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* 2 Clean Component Tabs: TAB 1: DỰ ÁN vs TAB 2: REQUEST POSM */}
-                    <div className="border-b border-slate-200 dark:border-slate-800 flex items-center gap-4">
-                        <button
-                            onClick={() => setActiveDetailTab('PROJECTS')}
-                            className={`flex items-center gap-2 px-5 py-3 font-bold text-xs border-b-2 transition-all cursor-pointer ${
-                                activeDetailTab === 'PROJECTS'
-                                    ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-800 rounded-t-xl'
-                                    : 'border-transparent text-slate-500 hover:text-slate-800'
-                            }`}
-                        >
-                            <Layers className="w-4 h-4" />
-                            <span>📁 TAB 1: DỰ ÁN ĐANG CHẠY ({selectedStore.masterStoreProjects.length})</span>
-                        </button>
-
-                        <button
-                            onClick={() => setActiveDetailTab('REQUESTS')}
-                            className={`flex items-center gap-2 px-5 py-3 font-bold text-xs border-b-2 transition-all cursor-pointer ${
-                                activeDetailTab === 'REQUESTS'
-                                    ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-800 rounded-t-xl'
-                                    : 'border-transparent text-slate-500 hover:text-slate-800'
-                            }`}
-                        >
-                            <FileText className="w-4 h-4" />
-                            <span>📋 TAB 2: REQUEST POSM CHI TIẾT ({selectedStore.requests.length})</span>
-                        </button>
-                    </div>
-
-                    {/* TAB 1 CONTENT: DỰ ÁN TỪ MASTER STORE */}
-                    {activeDetailTab === 'PROJECTS' && (
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden p-6 space-y-4">
-                            <div className="flex items-center justify-between">
-                                <h3 className="font-bold text-sm text-slate-800 dark:text-white flex items-center gap-2">
-                                    <Sparkles className="w-4 h-4 text-indigo-500" />
-                                    Danh Sách Các Dự Án Đang Triển Khai Tại Siêu Thị
-                                </h3>
-                            </div>
-
-                            {selectedStore.masterStoreProjects.length === 0 ? (
-                                <div className="p-8 text-center text-slate-400 text-xs italic">
-                                    Cửa hàng này chưa có Dự án nào được công bố từ Tổng hợp dự án.
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {selectedStore.masterStoreProjects.map((prj, i) => (
-                                        <div key={i} className="p-5 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3 shadow-2xs">
-                                            
-                                            {/* Header with Project Status Badge */}
-                                            <div className="flex items-start justify-between gap-3 border-b border-slate-200/80 dark:border-slate-800 pb-2.5">
-                                                <div className="font-extrabold text-sm text-slate-900 dark:text-white leading-snug">
-                                                    {prj.project_name}
-                                                </div>
-                                                {prj.status_label && (
-                                                    <span className={`shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-md border ${
-                                                        prj.status_color === 'emerald' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                                                        prj.status_color === 'rose' ? 'bg-rose-50 text-rose-700 border-rose-200' :
-                                                        'bg-indigo-50 text-indigo-700 border-indigo-200'
-                                                    }`}>
-                                                        {prj.status_label}
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            {/* 4 Separate Clean Metadata Fields */}
-                                            <div className="grid grid-cols-2 gap-3 text-xs pt-1">
-                                                <div className="p-2.5 bg-white dark:bg-slate-800 rounded-lg border border-slate-200/60 dark:border-slate-700 space-y-0.5">
-                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Giai đoạn (Phase)</span>
-                                                    <span className="font-bold text-indigo-600 dark:text-indigo-400">
-                                                        {prj.current_phase || 'Brief'}
-                                                    </span>
-                                                </div>
-
-                                                <div className="p-2.5 bg-white dark:bg-slate-800 rounded-lg border border-slate-200/60 dark:border-slate-700 space-y-0.5">
-                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block flex items-center gap-1">
-                                                        <Calendar className="w-3 h-3 text-slate-400" />
-                                                        Mốc thời gian
-                                                    </span>
-                                                    <span className="font-semibold text-slate-700 dark:text-slate-300 text-[11px]">
-                                                        {prj.expected_start ? (
-                                                            `${prj.expected_start} ${prj.expected_end ? `➔ ${prj.expected_end}` : ''}`
-                                                        ) : (
-                                                            'Chưa lên lịch'
-                                                        )}
-                                                    </span>
-                                                </div>
-
-                                                <div className="p-2.5 bg-white dark:bg-slate-800 rounded-lg border border-slate-200/60 dark:border-slate-700 space-y-0.5">
-                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block flex items-center gap-1">
-                                                        <Tag className="w-3 h-3 text-slate-400" />
-                                                        Loại POSM
-                                                    </span>
-                                                    <span className="font-bold text-slate-800 dark:text-slate-200">
-                                                        {prj.category || 'POSM'}
-                                                    </span>
-                                                </div>
-
-                                                <div className="p-2.5 bg-white dark:bg-slate-800 rounded-lg border border-slate-200/60 dark:border-slate-700 space-y-0.5">
-                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block flex items-center gap-1">
-                                                        <Building2 className="w-3 h-3 text-slate-400" />
-                                                        Nhà Cung Cấp
-                                                    </span>
-                                                    <span className="font-bold text-slate-800 dark:text-slate-200 truncate block">
-                                                        {prj.supplier_name && prj.supplier_name !== '-' ? prj.supplier_name : 'Chưa phân công'}
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* TAB 2 CONTENT: REQUEST POSM SUBTASKS WITH DATA RESPONSER & 3 NOTES VIEWER BUTTON */}
-                    {activeDetailTab === 'REQUESTS' && (
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                            <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                                <h3 className="font-bold text-sm text-slate-800 dark:text-white flex items-center gap-2">
-                                    <FileText className="w-4 h-4 text-indigo-500" />
-                                    Danh Sách Chi Tiết Request POSM (Liên kết Dự Án)
-                                </h3>
-                            </div>
-
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left text-xs">
-                                    <thead className="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold uppercase">
-                                        <tr>
-                                            <th className="p-3.5 bg-purple-50/50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300">Request ID</th>
-                                            <th className="p-3.5 min-w-[200px]">Mã & Tên Dự Án</th>
-                                            <th className="p-3.5">Hạng Mục POSM</th>
-                                            <th className="p-3.5">SR Yêu Cầu</th>
-                                            <th className="p-3.5">Phương Án</th>
-                                            <th className="p-3.5">Trạng Thái</th>
-                                            <th className="p-3.5">Thời Gian</th>
-                                            <th className="p-3.5 text-center">Data Responser</th>
-                                            <th className="p-3.5 text-center bg-blue-50/50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300">Ghi Chú (Notes)</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                                        {selectedStore.requests.map((r, rIdx) => (
-                                            <tr key={r.id || rIdx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                                                
-                                                {/* Request ID (Fix VIS-..., never REQ-#...) */}
-                                                <td className="p-3.5">
-                                                    {r.request_id ? (
-                                                        <div className="font-mono font-black text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-950 px-2.5 py-1 rounded-md border border-purple-200 dark:border-purple-800 shadow-2xs inline-flex items-center gap-1">
-                                                            📋 {r.request_id}
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-slate-400 text-xs font-mono font-medium">+ Subtask</span>
-                                                    )}
-                                                </td>
-
-                                                {/* Mã & Tên Dự Án (FIELD FORCE REQUEST) */}
-                                                <td className="p-3.5">
-                                                    <div className="font-mono font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
-                                                        <span>🏷️ {r.ma_du_an || 'FIELD FORCE REQUEST'}</span>
-                                                    </div>
-                                                    <div className="text-[11px] font-bold text-slate-800 dark:text-slate-200 leading-snug mt-0.5">
-                                                        {r.title_email_request || r.ma_du_an || 'Chưa liên kết tên dự án'}
-                                                    </div>
-                                                </td>
-
-                                                {/* Hạng mục POSM */}
-                                                <td className="p-3.5 font-semibold text-slate-800 dark:text-slate-200">
-                                                    {r.posm} {r.brand ? `(${r.brand})` : ''}
-                                                </td>
-
-                                                {/* SR Yêu cầu */}
-                                                <td className="p-3.5 font-medium">{r.sr || '-'}</td>
-
-                                                {/* Phương Án */}
-                                                <td className="p-3.5 font-semibold text-indigo-700 dark:text-indigo-300">
-                                                    {r.phuong_an || 'Visibility Request'}
-                                                </td>
-
-                                                {/* Trạng Thái */}
-                                                <td className="p-3.5">
-                                                    <span className="font-bold text-slate-900 dark:text-white px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                                                        {r.status || 'To Do'}
-                                                    </span>
-                                                </td>
-
-                                                {/* Thời gian */}
-                                                <td className="p-3.5 font-mono text-slate-600 dark:text-slate-400">
-                                                    {r.date_of_rq || '-'}
-                                                </td>
-
-                                                {/* Data Responser */}
-                                                <td className="p-3.5 text-center">
-                                                    {r.data_responser && r.data_responser.trim() !== '' ? (
-                                                        <button
-                                                            onClick={() => setSelectedDataResponserRecord(r)}
-                                                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-200 font-mono text-[11px] rounded-lg border border-amber-300 dark:border-amber-700 hover:border-amber-500 transition-colors cursor-pointer"
-                                                        >
-                                                            <span className="truncate max-w-[130px]">{normalizeDataResponser(r.data_responser)}</span>
-                                                            <Eye className="w-3 h-3 text-amber-600 shrink-0" />
-                                                        </button>
-                                                    ) : (
-                                                        <span className="text-slate-300 dark:text-slate-700 text-[10px] italic">Không có dữ liệu</span>
-                                                    )}
-                                                </td>
-
-                                                {/* Ghi Chú (Notes Viewer Button) */}
-                                                <td className="p-3.5 text-center">
-                                                    <button
-                                                        onClick={() => setSelectedNotesRecord(r)}
-                                                        className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-100 dark:bg-blue-950 text-blue-900 dark:text-blue-200 font-bold text-[11px] rounded-lg border border-blue-300 dark:border-blue-700 hover:border-blue-500 transition-colors cursor-pointer"
-                                                    >
-                                                        <MessageSquare className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                                                        <span>Xem 3 Ghi Chú</span>
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
-
-                </div>
-
-                {renderSharedModals()}
-            </div>
-        );
+  const [searchTerm, setSearchTerm] = useState('');
+  const [regionFilter, setRegionFilter] = useState('ALL');
+  const [customerFilter, setCustomerFilter] = useState('ALL');
+  const [quickFilter, setQuickFilter] = useState<'ALL' | 'HAS_REQUESTS' | 'HAS_INSTALLATIONS' | 'COMPLETED'>('ALL');
+  
+  // Selected Store state for drill-down view
+  const [selectedStoreKey, setSelectedStoreKey] = useState<string | null>(null);
+  const [activeDetailTab, setActiveDetailTab] = useState<'INSTALLATIONS' | 'REQUESTS'>('INSTALLATIONS');
+  
+  // Modals for Request details
+  const [selectedNotesRecord, setSelectedNotesRecord] = useState<RawRequestRecord | null>(null);
+  const [selectedDataResponserRecord, setSelectedDataResponserRecord] = useState<RawRequestRecord | null>(null);
+
+  const { updateRequest } = useRawRequests();
+
+  // 1. Fetch data from Tab Request (raw_requests table in Supabase)
+  const { data: requests = [], isLoading: isLoadingRequests, refetch: refetchRequests } = useQuery<RawRequestRecord[]>({
+    queryKey: ['raw_requests_store_plan_v2'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('raw_requests')
+        .select('*')
+        .eq('is_deleted_in_sheet', false)
+        .order('sheet_row_index', { ascending: true });
+
+      if (error) throw error;
+      return (data || []) as RawRequestRecord[];
     }
+  });
 
-    // --- RENDER 2: MASTER STORE TABLE VIEW (MAIN PAGE) ---
-    return (
-        <div className="p-6 h-[calc(100vh-64px)] overflow-y-auto bg-slate-50 dark:bg-slate-900 custom-scrollbar">
-            <div className="max-w-7xl mx-auto space-y-4">
-                
-                {/* 🚨 EXECUTIVE STORE PLAN COMMAND CENTER HEADER */}
-                {/* Header */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
-                            <FolderKanban className="w-8 h-8 text-indigo-600" />
-                            Kế Hoạch theo Store (Store Matrix Board)
-                        </h1>
-                        <p className="text-xs text-slate-500 mt-1">
-                            Tổng hợp danh sách Cửa hàng đang chạy Dự án & Request. Click dòng để mở trang chi tiết.
-                        </p>
-                    </div>
+  // 2. Fetch data from Tab Theo Dõi Lắp Đặt (UPDATE TRACKING INSTALLATION sheet CSV)
+  const { data: installationItems = [], isLoading: isLoadingInstallations, refetch: refetchInstallations } = useQuery<InstallationItem[]>({
+    queryKey: ['installation_items_store_plan_v2'],
+    queryFn: fetchInstallationItems,
+    staleTime: 5 * 60 * 1000,
+  });
 
-                    <div className="flex items-center gap-3">
-                        <div className="bg-white dark:bg-slate-800 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-2 shadow-2xs">
-                            <Store className="w-4 h-4 text-indigo-500" />
-                            <div>
-                                <span className="text-[10px] text-slate-400 font-bold block uppercase">Cửa Hàng Active:</span>
-                                <span className="font-bold text-xs text-slate-900 dark:text-white">{storeGroups.length} Store</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+  // 3. Fetch Master Stores Directory for Store metadata fallback
+  const { data: masterStores = [] } = useQuery({
+    queryKey: ['master_stores_metadata_v2'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('master_stores_directory')
+        .select('store_code, store_name, customer, ka, region, mer_name, sr_name');
+      if (error) return [];
+      return data || [];
+    },
+    staleTime: 5 * 60 * 1000
+  });
 
-                {/* MODULE INTERNAL NAVIGATION SUB-TABS */}
-                <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 w-fit">
-                    <button
-                        onClick={() => setActiveModuleTab('DATA_LIST')}
-                        className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                            activeModuleTab === 'DATA_LIST'
-                                ? 'bg-white dark:bg-slate-900 text-sky-600 dark:text-sky-400 shadow-sm'
-                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                        }`}
-                    >
-                        <Table className="w-4 h-4" />
-                        <span>Danh Sách Dữ Liệu</span>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 font-mono">
-                            {filteredStoreGroups.length}
-                        </span>
-                    </button>
+  const masterStoresMap = useMemo(() => {
+    const map = new Map<string, any>();
+    masterStores.forEach(s => {
+      if (s.store_code) map.set(s.store_code.toUpperCase().trim(), s);
+    });
+    return map;
+  }, [masterStores]);
 
-                    <button
-                        onClick={() => setActiveModuleTab('ANALYST')}
-                        className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                            activeModuleTab === 'ANALYST'
-                                ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-sm'
-                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                        }`}
-                    >
-                        <BarChart3 className="w-4 h-4" />
-                        <span>Báo Cáo & Thống Kê (Analyst)</span>
-                    </button>
-                </div>
+  // 4. Group all data primarily by STORE
+  const storeGroups = useMemo<StoreGroupData[]>(() => {
+    const map = new Map<string, StoreGroupData>();
 
-                {/* TAB 1: DEDICATED ANALYST / REPORTS WORKSPACE */}
-                {activeModuleTab === 'ANALYST' && (
-                    <div className="space-y-4 animate-in fade-in duration-200">
-                        <StorePlanCommandCenterHeader
-                            storesData={storeGroups}
-                            activeQuickFilter={activeQuickFilter}
-                            onSelectQuickFilter={setActiveQuickFilter}
-                        />
-                    </div>
-                )}
+    const getOrCreateStore = (storeCodeRaw?: string, storeNameRaw?: string) => {
+      const storeCode = (storeCodeRaw || '').toUpperCase().trim();
+      const storeName = (storeNameRaw || '').trim() || 'Cửa hàng chưa đặt tên';
+      
+      const isCodeValid = storeCode !== '' && storeCode !== '-' && storeCode !== 'N/A';
+      const storeKey = isCodeValid ? storeCode : `NAME_${storeName.toUpperCase()}`;
 
-                {/* TAB 2: CLEAN OPERATIONAL DATA LIST WORKSPACE */}
-                {activeModuleTab === 'DATA_LIST' && (
-                    <div className="space-y-4">
+      const masterInfo = isCodeValid ? masterStoresMap.get(storeCode) : null;
 
-                        {/* Filter & Search Bar */}
-                <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-4">
-                    <div className="relative flex-1 min-w-[280px]">
-                        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input
-                            type="text"
-                            placeholder="Tìm theo Siêu thị, Mã Store, Mã Dự Án, SR, Mer..."
-                            value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
-                            className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                    </div>
+      if (!map.has(storeKey)) {
+        map.set(storeKey, {
+          store_key: storeKey,
+          store_code: isCodeValid ? storeCode : '-',
+          store_name: masterInfo?.store_name || storeName,
+          customer: masterInfo?.customer || '-',
+          region: masterInfo?.region || '-',
+          sr_name: masterInfo?.sr_name || '-',
+          mer_name: masterInfo?.mer_name || '-',
+          requests: [],
+          requestCount: 0,
+          completedRequestsCount: 0,
+          inProgressRequestsCount: 0,
+          installationItems: [],
+          installationCount: 0,
+          projects: [],
+          projectCount: 0,
+          completedInstallationsCount: 0,
+          failedInstallationsCount: 0,
+          totalItemsCount: 0,
+          totalCompletedCount: 0,
+          completionPercentage: 0,
+        });
+      }
 
-                    <div className="flex flex-wrap items-center gap-3">
-                        <select
-                            value={projectPhaseFilter}
-                            onChange={e => setProjectPhaseFilter(e.target.value)}
-                            className="bg-slate-50 dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 rounded-xl px-3 py-2 text-xs text-indigo-900 dark:text-indigo-200 font-bold outline-none cursor-pointer"
-                        >
-                            <option value="ALL">Tất cả Giai đoạn Dự án</option>
-                            {projectPhasesList.map(ph => (
-                                <option key={ph} value={ph}>Giai đoạn: {ph}</option>
-                            ))}
-                        </select>
+      return map.get(storeKey)!;
+    };
 
-                        <select
-                            value={regionFilter}
-                            onChange={e => setRegionFilter(e.target.value)}
-                            className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white font-medium outline-none cursor-pointer"
-                        >
-                            <option value="ALL">Tất cả Vùng miền</option>
-                            {regionsList.map(r => (
-                                <option key={r} value={r}>{r}</option>
-                            ))}
-                        </select>
+    // Group 1: Populate from Tab Request (raw_requests)
+    requests.forEach(req => {
+      const group = getOrCreateStore(req.ess_store_code, req.store_name);
+      group.requests.push(req);
+      group.requestCount++;
 
-                        <select
-                            value={customerFilter}
-                            onChange={e => setCustomerFilter(e.target.value)}
-                            className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white font-medium outline-none cursor-pointer"
-                        >
-                            <option value="ALL">Tất cả Hệ thống</option>
-                            {customersList.map(c => (
-                                <option key={c} value={c}>{c}</option>
-                            ))}
-                        </select>
+      if (req.customer && group.customer === '-') group.customer = req.customer;
+      if (req.sr && group.sr_name === '-') group.sr_name = req.sr;
+      if (req.mer && group.mer_name === '-') group.mer_name = req.mer;
 
-                        <select
-                            value={statusFilter}
-                            onChange={e => setStatusFilter(e.target.value)}
-                            className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white font-medium outline-none cursor-pointer"
-                        >
-                            <option value="ALL">Tất cả Trạng thái Store</option>
-                            <option value="IN_PROGRESS">Đang Triển Khai</option>
-                            <option value="COMPLETED">Đã Hoàn Thành 100%</option>
-                            <option value="TO_DO">Mới Tiếp Nhận</option>
-                        </select>
-                    </div>
-                </div>
+      const tienDo = (req.tien_do || '').toLowerCase();
+      const status = (req.status || '').toLowerCase();
+      if (tienDo.includes('hoàn thành') || status.includes('completed') || status.includes('approve') || status.includes('done')) {
+        group.completedRequestsCount++;
+      } else {
+        group.inProgressRequestsCount++;
+      }
+    });
 
-                {/* Master Store Table View */}
-                {isLoadingRequests ? (
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-12 text-center text-slate-400 font-medium border border-slate-200 dark:border-slate-700">
-                        Đang tổng hợp kế hoạch theo cửa hàng...
-                    </div>
-                ) : filteredStoreGroups.length === 0 ? (
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-12 text-center text-slate-400 font-medium border border-slate-200 dark:border-slate-700">
-                        Không tìm thấy Cửa hàng nào phù hợp với bộ lọc hiện tại.
-                    </div>
-                ) : (
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left text-xs">
-                                <thead className="bg-slate-100/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
-                                    <tr>
-                                        <th className="p-4 min-w-[220px]">Store Name / Store Code</th>
-                                        <th className="p-4 min-w-[180px]">Hệ thống (KA / Customer)</th>
-                                        <th className="p-4 min-w-[200px]">SR (Quản lý CH) / Mer (Vis Tech)</th>
-                                        <th className="p-4 min-w-[120px] text-center">Dự Án</th>
-                                        <th className="p-4 min-w-[120px] text-center">Request</th>
-                                        <th className="p-4 min-w-[160px]">Tiến Độ Store</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
-                                    {filteredStoreGroups.map((g, idx) => {
-                                        const storeKey = g.store_code !== '-' ? g.store_code : g.store_name;
-                                        return (
-                                            <tr 
-                                                key={storeKey}
-                                                onClick={() => setSelectedStoreKey(storeKey)}
-                                                className="hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer group"
-                                            >
-                                                {/* 1. Store Name / Store Code */}
-                                                <td className="p-4">
-                                                    <div className="font-bold text-slate-900 dark:text-white text-xs group-hover:text-indigo-600">
-                                                        {g.store_name}
-                                                    </div>
-                                                    <div className="mt-1">
-                                                        <span className="font-mono text-[11px] bg-slate-100 dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 font-bold px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
-                                                            {g.store_code}
-                                                        </span>
-                                                    </div>
-                                                </td>
+    // Group 2: Populate from Tab Theo Dõi Lắp Đặt (installationItems)
+    installationItems.forEach(item => {
+      const group = getOrCreateStore(item.storeCode, item.storeName);
+      group.installationItems.push(item);
+      group.installationCount++;
 
-                                                {/* 2. Hệ thống (KA / Customer) */}
-                                                <td className="p-4 font-semibold text-slate-800 dark:text-slate-200">
-                                                    <div>{g.customer}</div>
-                                                    <div className="text-[10px] text-slate-400">{g.ka !== '-' ? g.ka : g.region}</div>
-                                                </td>
+      if (item.customer && group.customer === '-') group.customer = item.customer;
+      if (item.region && group.region === '-') group.region = item.region;
+      if (item.technician && group.mer_name === '-') group.mer_name = item.technician;
 
-                                                {/* 3. SR (Quản lý CH) / Mer (Vis Tech) */}
-                                                <td className="p-4">
-                                                    <div className="font-bold text-slate-800 dark:text-slate-200">
-                                                        {g.sr_name} <span className="text-[10px] text-slate-400 font-normal">(SR)</span>
-                                                    </div>
-                                                    <div className="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium">
-                                                        {g.mer_name} <span className="text-[10px] text-slate-400 font-normal">(Mer)</span>
-                                                    </div>
-                                                </td>
+      const resultSign = (item.resultSign || '').trim();
+      const isCompleted = resultSign === '✔' || resultSign.toLowerCase().includes('pass') || (item.completionTime && item.completionTime.trim() !== '');
+      const isFailed = resultSign === '❌' || resultSign.toLowerCase().includes('fail');
 
-                                                {/* 4. Dự Án (Số lượng) */}
-                                                <td className="p-4 text-center font-bold">
-                                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-lg border border-indigo-200 dark:border-indigo-800">
-                                                        📦 {g.masterStoreProjects.length} Dự án
-                                                    </span>
-                                                </td>
+      if (isCompleted) group.completedInstallationsCount++;
+      if (isFailed) group.failedInstallationsCount++;
 
-                                                {/* 5. Request (Số lượng) */}
-                                                <td className="p-4 text-center font-bold">
-                                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 rounded-lg border border-blue-200 dark:border-blue-800">
-                                                        📋 {g.totalRequests} Request
-                                                    </span>
-                                                </td>
+      // Group projects within this store
+      const prjCode = item.projectCode?.trim() || item.projectName?.trim() || 'Dự án khác';
+      let prjGroup = group.projects.find(p => p.projectCode === prjCode);
+      if (!prjGroup) {
+        prjGroup = {
+          projectCode: prjCode,
+          projectName: item.projectName || prjCode,
+          installationItems: [],
+          completedCount: 0,
+          failedCount: 0,
+        };
+        group.projects.push(prjGroup);
+      }
+      prjGroup.installationItems.push(item);
+      if (isCompleted) prjGroup.completedCount++;
+      if (isFailed) prjGroup.failedCount++;
+    });
 
-                                                {/* 6. Tiến Độ Store */}
-                                                <td className="p-4">
-                                                    <div className="flex items-center justify-between mb-1">
-                                                        <span className={`font-bold text-xs ${
-                                                            g.completionPercentage === 100 ? 'text-emerald-600' : (g.completionPercentage > 0 ? 'text-blue-600' : 'text-slate-500')
-                                                        }`}>
-                                                            {g.completionPercentage}%
-                                                        </span>
-                                                        <span className="text-[10px] text-slate-400 font-semibold">{g.completedRequests}/{g.totalRequests} Xong</span>
-                                                    </div>
-                                                    <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
-                                                        <div 
-                                                            className={`h-full transition-all duration-300 ${
-                                                                g.completionPercentage === 100 ? 'bg-emerald-500' : 'bg-indigo-600'
-                                                            }`} 
-                                                            style={{ width: `${g.completionPercentage}%` }} 
-                                                        />
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                )}
-                </div>
-            )}
+    // Finalize counts and percentage
+    return Array.from(map.values()).map(group => {
+      group.projectCount = group.projects.length;
+      group.totalItemsCount = group.requestCount + group.installationCount;
+      group.totalCompletedCount = group.completedRequestsCount + group.completedInstallationsCount;
+      group.completionPercentage = group.totalItemsCount > 0
+        ? Math.round((group.totalCompletedCount / group.totalItemsCount) * 100)
+        : 0;
+      return group;
+    });
+  }, [requests, installationItems, masterStoresMap]);
+
+  // Unique Region and Customer Lists for Filters
+  const regionsList = useMemo(() => {
+    const set = new Set<string>();
+    storeGroups.forEach(g => { if (g.region && g.region !== '-') set.add(g.region); });
+    return Array.from(set).sort();
+  }, [storeGroups]);
+
+  const customersList = useMemo(() => {
+    const set = new Set<string>();
+    storeGroups.forEach(g => { if (g.customer && g.customer !== '-') set.add(g.customer); });
+    return Array.from(set).sort();
+  }, [storeGroups]);
+
+  // Filtered Store Groups
+  const filteredStores = useMemo(() => {
+    return storeGroups.filter(g => {
+      const matchesSearch = !searchTerm.trim() ||
+        g.store_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        g.store_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        g.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        g.sr_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        g.mer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        g.projects.some(p => p.projectCode.toLowerCase().includes(searchTerm.toLowerCase()) || p.projectName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        g.requests.some(r => (r.request_id || '').toLowerCase().includes(searchTerm.toLowerCase()) || (r.posm || '').toLowerCase().includes(searchTerm.toLowerCase()));
+
+      const matchesRegion = regionFilter === 'ALL' || g.region === regionFilter;
+      const matchesCustomer = customerFilter === 'ALL' || g.customer === customerFilter;
+
+      let matchesQuick = true;
+      if (quickFilter === 'HAS_REQUESTS') matchesQuick = g.requestCount > 0;
+      else if (quickFilter === 'HAS_INSTALLATIONS') matchesQuick = g.installationCount > 0;
+      else if (quickFilter === 'COMPLETED') matchesQuick = g.completionPercentage === 100;
+
+      return matchesSearch && matchesRegion && matchesCustomer && matchesQuick;
+    });
+  }, [storeGroups, searchTerm, regionFilter, customerFilter, quickFilter]);
+
+  // Selected Store Object
+  const selectedStore = useMemo(() => {
+    if (!selectedStoreKey) return null;
+    return storeGroups.find(g => g.store_key === selectedStoreKey) || null;
+  }, [selectedStoreKey, storeGroups]);
+
+  // Aggregate Metrics Summary
+  const aggregateMetrics = useMemo(() => {
+    let totalReq = 0;
+    let totalInstall = 0;
+    let totalPrj = 0;
+    const allProjectsSet = new Set<string>();
+
+    storeGroups.forEach(g => {
+      totalReq += g.requestCount;
+      totalInstall += g.installationCount;
+      g.projects.forEach(p => allProjectsSet.add(p.projectCode));
+    });
+
+    totalPrj = allProjectsSet.size;
+
+    return {
+      totalStores: storeGroups.length,
+      totalRequests: totalReq,
+      totalInstallations: totalInstall,
+      totalProjects: totalPrj,
+    };
+  }, [storeGroups]);
+
+  const isLoading = isLoadingRequests || isLoadingInstallations;
+
+  return (
+    <div className="p-4 md:p-6 h-[calc(100vh-64px)] overflow-y-auto bg-slate-50 dark:bg-slate-950 custom-scrollbar space-y-5">
+      
+      {/* SECTION 1: HEADER COMMAND CENTER */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+        <div className="flex items-center gap-3.5">
+          <div className="p-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl border border-slate-200 dark:border-slate-700">
+            <Store className="w-5 h-5 text-sky-600 dark:text-sky-400" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
+                Bảng Kế Hoạch Siêu Thị (Store Plan Board)
+              </h1>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200/60 dark:border-sky-900/60">
+                Store-Centric View
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Quản lý tổng hợp theo từng Store • Bao gồm dữ liệu từ <strong className="text-slate-800 dark:text-slate-200">Tab Request</strong> &amp; <strong className="text-slate-800 dark:text-slate-200">Tab Theo Dõi Lắp Đặt</strong>
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { refetchRequests(); refetchInstallations(); }}
+            disabled={isLoading}
+            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xs cursor-pointer transition-colors"
+          >
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            <span>Làm Mới Dữ Liệu</span>
+          </button>
+        </div>
+      </div>
+
+      {/* SECTION 2: TOP METRIC STAT CARDS */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+        <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Tổng Số Siêu Thị</p>
+            <h3 className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-1">{aggregateMetrics.totalStores}</h3>
+            <p className="text-[11px] text-slate-500 mt-0.5">cửa hàng trên toàn hệ thống</p>
+          </div>
+          <div className="p-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl">
+            <Building2 className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">Yêu Cầu (Tab Request)</p>
+            <h3 className="text-2xl font-black text-sky-600 dark:text-sky-400 mt-1">{aggregateMetrics.totalRequests}</h3>
+            <p className="text-[11px] text-sky-600/70 mt-0.5">mã request từ MER VIEW 2026</p>
+          </div>
+          <div className="p-2.5 bg-sky-50 dark:bg-sky-950/60 text-sky-600 rounded-xl">
+            <FileText className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Hạng Mục Lắp Đặt</p>
+            <h3 className="text-2xl font-black text-indigo-600 dark:text-indigo-400 mt-1">{aggregateMetrics.totalInstallations}</h3>
+            <p className="text-[11px] text-indigo-600/70 mt-0.5">dòng POSM theo dõi lắp đặt</p>
+          </div>
+          <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 rounded-xl">
+            <Wrench className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Tổng Số Dự Án Lắp Đặt</p>
+            <h3 className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{aggregateMetrics.totalProjects}</h3>
+            <p className="text-[11px] text-emerald-600/70 mt-0.5">mã dự án thi công thực tế</p>
+          </div>
+          <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 rounded-xl">
+            <Layers className="w-5 h-5" />
+          </div>
+        </div>
+      </div>
+
+      {/* RENDER VIEW 1: DRILL-DOWN DETAILED STORE VIEW */}
+      {selectedStore ? (
+        <div className="space-y-5 animate-in fade-in duration-200">
+          
+          {/* Top Bar with Back Button */}
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setSelectedStoreKey(null)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 rounded-xl font-bold text-xs text-slate-700 dark:text-slate-200 shadow-2xs transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4 text-sky-600" />
+              Quay lại danh sách Siêu thị
+            </button>
+          </div>
+
+          {/* Store Information Card Header */}
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-mono text-xs font-black bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 px-2.5 py-1 rounded-lg border border-sky-200 dark:border-sky-800">
+                  Mã Store: {selectedStore.store_code}
+                </span>
+                <span className="text-xs font-bold text-slate-500">
+                  Hệ thống: {selectedStore.customer} • Vùng: {selectedStore.region}
+                </span>
+              </div>
+              <h1 className="text-2xl font-black text-slate-900 dark:text-white">
+                {selectedStore.store_name}
+              </h1>
+              <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-1">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <User className="w-4 h-4 text-sky-500" />
+                  SR Phụ trách: <strong className="text-slate-800 dark:text-slate-200">{selectedStore.sr_name}</strong>
+                </span>
+                <span>•</span>
+                <span className="flex items-center gap-1.5 font-medium">
+                  <Wrench className="w-4 h-4 text-indigo-500" />
+                  QC Technician / Mer: <strong className="text-slate-800 dark:text-slate-200">{selectedStore.mer_name}</strong>
+                </span>
+              </div>
             </div>
 
-            {renderSharedModals()}
+            {/* Combined Store Metric Badges */}
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-sky-50 dark:bg-sky-950/60 rounded-xl border border-sky-200 dark:border-sky-900 text-center min-w-[110px]">
+                <span className="text-[10px] font-bold text-sky-600 uppercase block">Tab Request</span>
+                <span className="text-xl font-black text-sky-700 dark:text-sky-300 font-mono">{selectedStore.requestCount}</span>
+                <span className="text-[10px] text-sky-600/70 block">Yêu cầu POSM</span>
+              </div>
+
+              <div className="p-3 bg-indigo-50 dark:bg-indigo-950/60 rounded-xl border border-indigo-200 dark:border-indigo-900 text-center min-w-[110px]">
+                <span className="text-[10px] font-bold text-indigo-600 uppercase block">Tab Lắp Đặt</span>
+                <span className="text-xl font-black text-indigo-700 dark:text-indigo-300 font-mono">{selectedStore.installationCount}</span>
+                <span className="text-[10px] text-indigo-600/70 block">{selectedStore.projectCount} Dự Án</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 2 MAIN DRILL-DOWN TABS */}
+          <div className="border-b border-slate-200 dark:border-slate-800 flex items-center gap-3">
+            <button
+              onClick={() => setActiveDetailTab('INSTALLATIONS')}
+              className={`flex items-center gap-2 px-5 py-3 font-bold text-xs border-b-2 transition-all cursor-pointer ${
+                activeDetailTab === 'INSTALLATIONS'
+                  ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900 rounded-t-xl'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <Wrench className="w-4 h-4" />
+              <span>🛠️ TAB 1: DỰ ÁN &amp; HẠNG MỤC LẮP ĐẶT ({selectedStore.installationCount} POSM / {selectedStore.projectCount} Dự án)</span>
+            </button>
+
+            <button
+              onClick={() => setActiveDetailTab('REQUESTS')}
+              className={`flex items-center gap-2 px-5 py-3 font-bold text-xs border-b-2 transition-all cursor-pointer ${
+                activeDetailTab === 'REQUESTS'
+                  ? 'border-sky-600 text-sky-600 dark:text-sky-400 bg-white dark:bg-slate-900 rounded-t-xl'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              <span>📋 TAB 2: REQUEST POSM ({selectedStore.requestCount} Yêu cầu)</span>
+            </button>
+          </div>
+
+          {/* TAB 1 CONTENT: THEO DÕI LẮP ĐẶT DATA */}
+          {activeDetailTab === 'INSTALLATIONS' && (
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xs border border-slate-200/80 dark:border-slate-800 overflow-hidden p-5 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                <h3 className="font-bold text-xs text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                  <Wrench className="w-4 h-4 text-indigo-500" />
+                  Danh Sách Dự Án &amp; Hạng Mục Theo Dõi Lắp Đặt tại {selectedStore.store_name}
+                </h3>
+              </div>
+
+              {selectedStore.installationItems.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 text-xs italic">
+                  Chưa có dòng dữ liệu nào từ tab Theo Dõi Lắp Đặt cho Siêu thị này.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider text-[11px]">
+                      <tr>
+                        <th className="p-3">Mã Dự Án</th>
+                        <th className="p-3">Tên Dự Án</th>
+                        <th className="p-3">Hạng Mục POSM</th>
+                        <th className="p-3">Ngành Hàng / Brand</th>
+                        <th className="p-3">Supplier</th>
+                        <th className="p-3">Dự Kiến Thực Hiện</th>
+                        <th className="p-3">Ngày Hoàn Thành</th>
+                        <th className="p-3 text-center">Kết Quả (&gt;&lt;)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {selectedStore.installationItems.map((item, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                          <td className="p-3 font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                            {item.projectCode || '-'}
+                          </td>
+                          <td className="p-3 font-medium text-slate-800 dark:text-slate-200">
+                            {item.projectName || '-'}
+                          </td>
+                          <td className="p-3 font-semibold text-slate-800 dark:text-slate-200">
+                            {item.item || item.posmTypeCode || 'POSM'}
+                          </td>
+                          <td className="p-3 text-slate-600 dark:text-slate-400">
+                            {item.brandName || item.catName || '-'}
+                          </td>
+                          <td className="p-3 font-bold text-sky-700 dark:text-sky-300">
+                            {item.supplierName || '-'}
+                          </td>
+                          <td className="p-3 font-mono text-slate-500">
+                            {item.plannedStartDate ? `${item.plannedStartDate} ➔ ${item.plannedEndDate || ''}` : '-'}
+                          </td>
+                          <td className="p-3 font-mono font-bold text-slate-800 dark:text-slate-200">
+                            {item.completionTime || item.actualTime || 'Chưa xong'}
+                          </td>
+                          <td className="p-3 text-center">
+                            {item.resultSign === '✔' ? (
+                              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 rounded font-bold text-xs">
+                                ✔ Pass
+                              </span>
+                            ) : item.resultSign === '❌' ? (
+                              <span className="px-2 py-0.5 bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 rounded font-bold text-xs">
+                                ❌ QC Fail
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 rounded text-xs">
+                                ⏳ Đang triển khai
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 2 CONTENT: REQUEST POSM DATA */}
+          {activeDetailTab === 'REQUESTS' && (
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xs border border-slate-200/80 dark:border-slate-800 overflow-hidden p-5 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                <h3 className="font-bold text-xs text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-sky-500" />
+                  Danh Sách Request POSM tại {selectedStore.store_name}
+                </h3>
+              </div>
+
+              {selectedStore.requests.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 text-xs italic">
+                  Chưa có Request nào gửi từ Tab Request cho Siêu thị này.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider text-[11px]">
+                      <tr>
+                        <th className="p-3">Request ID</th>
+                        <th className="p-3">Mã &amp; Tên Dự Án</th>
+                        <th className="p-3">Hạng Mục POSM</th>
+                        <th className="p-3">SR Yêu Cầu</th>
+                        <th className="p-3">Phương Án</th>
+                        <th className="p-3">Trạng Thái</th>
+                        <th className="p-3">Ngày RQ</th>
+                        <th className="p-3 text-center">Ghi Chú (Notes)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {selectedStore.requests.map((r, rIdx) => (
+                        <tr key={r.id || rIdx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                          <td className="p-3">
+                            <span className="font-mono font-black text-sky-700 dark:text-sky-300 bg-sky-100 dark:bg-sky-950 px-2 py-0.5 rounded border border-sky-200 dark:border-sky-800">
+                              {r.request_id || `REQ-${rIdx + 1}`}
+                            </span>
+                          </td>
+                          <td className="p-3 font-medium text-slate-800 dark:text-slate-200">
+                            <div className="font-mono text-sky-600 font-bold">{r.ma_du_an || 'FIELD FORCE REQUEST'}</div>
+                            <div className="text-[11px] text-slate-500 truncate max-w-[200px]">{r.title_email_request || '-'}</div>
+                          </td>
+                          <td className="p-3 font-semibold text-slate-800 dark:text-slate-200">
+                            {r.posm} {r.brand ? `(${r.brand})` : ''}
+                          </td>
+                          <td className="p-3 text-slate-700 dark:text-slate-300">{r.sr || '-'}</td>
+                          <td className="p-3 text-slate-700 dark:text-slate-300">{r.phuong_an || 'Visibility Request'}</td>
+                          <td className="p-3">
+                            <span className="font-bold text-slate-800 dark:text-slate-200 px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px]">
+                              {r.tien_do || r.status || 'To Do'}
+                            </span>
+                          </td>
+                          <td className="p-3 font-mono text-slate-500">{r.date_of_rq || '-'}</td>
+                          <td className="p-3 text-center">
+                            <button
+                              onClick={() => setSelectedNotesRecord(r)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-sky-100 dark:bg-sky-950 text-sky-900 dark:text-sky-200 font-bold text-[11px] rounded-lg border border-sky-300 dark:border-sky-700 hover:border-sky-500 cursor-pointer transition-colors"
+                            >
+                              <MessageSquare className="w-3.5 h-3.5 text-sky-600" />
+                              <span>Xem Ghi Chú</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
         </div>
-    );
+      ) : (
+        /* RENDER VIEW 2: STORE DIRECTORY MAIN GRID & TABLE */
+        <div className="space-y-4">
+          
+          {/* SEARCH & FILTERS BAR */}
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+            
+            {/* Search Input */}
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Tìm tên cửa hàng, mã store (STR-...), mã dự án, request ID..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs outline-none focus:border-sky-500 font-medium text-slate-800 dark:text-slate-200"
+              />
+              {searchTerm && (
+                <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Dropdown Filters */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Region Filter */}
+              <select
+                value={regionFilter}
+                onChange={(e) => setRegionFilter(e.target.value)}
+                className="px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 outline-none cursor-pointer focus:border-sky-500"
+              >
+                <option value="ALL">🌐 Tất cả Vùng ({regionsList.length})</option>
+                {regionsList.map(r => (
+                  <option key={r} value={r}>Vùng: {r}</option>
+                ))}
+              </select>
+
+              {/* Customer Filter */}
+              <select
+                value={customerFilter}
+                onChange={(e) => setCustomerFilter(e.target.value)}
+                className="px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 outline-none cursor-pointer focus:border-sky-500"
+              >
+                <option value="ALL">🛒 Tất cả Hệ Thống ({customersList.length})</option>
+                {customersList.map(c => (
+                  <option key={c} value={c}>Customer: {c}</option>
+                ))}
+              </select>
+
+              {/* Quick Filter Pill Buttons */}
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+                <button
+                  onClick={() => setQuickFilter('ALL')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
+                    quickFilter === 'ALL' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs' : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  Tất cả ({storeGroups.length})
+                </button>
+                <button
+                  onClick={() => setQuickFilter('HAS_REQUESTS')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
+                    quickFilter === 'HAS_REQUESTS' ? 'bg-sky-600 text-white shadow-2xs' : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  Có Request
+                </button>
+                <button
+                  onClick={() => setQuickFilter('HAS_INSTALLATIONS')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
+                    quickFilter === 'HAS_INSTALLATIONS' ? 'bg-indigo-600 text-white shadow-2xs' : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  Có Dự Án Lắp Đặt
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* MAIN STORES TABLE */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider text-[11px]">
+                  <tr>
+                    <th className="p-3.5">Mã Store</th>
+                    <th className="p-3.5 min-w-[220px]">Tên Siêu Thị (Store Name)</th>
+                    <th className="p-3.5">Hệ Thống / Customer</th>
+                    <th className="p-3.5">Vùng</th>
+                    <th className="p-3.5 text-center">Tab Request (MER VIEW)</th>
+                    <th className="p-3.5 text-center">Tab Theo Dõi Lắp Đặt</th>
+                    <th className="p-3.5 text-center">Tiến Độ Tổng</th>
+                    <th className="p-3.5 text-right">Thao Tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {filteredStores.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="p-8 text-center text-slate-400 text-xs italic">
+                        Không tìm thấy Siêu thị nào phù hợp với bộ lọc.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredStores.map((store) => (
+                      <tr 
+                        key={store.store_key}
+                        onClick={() => setSelectedStoreKey(store.store_key)}
+                        className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer"
+                      >
+                        {/* Mã Store */}
+                        <td className="p-3.5">
+                          <span className="font-mono font-bold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950 px-2 py-1 rounded border border-sky-200 dark:border-sky-800">
+                            {store.store_code}
+                          </span>
+                        </td>
+
+                        {/* Tên Store */}
+                        <td className="p-3.5 font-extrabold text-slate-900 dark:text-slate-100">
+                          {store.store_name}
+                          {(store.sr_name !== '-' || store.mer_name !== '-') && (
+                            <div className="text-[10px] text-slate-400 font-normal mt-0.5">
+                              SR: {store.sr_name} • Mer: {store.mer_name}
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Customer */}
+                        <td className="p-3.5 font-semibold text-slate-700 dark:text-slate-300">
+                          {store.customer}
+                        </td>
+
+                        {/* Region */}
+                        <td className="p-3.5 text-slate-600 dark:text-slate-400">
+                          {store.region}
+                        </td>
+
+                        {/* Badge Tab Request */}
+                        <td className="p-3.5 text-center">
+                          {store.requestCount > 0 ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 rounded-lg border border-sky-200/80 dark:border-sky-800 font-bold text-xs">
+                              <FileText className="w-3.5 h-3.5 text-sky-500" />
+                              {store.requestCount} Request
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 text-[11px] italic">-</span>
+                          )}
+                        </td>
+
+                        {/* Badge Tab Lắp Đặt */}
+                        <td className="p-3.5 text-center">
+                          {store.installationCount > 0 ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 rounded-lg border border-indigo-200/80 dark:border-indigo-800 font-bold text-xs">
+                              <Wrench className="w-3.5 h-3.5 text-indigo-500" />
+                              {store.projectCount} Dự Án ({store.installationCount} POSM)
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 text-[11px] italic">-</span>
+                          )}
+                        </td>
+
+                        {/* Tiến Độ Tổng */}
+                        <td className="p-3.5 text-center font-mono font-bold">
+                          <span className={`px-2.5 py-1 rounded-lg text-xs border ${
+                            store.completionPercentage === 100 
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                              : store.completionPercentage > 0 
+                                ? 'bg-indigo-50 text-indigo-700 border-indigo-200' 
+                                : 'bg-slate-100 text-slate-600 border-slate-200'
+                          }`}>
+                            {store.completionPercentage}% Xong
+                          </span>
+                        </td>
+
+                        {/* Action Button */}
+                        <td className="p-3.5 text-right">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedStoreKey(store.store_key);
+                            }}
+                            className="px-3 py-1.5 bg-slate-100 hover:bg-sky-600 hover:text-white text-slate-700 font-bold rounded-lg text-xs transition-colors cursor-pointer inline-flex items-center gap-1"
+                          >
+                            <span>Xem Store</span>
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Table Footer */}
+            <div className="p-3 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500">
+              <span>Hiển thị {filteredStores.length} trên tổng số {storeGroups.length} Siêu thị</span>
+              <span>Google Sheet Connected • MER VIEW 2026 &amp; UPDATE TRACKING INSTALLATION</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NOTES VIEWER MODAL */}
+      {selectedNotesRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-sky-600" />
+                <div>
+                  <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                    Chi Tiết Ghi Chú Request
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Store: {selectedNotesRecord.store_name} ({selectedNotesRecord.ess_store_code})
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setSelectedNotesRecord(null)} className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs overflow-y-auto max-h-[70vh]">
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1">
+                <span className="font-bold text-slate-800 dark:text-slate-200 block text-[11px]">
+                  📌 SR Note:
+                </span>
+                <div className="text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
+                  {selectedNotesRecord.sr_note || <span className="text-slate-400 italic">Chưa có ghi chú lỗi chi tiết từ SR</span>}
+                </div>
+              </div>
+
+              <div className="p-3 bg-sky-50/60 dark:bg-sky-950/40 rounded-xl border border-sky-200 dark:border-sky-800 space-y-1">
+                <span className="font-bold text-sky-900 dark:text-sky-200 block text-[11px]">
+                  🏢 Vis Note:
+                </span>
+                <div className="text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
+                  {selectedNotesRecord.vis_note || <span className="text-slate-400 italic">Chưa có phản hồi từ Team Vis văn phòng</span>}
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-900 dark:text-slate-100 text-[11px]">
+                    🛠️ Mer Note:
+                  </span>
+                </div>
+                <textarea
+                  defaultValue={selectedNotesRecord.mer_note || ''}
+                  placeholder="Nhập ghi chú xử lý của Mer tại đây..."
+                  onBlur={(e) => {
+                    const val = e.target.value;
+                    if (val !== (selectedNotesRecord.mer_note || '')) {
+                      updateRequest(selectedNotesRecord.id!, { mer_note: val });
+                      setSelectedNotesRecord({ ...selectedNotesRecord, mer_note: val });
+                    }
+                  }}
+                  className="w-full p-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 font-medium focus:ring-2 focus:ring-sky-500 outline-none resize-y min-h-[80px]"
+                />
+              </div>
+            </div>
+
+            <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 flex justify-end">
+              <button
+                onClick={() => setSelectedNotesRecord(null)}
+                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-xs cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
 }

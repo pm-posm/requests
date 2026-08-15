@@ -7,6 +7,7 @@ import type { InstallationItem } from '@/services/installationSyncService';
 import type { MasterStoreContactInfo } from '@/services/sheetSyncService';
 import type { GroupedProject } from '../hooks/useInstallationFilters';
 import { getStatusBadgeStyle, evaluateScheduleHighlight, calculateInstallationResult, getActualTimeAlert } from '../utils/statusCalculators';
+import { StatusMultiSelectDropdown } from './StatusMultiSelectDropdown';
 
 interface ProjectDetailViewProps {
   currentDetailProject: GroupedProject;
@@ -423,29 +424,36 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                       {store.technician || '-'}
                     </td>
 
-                    {/* Status */}
+                    {/* Status (Multi-badge 1:1 with Google Sheet) */}
                     <td className="px-4 py-3.5">
-                      <span className={`inline-flex px-2 py-0.5 rounded text-[11px] border ${getStatusBadgeStyle(store.status)}`}>
-                        {store.status || 'New'}
-                      </span>
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {(store.status || 'New').split(',').map((stItem, stIdx) => {
+                          const cleanSt = stItem.trim();
+                          if (!cleanSt) return null;
+                          return (
+                            <span key={stIdx} className={`inline-flex px-2 py-0.5 rounded text-[11px] border ${getStatusBadgeStyle(cleanSt)}`}>
+                              {cleanSt}
+                            </span>
+                          );
+                        })}
+                      </div>
                     </td>
 
-                    {/* Kết quả >< (Strict 1:1 from Sheet Column X & Apps Script onEdit logic) */}
+                    {/* Kết quả >< (Strict 1:1 from Sheet Column X) */}
                     <td className="px-4 py-3.5 text-center">
                       {(() => {
                         const res = calculateInstallationResult(store.actualTime, store.completionTime, store.status, store.resultSign);
                         if (res.sign === '✔') {
                           return (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-900 rounded text-xs font-bold">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-900 rounded text-xs font-bold">
                               <CheckCircle2 className="w-3.5 h-3.5" /> Pass
                             </span>
                           );
                         }
                         if (res.sign === '❌') {
-                          const labelText = res.failReason === 'LATE' ? 'Trễ hạn' : res.failReason === 'QC_FAIL' ? 'QC Fail' : 'Fail';
                           return (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-900 rounded text-xs font-bold" title={res.failReason === 'LATE' ? 'Nghiệm thu trễ hơn ngày Actual Time' : 'Bị lỗi QC'}>
-                              <AlertTriangle className="w-3.5 h-3.5" /> {labelText}
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-900 rounded text-xs font-bold">
+                              <AlertTriangle className="w-3.5 h-3.5" /> Fail
                             </span>
                           );
                         }
@@ -549,21 +557,17 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 <p className="text-slate-500">Nhãn: <strong className="text-slate-700 dark:text-slate-300">{currentDetailProject.brandName}</strong> (Ngành: {currentDetailProject.categoryCode})</p>
               </div>
 
-              {/* 1. Status Dropdown */}
+              {/* 1. Status Multi-Select Dropdown */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
-                  Trạng Thái (Status) <span className="text-rose-500">*</span>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide flex items-center justify-between">
+                  <span>Trạng Thái Status (Cho phép chọn nhiều)</span>
                 </label>
-                <select
+                <StatusMultiSelectDropdown
+                  options={modalStatusOptions}
                   value={bulkForm.status || ''}
-                  onChange={(e) => setBulkForm(prev => ({ ...prev, status: e.target.value }))}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl outline-none font-semibold text-slate-800 dark:text-slate-200 focus:border-sky-500"
-                >
-                  <option value="">-- Giữ nguyên trạng thái cũ --</option>
-                  {modalStatusOptions.map(st => (
-                    <option key={st} value={st}>{st}</option>
-                  ))}
-                </select>
+                  onChange={(newValue) => setBulkForm(prev => ({ ...prev, status: newValue }))}
+                  placeholder="Bấm để chọn 1 hoặc nhiều trạng thái..."
+                />
               </div>
 
               {/* 2. POSM QC Technician */}
@@ -611,25 +615,17 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 </div>
               </div>
 
-              {/* 5. Planned Start & End Dates */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">Dự Kiến Từ Ngày</label>
-                  <input
-                    type="date"
-                    value={localDdmmyyyyToISO(bulkForm.plannedStartDate || '')}
-                    onChange={(e) => setBulkForm(prev => ({ ...prev, plannedStartDate: localIsoToDDMMYYYY(e.target.value) }))}
-                    className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl outline-none font-mono text-xs"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">Dự Kiến Đến Ngày</label>
-                  <input
-                    type="date"
-                    value={localDdmmyyyyToISO(bulkForm.plannedEndDate || '')}
-                    onChange={(e) => setBulkForm(prev => ({ ...prev, plannedEndDate: localIsoToDDMMYYYY(e.target.value) }))}
-                    className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl outline-none font-mono text-xs"
-                  />
+              {/* 5. Planned Start & End Dates (Lịch Kế Hoạch Hệ Thống - Cố định 1:1 từ Sheet) */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide flex items-center justify-between">
+                  <span>Thời Gian Dự Kiến (Lịch Kế Hoạch Hệ Thống)</span>
+                  <span className="text-[10px] text-slate-400 font-normal lowercase">(cố định 1:1 từ Sheet)</span>
+                </label>
+                <div className="p-2.5 bg-slate-100/80 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 rounded-xl flex items-center justify-between font-mono text-xs text-slate-700 dark:text-slate-300 select-none">
+                  <div className="flex items-center gap-1.5 font-bold">
+                    <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span>{currentDetailProject.plannedTimeRange || '—'}</span>
+                  </div>
                 </div>
               </div>
 

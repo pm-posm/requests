@@ -20,6 +20,7 @@ const TrackingNtxx = React.lazy(() => import('./TrackingNtxx'));
 const TrackingWarranty = React.lazy(() => import('./TrackingWarranty'));
 import { StoreContactPage } from '../pages/StoreContactPage';
 import { StorePlanBoardPage } from '../pages/StorePlanBoardPage';
+import { RequestPage } from '../pages/RequestPage';
 import { UnderDevelopment } from './UnderDevelopment';
 
 import { useDashboardStore } from '@/stores/useDashboardStore';
@@ -194,14 +195,19 @@ export default function Dashboard() {
               {/* Active Contacts / Master Stores Route */}
               <Route path="/contacts" element={<StoreContactPage />} />
 
-              {/* Locked / Features Under Development */}
-              <Route path="/tracking/ntxx" element={<UnderDevelopment title="Nghiệm thu Xuất xưởng" description="Tính năng Nghiệm thu Xuất xưởng đang trong quá trình phát triển và sẽ hoạt động trong tương lai." />} />
+              <Route path="/tracking/ntxx" element={
+                <div className="absolute inset-0 p-2.5 sm:p-4 md:p-5 overflow-y-auto custom-scrollbar bg-background">
+                  <div className="w-full max-w-[1920px] mx-auto">
+                    <TrackingNtxx />
+                  </div>
+                </div>
+              } />
               <Route path="/analytics" element={<UnderDevelopment title="Dashboard Báo Cáo" description="Tính năng Báo cáo & Thống kê tổng quan đang trong quá trình phát triển và sẽ hoạt động trong tương lai." />} />
-              <Route path="/requests" element={<UnderDevelopment title="Xử lý Request" description="Tính năng Xử lý Request đang trong quá trình phát triển và sẽ hoạt động trong tương lai." />} />
-              <Route path="/requests/*" element={<UnderDevelopment title="Xử lý Request" description="Tính năng Xử lý Request đang trong quá trình phát triển và sẽ hoạt động trong tương lai." />} />
+              <Route path="/requests" element={<RequestPage />} />
+              <Route path="/requests/*" element={<RequestPage />} />
               <Route path="/projects" element={<UnderDevelopment title="Tổng hợp dự án" description="Tính năng Tổng hợp dự án đang trong quá trình phát triển và sẽ hoạt động trong tương lai." />} />
               <Route path="/project/*" element={<UnderDevelopment title="Chi tiết dự án" description="Tính năng Chi tiết dự án đang trong quá trình phát triển và sẽ hoạt động trong tương lai." />} />
-              <Route path="/store-plan" element={<UnderDevelopment title="Bảng kế hoạch" description="Tính năng Bảng kế hoạch đang trong quá trình phát triển và sẽ hoạt động trong tương lai." />} />
+              <Route path="/store-plan" element={<StorePlanBoardPage />} />
 
               {/* Default Fallback Redirects */}
               <Route path="/" element={<Navigate to="/tracking/warranty" replace />} />

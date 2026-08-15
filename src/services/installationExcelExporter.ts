@@ -9,7 +9,8 @@ export interface ExportReportOptions {
 
 /**
  * Service Xuất Báo Cáo Excel Executive 2-Tab Cho Theo Dõi Lắp Đặt POSM
- * TAB 1: SUMMARY & SUPPLIERS (Bảng Tổng hợp Tiến độ, Supplier Matrix, Chi tiết Dự án Issue / Sự cố)
+ * Standardized 1:1 matching Dashboard logic (Pass / Fail / Cancelled / Supplier Breakdown)
+ * TAB 1: SUMMARY & SUPPLIERS (Bảng Tổng hợp Tiến độ, Bảng Đánh Giá Supplier, Chi Tiết Ca Issue / Sự Cố)
  * TAB 2: RAW DATA (Dữ liệu thô 100% ca lắp đặt theo bộ lọc)
  */
 export const exportInstallationExecutiveReport = (
@@ -27,19 +28,21 @@ export const exportInstallationExecutiveReport = (
   const filenamePrefix = opts.filenamePrefix || 'POSM_Installation_Executive_Report';
   const totalCount = items.length;
 
-  let successCount = 0;
-  let issueCount = 0;
+  let passCount = 0;
+  let failCount = 0;
   let noReportCount = 0;
   let cancelledCount = 0;
+  let noActualTimeCount = 0;
   let unupdatedCount = 0;
 
   const supplierMap: Record<string, {
     displayName: string;
     total: number;
-    success: number;
-    issue: number;
+    pass: number;
+    fail: number;
     noReport: number;
     cancelled: number;
+    noActualTime: number;
     unupdated: number;
   }> = {};
 
@@ -57,44 +60,51 @@ export const exportInstallationExecutiveReport = (
       supplierMap[supplierKey] = {
         displayName: supplierName,
         total: 0,
-        success: 0,
-        issue: 0,
+        pass: 0,
+        fail: 0,
         noReport: 0,
         cancelled: 0,
+        noActualTime: 0,
         unupdated: 0
       };
     }
     supplierMap[supplierKey].total++;
 
-    const isQCFailed = statusLower.includes('installation qc failed') || statusLower.includes('qc failed') || statusLower.includes('failed') || statusLower.includes('lỗi');
     const isCancelled = statusLower.includes('cancelled') || statusLower.includes('cancel') || statusLower.includes('hủy');
     const isNoReport = noteLower.includes('chưa gửi report') || statusLower.includes('chưa gửi report') || statusLower.includes('no report');
+    const isQCFailed = statusLower.includes('installation qc failed') || statusLower.includes('qc failed') || statusLower.includes('failed') || statusLower.includes('lỗi');
+    const isNew = statusLower === 'new' || statusLower === 'mới' || statusLower === 'chưa thi công' || statusLower === 'chưa thực hiện';
+    const hasActualTime = !!(item.actualTime && item.actualTime.trim());
 
     let resultText = '—';
-    if (isCancelled) {
-      resultText = 'Hủy';
+    if (res.sign === '✔' || statusLower.includes('pass')) {
+      resultText = '✔ Pass';
+      passCount++;
+      supplierMap[supplierKey].pass++;
+    } else if (res.sign === '❌' || isQCFailed) {
+      resultText = '❌ Fail';
+      failCount++;
+      supplierMap[supplierKey].fail++;
+    } else if (isCancelled) {
+      resultText = 'Cancelled';
       cancelledCount++;
       supplierMap[supplierKey].cancelled++;
     } else if (isNoReport) {
       resultText = 'Chưa gửi Report';
       noReportCount++;
       supplierMap[supplierKey].noReport++;
-    } else if (res.isLateOrFailed || res.sign === '❌' || isQCFailed) {
-      resultText = res.failReason === 'LATE' ? '❌ Trễ hạn' : res.failReason === 'QC_FAIL' ? '❌ QC Fail' : '❌ Fail';
-      issueCount++;
-      supplierMap[supplierKey].issue++;
-    } else if (res.sign === '✔' || statusLower.includes('completed') || statusLower.includes('pass')) {
-      resultText = '✔ Pass';
-      successCount++;
-      supplierMap[supplierKey].success++;
+    } else if (!hasActualTime) {
+      resultText = 'Chưa có lịch';
+      noActualTimeCount++;
+      supplierMap[supplierKey].noActualTime++;
     } else {
       resultText = '—';
       unupdatedCount++;
       supplierMap[supplierKey].unupdated++;
     }
 
-    // Push to Issue Rows in Tab 1 if row has issue, cancelled, no report, or fail
-    if (isCancelled || isNoReport || res.isLateOrFailed || res.sign === '❌' || isQCFailed) {
+    // Push to Issue Rows in Tab 1 if non-Pass and NOT New (matching Dashboard Issue Audit List 1:1)
+    if (!isNew && (res.sign === '❌' || isQCFailed || isCancelled || isNoReport || !hasActualTime || resultText !== '✔ Pass')) {
       issueRows.push([
         issueRows.length + 1,
         item.projectCode || '-',
@@ -103,10 +113,10 @@ export const exportInstallationExecutiveReport = (
         item.brandName || '-',
         item.storeName || '-',
         item.actualTime || '-',
-        item.completionTime || 'Chưa hoàn thành',
+        item.completionTime || (isCancelled ? 'Đã Hủy' : 'Chưa hoàn thành'),
         item.status || 'QC Failed',
         resultText,
-        item.note || 'Lỗi nghiệm thu / Trễ tiến độ / Sự cố',
+        item.note || (isCancelled ? 'Ca bị hủy' : 'Lỗi nghiệm thu / Trễ tiến độ / Sự cố'),
         supplierName
       ]);
     }
@@ -121,40 +131,42 @@ export const exportInstallationExecutiveReport = (
     [`Ngày xuất báo cáo: ${new Date().toLocaleString('vi-VN')} | Tổng số ca trong báo cáo: ${totalCount}`],
     [''],
     ['1. BẢNG TỔNG HỢP TIẾN ĐỘ DỰ ÁN'],
-    ['Hạng mục tổng hợp', 'Số lượng dự án/asset', 'Tỷ lệ %'],
-    ['Tổng số các dự án/asset được thực hiện', totalCount, '100%'],
-    ['Đã hoàn thành (Pass QC & Đúng hạn)', successCount, totalCount > 0 ? `${((successCount / totalCount) * 100).toFixed(1)}%` : '0%'],
-    ['Dự án trễ deadline / QC fail', issueCount, totalCount > 0 ? `${((issueCount / totalCount) * 100).toFixed(1)}%` : '0%'],
+    ['Hạng mục tổng hợp', 'Số lượng vị trí', 'Tỷ lệ %'],
+    ['Tổng số ca/vị trí asset', totalCount, '100%'],
+    ['Hoàn thành (Pass)', passCount, totalCount > 0 ? `${((passCount / totalCount) * 100).toFixed(1)}%` : '0%'],
+    ['Lỗi / QC Fail / Trễ', failCount, totalCount > 0 ? `${((failCount / totalCount) * 100).toFixed(1)}%` : '0%'],
+    ['Bị Hủy (Cancelled)', cancelledCount, totalCount > 0 ? `${((cancelledCount / totalCount) * 100).toFixed(1)}%` : '0%'],
     ['Supplier chưa gửi Report', noReportCount, totalCount > 0 ? `${((noReportCount / totalCount) * 100).toFixed(1)}%` : '0%'],
-    ['Dự án bị Hủy (Cancelled)', cancelledCount, totalCount > 0 ? `${((cancelledCount / totalCount) * 100).toFixed(1)}%` : '0%'],
-    ['Chưa được cập nhật', unupdatedCount, totalCount > 0 ? `${((unupdatedCount / totalCount) * 100).toFixed(1)}%` : '0%'],
+    ['Chưa cập nhật lịch', noActualTimeCount, totalCount > 0 ? `${((noActualTimeCount / totalCount) * 100).toFixed(1)}%` : '0%'],
+    ['Chưa phân loại / Khác', unupdatedCount, totalCount > 0 ? `${((unupdatedCount / totalCount) * 100).toFixed(1)}%` : '0%'],
     [''],
-    ['2. BÁO CÁO TIẾN ĐỘ THEO SUPPLIER (NHÀ THẦU)'],
-    ['STT', 'Tên Supplier', 'Tổng dự án', 'Đã hoàn thành', 'Trễ / QC Fail', 'Chưa gửi Report', 'Bị Hủy (Cancelled)', 'Chưa cập nhật', 'Tỷ Lệ Đạt (%)']
+    ['2. BẢNG ĐÁNH GIÁ NHÀ CUNG CẤP (SUPPLIER)'],
+    ['STT', 'Nhà Cung Cấp', 'Tổng Ca', 'Pass', 'Fail', 'Chưa Báo Cáo', 'Bị Hủy (Cancelled)', 'Chưa Có Lịch', 'Tỷ Lệ Pass (%)']
   ];
 
   let sttSup = 1;
   Object.values(supplierMap).forEach(d => {
-    const rate = d.total > 0 ? `${((d.success / d.total) * 100).toFixed(1)}%` : '0%';
+    const executed = d.pass + d.fail;
+    const rate = executed > 0 ? `${((d.pass / executed) * 100).toFixed(1)}%` : '0%';
     summaryRows.push([
       sttSup++,
       d.displayName,
       d.total,
-      d.success,
-      d.issue,
+      d.pass,
+      d.fail,
       d.noReport,
       d.cancelled,
-      d.unupdated,
+      d.noActualTime,
       rate
     ]);
   });
 
   summaryRows.push(['']);
-  summaryRows.push(['3. CHI TIẾT CÁC DỰ ÁN SỰ CỐ / LỖI QC / TRỄ DEADLINE / HỦY (ISSUE AUDIT TABLE)']);
-  summaryRows.push(['STT', 'Mã dự án', 'Hạng mục', 'CAT', 'Brand', 'Tên cửa hàng', 'Lịch lắp đặt', 'Ngày hoàn thành', 'Status', 'Kết quả ><', 'Chi tiết Issue / Ghi chú', 'Supplier']);
+  summaryRows.push(['3. BẢNG TRUY VẤN & KIỂM SOÁT CA LỖI QC / HỦY / SỰ CỐ (ISSUE AUDIT TABLE)']);
+  summaryRows.push(['STT', 'Mã dự án', 'Hạng mục', 'CAT', 'Brand', 'Tên cửa hàng', 'Lịch thi công', 'Ngày hoàn thành', 'Status', 'Kết quả ><', 'Ghi chú lỗi / Chi tiết', 'Supplier']);
 
   if (issueRows.length === 0) {
-    summaryRows.push(['-', 'Không có dự án phát sinh lỗi QC Fail hoặc trễ deadline trong kỳ báo cáo này', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-']);
+    summaryRows.push(['-', 'Không có dự án phát sinh lỗi QC Fail hoặc sự cố trong kỳ báo cáo này', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-']);
   } else {
     issueRows.forEach(row => summaryRows.push(row));
   }
@@ -167,7 +179,7 @@ export const exportInstallationExecutiveReport = (
     { wch: 12 }, // CAT
     { wch: 16 }, // Brand
     { wch: 28 }, // Store Name
-    { wch: 20 }, // Lịch lắp
+    { wch: 20 }, // Lịch thi công
     { wch: 18 }, // Ngày HT
     { wch: 20 }, // Status
     { wch: 16 }, // Kết quả ><
@@ -197,12 +209,15 @@ export const exportInstallationExecutiveReport = (
     const res = calculateInstallationResult(item.actualTime, item.completionTime, item.status, item.resultSign);
     const statusLower = (item.status || '').toLowerCase().trim();
     const isQCFailed = statusLower.includes('installation qc failed') || statusLower.includes('qc failed') || statusLower.includes('failed') || statusLower.includes('lỗi');
-    
+    const isCancelled = statusLower.includes('cancelled') || statusLower.includes('cancel') || statusLower.includes('hủy');
+
     let resultSignText = '—';
-    if (res.sign === '✔') {
+    if (res.sign === '✔' || statusLower.includes('pass')) {
       resultSignText = '✔ Pass';
     } else if (res.sign === '❌' || isQCFailed) {
-      resultSignText = res.failReason === 'LATE' ? '❌ Trễ hạn' : res.failReason === 'QC_FAIL' ? '❌ QC Fail' : '❌ Fail';
+      resultSignText = '❌ Fail';
+    } else if (isCancelled) {
+      resultSignText = 'Cancelled';
     }
 
     rawRows.push([
