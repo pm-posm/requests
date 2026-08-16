@@ -69,32 +69,38 @@ export const formatFileSize = (size: string | number | undefined): string => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-// Sub-component: Clean & Beautiful Email Body Viewer with Precise Image Resolution & DOMPurify Sanitization
+// Sub-component: Clean & Ultra-Fast Email Body Viewer with Isolated CSS and Sanitization
 const EmailBodyViewer = React.memo<{ 
   body: string; 
   htmlBody?: string;
   attachments?: WarrantyEmailAttachment[];
   onImageClick?: (url: string) => void;
 }>(({ body, htmlBody, attachments, onImageClick }) => {
-  const [viewMode, setViewMode] = useState<'RICH' | 'TEXT'>(htmlBody ? 'RICH' : 'TEXT');
+  // Default to TEXT viewMode for instantaneous, zero-lag rendering. User can click 'Định dạng gốc' if desired.
+  const [viewMode, setViewMode] = useState<'TEXT' | 'RICH'>('TEXT');
 
-  // Format plain text
+  // Format plain text cleanly
   const formattedPlainText = useMemo(() => {
-    if (!body) return '';
+    if (!body) return 'Không có nội dung văn bản';
     return body
       .replace(/<mailto:[^>]+>/g, '')
       .replace(/^(>\s*)+/gm, '▎ ')
       .trim();
   }, [body]);
 
-  // Clean HTML, inject Base64 Data URIs with multi-strategy CID matching, and sanitize with DOMPurify
+  // Clean HTML: Strip <style> tags to PREVENT CSS rules from leaking into the dashboard DOM!
   const cleanedHtml = useMemo(() => {
-    if (!htmlBody) return '';
+    if (viewMode !== 'RICH' || !htmlBody) return '';
     
-    // Safety cap: Truncate excessively large HTML strings (> 60KB) to prevent DOMPurify main thread lockup
-    let safeHtml = htmlBody.length > 60000 ? htmlBody.substring(0, 60000) + '<p class="text-xs text-slate-400 font-mono">[Nội dung dài đã được rút gọn để tăng tốc độ hiển thị...]</p>' : htmlBody;
+    // Safety cap: Truncate large HTML strings
+    let safeHtml = htmlBody.length > 50000 
+      ? htmlBody.substring(0, 50000) + '<p style="color:#94a3b8;font-size:11px;font-style:italic;">[Nội dung HTML dài đã được tối ưu để tăng tốc độ...]</p>' 
+      : htmlBody;
 
+    // STRIP OUT ALL <style> and <link> TAGS to prevent global layout reflow storms!
     let clean = safeHtml
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<link[^>]*>/gi, '')
       .replace(/<html[^>]*>/gi, '')
       .replace(/<\/html>/gi, '')
       .replace(/<body[^>]*>/gi, '')
@@ -131,37 +137,38 @@ const EmailBodyViewer = React.memo<{
     clean = clean.replace(/<img[^>]*src=["']cid:[^"']*["'][^>]*>/gi, '');
     clean = clean.replace(/<img\s+/gi, '<img onerror="this.style.display=\'none\';this.remove();" ');
 
+    // Sanitize with DOMPurify: EXCLUDE 'style' tag from ADD_TAGS to protect document layout!
     return DOMPurify.sanitize(clean, {
-      ADD_TAGS: ['table', 'thead', 'tbody', 'tr', 'th', 'td', 'style', 'img', 'span', 'b', 'strong', 'i', 'em', 'p', 'div', 'br', 'hr', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'font'],
+      ADD_TAGS: ['table', 'thead', 'tbody', 'tr', 'th', 'td', 'img', 'span', 'b', 'strong', 'i', 'em', 'p', 'div', 'br', 'hr', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'font'],
       ADD_ATTR: ['src', 'alt', 'width', 'height', 'style', 'class', 'target', 'href', 'align', 'valign', 'border', 'cellpadding', 'cellspacing', 'color', 'size', 'face', 'onerror'],
       FORCE_BODY: false
     });
-  }, [htmlBody, attachments]);
+  }, [htmlBody, attachments, viewMode]);
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-1.5">
       {/* Mode Switcher */}
       {htmlBody && (
-        <div className="flex items-center justify-end gap-1">
-          <button
-            onClick={() => setViewMode('RICH')}
-            className={`px-1.5 py-0.5 rounded text-[10px] font-semibold transition-colors cursor-pointer ${
-              viewMode === 'RICH'
-                ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
-                : 'text-slate-400 hover:text-slate-600'
-            }`}
-          >
-            Định dạng gốc
-          </button>
+        <div className="flex items-center justify-end gap-1.5">
           <button
             onClick={() => setViewMode('TEXT')}
-            className={`px-1.5 py-0.5 rounded text-[10px] font-semibold transition-colors cursor-pointer ${
+            className={`px-2 py-0.5 rounded-md text-[10px] font-semibold transition-colors cursor-pointer ${
               viewMode === 'TEXT'
-                ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
-                : 'text-slate-400 hover:text-slate-600'
+                ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 font-bold shadow-2xs'
+                : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
             }`}
           >
-            Văn bản thuần
+            Văn bản thuần (Siêu tốc)
+          </button>
+          <button
+            onClick={() => setViewMode('RICH')}
+            className={`px-2 py-0.5 rounded-md text-[10px] font-semibold transition-colors cursor-pointer ${
+              viewMode === 'RICH'
+                ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 font-bold shadow-2xs'
+                : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+            }`}
+          >
+            Định dạng HTML gốc
           </button>
         </div>
       )}
@@ -175,11 +182,12 @@ const EmailBodyViewer = React.memo<{
               if (src) onImageClick(src);
             }
           }}
-          className="email-rich-content text-slate-800 dark:text-slate-200 text-[11px] leading-relaxed overflow-x-auto custom-scrollbar p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-800"
+          className="email-rich-content text-slate-800 dark:text-slate-200 text-[11px] leading-relaxed overflow-x-auto custom-scrollbar p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-2xs"
+          style={{ contain: 'paint layout' }}
           dangerouslySetInnerHTML={{ __html: cleanedHtml }}
         />
       ) : (
-        <div className="text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed font-sans whitespace-pre-wrap select-text break-words bg-white dark:bg-slate-900/80 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
+        <div className="text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed font-sans whitespace-pre-wrap select-text break-words bg-white dark:bg-slate-900/80 p-3 rounded-xl border border-slate-100 dark:border-slate-800 shadow-2xs">
           {formattedPlainText}
         </div>
       )}
