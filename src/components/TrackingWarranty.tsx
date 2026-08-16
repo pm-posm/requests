@@ -1279,25 +1279,14 @@ export default function TrackingWarranty() {
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
-            {selectedProject !== 'all' ? (
-              <button
-                onClick={() => handleExportExcel(selectedProject)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 rounded-xl shadow-xs transition-all cursor-pointer border border-amber-400/40"
-                title={`Xuất file báo cáo Excel 3-Tab riêng cho Dự Án ${selectedProject}`}
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Xuất Excel ({filteredItems.length})</span>
-              </button>
-            ) : (
-              <button
-                onClick={() => handleExportExcel()}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl shadow-xs transition-all cursor-pointer border border-emerald-400/40"
-                title="Xuất file báo cáo Excel 3-Tab BI (.xlsx) cho tất cả dự án"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Xuất Excel</span>
-              </button>
-            )}
+            <button
+              onClick={() => handleExportExcel()}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl shadow-xs transition-all cursor-pointer border border-emerald-400/40"
+              title="Xuất file báo cáo Excel 3-Tab BI (.xlsx) theo bộ lọc hiện tại"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Xuất Excel ({filteredItems.length})</span>
+            </button>
 
             <button
               onClick={() => fetchSheetData(sheetUrl)}
