@@ -375,19 +375,8 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
   onOpenWarrantyDrawer,
   onUpdateWebAppUrl
 }) => {
-  const [threads, setThreads] = useState<WarrantyEmailThread[]>(() => {
-    try {
-      const saved = localStorage.getItem('WARRANTY_GMAIL_SAVED_THREADS');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {}
-    return SAMPLE_WARRANTY_THREADS;
-  });
-  const [selectedThreadId, setSelectedThreadId] = useState<string>(() => {
-    return threads[0]?.threadId || '';
-  });
+  const [threads, setThreads] = useState<WarrantyEmailThread[]>([]);
+  const [selectedThreadId, setSelectedThreadId] = useState<string>('');
   const [mobileShowDetail, setMobileShowDetail] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'ALL' | 'NEW' | 'MATCHED' | 'HAS_ATTACHMENT' | 'IN_PROGRESS'>('ALL');
@@ -526,6 +515,10 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
           setThreads(mappedThreads);
           setSelectedThreadId(prev => prev || mappedThreads[0]?.threadId || '');
           setLastSyncedTime(new Date().toLocaleTimeString('vi-VN'));
+        } else {
+          setThreads([]);
+          setSelectedThreadId('');
+          setLastSyncedTime(new Date().toLocaleTimeString('vi-VN'));
         }
       } catch (err) {
         console.warn('Supabase initial load error:', err);
@@ -625,8 +618,10 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
           });
         }
       } else {
+        setThreads([]);
+        setSelectedThreadId('');
         if (!isSilent) {
-          toast('Hộp thư trên Supabase đang trống.', { icon: 'ℹ️' });
+          toast('Hộp thư trên Supabase đang trống (0 email).', { icon: 'ℹ️' });
         }
       }
     } catch (err: any) {
