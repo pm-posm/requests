@@ -50,30 +50,33 @@ interface MultiSelectGroupProps {
 const MultiSelectGroup: React.FC<MultiSelectGroupProps> = ({
   label,
   icon,
-  options,
-  selectedValues,
+  options = [],
+  selectedValues = [],
   onChange
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
 
+  const safeOptions = options || [];
+  const safeSelected = selectedValues || [];
+
   const filteredOptions = useMemo(() => {
-    return options.filter(opt =>
-      opt.toLowerCase().includes(search.toLowerCase().trim())
+    return safeOptions.filter(opt =>
+      opt && opt.toLowerCase().includes(search.toLowerCase().trim())
     );
-  }, [options, search]);
+  }, [safeOptions, search]);
 
   const toggleOption = (val: string) => {
-    if (selectedValues.includes(val)) {
-      onChange(selectedValues.filter(v => v !== val));
+    if (safeSelected.includes(val)) {
+      onChange(safeSelected.filter(v => v !== val));
     } else {
-      onChange([...selectedValues, val]);
+      onChange([...safeSelected, val]);
     }
   };
 
   const selectAll = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onChange([...options]);
+    onChange([...safeOptions]);
   };
 
   const clearAll = (e: React.MouseEvent) => {
@@ -279,38 +282,46 @@ export const WarrantyFilterBar: React.FC<WarrantyFilterBarProps> = ({
     return uniqueProjects.filter(p => p.code.toLowerCase().includes(s));
   }, [uniqueProjects, projectSearch]);
 
+  // Safe defaults for array properties
+  const selectedProjects = filters?.selectedProjects || [];
+  const selectedVisTechs = filters?.selectedVisTechs || [];
+  const selectedSuppliers = filters?.selectedSuppliers || [];
+  const selectedStores = filters?.selectedStores || [];
+  const selectedPosmTypes = filters?.selectedPosmTypes || [];
+  const selectedBrands = filters?.selectedBrands || [];
+
   // Date active check
-  const isDateFiltered = filters.selectedYear !== 'all' ||
-    filters.selectedQuarter !== 'all' ||
-    filters.selectedMonth !== 'all' ||
-    filters.selectedWeek !== 'all' ||
-    !!filters.dateFrom ||
-    !!filters.dateTo;
+  const isDateFiltered = (filters?.selectedYear && filters.selectedYear !== 'all') ||
+    (filters?.selectedQuarter && filters.selectedQuarter !== 'all') ||
+    (filters?.selectedMonth && filters.selectedMonth !== 'all') ||
+    (filters?.selectedWeek && filters.selectedWeek !== 'all') ||
+    !!filters?.dateFrom ||
+    !!filters?.dateTo;
 
   // Project active check
-  const isProjectFiltered = filters.selectedProjects.length > 0;
+  const isProjectFiltered = selectedProjects.length > 0;
 
   // Dimension active count
   const totalActiveClassificationCount = 
-    filters.selectedVisTechs.length +
-    filters.selectedSuppliers.length +
-    filters.selectedStores.length +
-    filters.selectedPosmTypes.length +
-    filters.selectedBrands.length;
+    selectedVisTechs.length +
+    selectedSuppliers.length +
+    selectedStores.length +
+    selectedPosmTypes.length +
+    selectedBrands.length;
 
-  const hasAnyActiveFilters = isDateFiltered || isProjectFiltered || totalActiveClassificationCount > 0 || !!filters.searchTerm.trim();
+  const hasAnyActiveFilters = isDateFiltered || isProjectFiltered || totalActiveClassificationCount > 0 || !!(filters?.searchTerm || '').trim();
 
   // Label for Date trigger button
   const getDateFilterLabel = () => {
-    if (filters.dateFrom && filters.dateTo) return `${filters.dateFrom} ➔ ${filters.dateTo}`;
-    if (filters.dateFrom) return `Từ ${filters.dateFrom}`;
-    if (filters.dateTo) return `Đến ${filters.dateTo}`;
-    if (filters.selectedWeek !== 'all') return `Tuần ${filters.selectedWeek}`;
-    if (filters.selectedQuarter !== 'all' && filters.selectedYear !== 'all') return `Quý ${filters.selectedQuarter}/${filters.selectedYear}`;
-    if (filters.selectedQuarter !== 'all') return `Quý ${filters.selectedQuarter}`;
-    if (filters.selectedMonth !== 'all' && filters.selectedYear !== 'all') return `T${filters.selectedMonth}/${filters.selectedYear}`;
-    if (filters.selectedMonth !== 'all') return `Tháng ${filters.selectedMonth}`;
-    if (filters.selectedYear !== 'all') return `Năm ${filters.selectedYear}`;
+    if (filters?.dateFrom && filters?.dateTo) return `${filters.dateFrom} ➔ ${filters.dateTo}`;
+    if (filters?.dateFrom) return `Từ ${filters.dateFrom}`;
+    if (filters?.dateTo) return `Đến ${filters.dateTo}`;
+    if (filters?.selectedWeek && filters.selectedWeek !== 'all') return `Tuần ${filters.selectedWeek}`;
+    if (filters?.selectedQuarter && filters.selectedQuarter !== 'all' && filters?.selectedYear && filters.selectedYear !== 'all') return `Quý ${filters.selectedQuarter}/${filters.selectedYear}`;
+    if (filters?.selectedQuarter && filters.selectedQuarter !== 'all') return `Quý ${filters.selectedQuarter}`;
+    if (filters?.selectedMonth && filters.selectedMonth !== 'all' && filters?.selectedYear && filters.selectedYear !== 'all') return `T${filters.selectedMonth}/${filters.selectedYear}`;
+    if (filters?.selectedMonth && filters.selectedMonth !== 'all') return `Tháng ${filters.selectedMonth}`;
+    if (filters?.selectedYear && filters.selectedYear !== 'all') return `Năm ${filters.selectedYear}`;
     return 'Tất cả';
   };
 
@@ -615,16 +626,16 @@ export const WarrantyFilterBar: React.FC<WarrantyFilterBarProps> = ({
             <div className="flex items-center gap-2">
               <FolderKanban className="w-4 h-4 text-amber-600 dark:text-amber-400" />
               <span>
-                Dự án: {filters.selectedProjects.length === 0
+                Dự án: {selectedProjects.length === 0
                   ? 'Tất cả'
-                  : filters.selectedProjects.length === 1
-                  ? `${filters.selectedProjects[0]}`
-                  : `${filters.selectedProjects.length} mã đã chọn`}
+                  : selectedProjects.length === 1
+                  ? `${selectedProjects[0]}`
+                  : `${selectedProjects.length} mã đã chọn`}
               </span>
             </div>
-            {filters.selectedProjects.length > 0 && (
+            {selectedProjects.length > 0 && (
               <span className="w-5 h-5 rounded-full bg-amber-600 text-white text-[10px] font-bold flex items-center justify-center font-mono">
-                {filters.selectedProjects.length}
+                {selectedProjects.length}
               </span>
             )}
             <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isProjectPopoverOpen ? 'rotate-180' : ''}`} />

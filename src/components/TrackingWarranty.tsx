@@ -770,26 +770,32 @@ export default function TrackingWarranty() {
       }
 
       // 3. Project Code filter (Multi-select)
-      if (filters.selectedProjects && filters.selectedProjects.length > 0) {
+      const selectedProjects = filters.selectedProjects || [];
+      if (selectedProjects.length > 0) {
         const itemPrj = (item.projectCode || '').trim();
-        if (!filters.selectedProjects.includes(itemPrj)) return false;
+        if (!selectedProjects.includes(itemPrj)) return false;
       }
 
       // 4. Classification filters (VIS-Tech, Supplier, Store, Loại POSM, Nhãn)
-      if (filters.selectedVisTechs.length > 0) {
-        if (!filters.selectedVisTechs.includes(item.visTech?.trim())) return false;
+      const selectedVisTechs = filters.selectedVisTechs || [];
+      if (selectedVisTechs.length > 0) {
+        if (!selectedVisTechs.includes(item.visTech?.trim())) return false;
       }
-      if (filters.selectedSuppliers.length > 0) {
-        if (!filters.selectedSuppliers.includes(item.supplier?.trim())) return false;
+      const selectedSuppliers = filters.selectedSuppliers || [];
+      if (selectedSuppliers.length > 0) {
+        if (!selectedSuppliers.includes(item.supplier?.trim())) return false;
       }
-      if (filters.selectedStores.length > 0) {
-        if (!filters.selectedStores.includes(item.storeName?.trim())) return false;
+      const selectedStores = filters.selectedStores || [];
+      if (selectedStores.length > 0) {
+        if (!selectedStores.includes(item.storeName?.trim())) return false;
       }
-      if (filters.selectedPosmTypes.length > 0) {
-        if (!filters.selectedPosmTypes.includes(item.posmType?.trim())) return false;
+      const selectedPosmTypes = filters.selectedPosmTypes || [];
+      if (selectedPosmTypes.length > 0) {
+        if (!selectedPosmTypes.includes(item.posmType?.trim())) return false;
       }
-      if (filters.selectedBrands.length > 0) {
-        if (!filters.selectedBrands.includes(item.brand?.trim())) return false;
+      const selectedBrands = filters.selectedBrands || [];
+      if (selectedBrands.length > 0) {
+        if (!selectedBrands.includes(item.brand?.trim())) return false;
       }
 
       return true;
