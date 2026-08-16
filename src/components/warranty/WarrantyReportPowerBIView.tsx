@@ -60,7 +60,7 @@ const formatDateDisplay = (str?: string): string => {
   return `${dd}/${mm}/${yyyy}`;
 };
 
-// Power BI Visual Container Component with Standard Fluent Header Toolbar
+// Modern Executive Analytics Visual Container Component
 const PowerBIVisual: React.FC<{
   title: string;
   subtitle?: string;
@@ -69,47 +69,44 @@ const PowerBIVisual: React.FC<{
   onFocus?: () => void;
   accentColor?: string;
   filterActive?: boolean;
-}> = ({ title, subtitle, className = '', children, onFocus, accentColor, filterActive }) => {
+}> = ({ title, subtitle, className = '', children, onFocus, filterActive }) => {
   return (
-    <div className={`bg-white dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] shadow-[0_1px_3px_rgba(0,0,0,0.06)] flex flex-col relative transition-all group/pbi ${className}`}>
-      {accentColor && (
-        <div className="h-[3px] w-full" style={{ backgroundColor: accentColor }} />
-      )}
+    <div className={`bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-2xs flex flex-col relative transition-all overflow-hidden ${className}`}>
       
-      {/* Power BI Visual Header */}
-      <div className="px-3 py-2 border-b border-[#EDEBE9] dark:border-[#323130] flex items-center justify-between gap-2 select-none">
+      {/* Visual Header */}
+      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2 select-none bg-slate-50/50 dark:bg-slate-950/30">
         <div className="min-w-0">
-          <div className="flex items-center gap-1.5">
-            <h3 className="text-[12px] font-semibold text-[#252423] dark:text-[#F3F2F1] tracking-tight truncate font-sans">
+          <div className="flex items-center gap-2">
+            <h3 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 tracking-tight truncate font-sans">
               {title}
             </h3>
             {filterActive && (
-              <span className="w-1.5 h-1.5 rounded-full bg-[#118DFF]" title="Đang lọc theo visual này" />
+              <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse" title="Đang lọc theo visual này" />
             )}
           </div>
           {subtitle && (
-            <p className="text-[10px] text-[#605E5C] dark:text-[#A19F9D] truncate font-sans">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate font-sans mt-0.5">
               {subtitle}
             </p>
           )}
         </div>
 
-        {/* Visual Header Hover Icons */}
-        <div className="flex items-center gap-1 opacity-40 group-hover/pbi:opacity-100 transition-opacity">
+        {/* Visual Header Actions */}
+        <div className="flex items-center gap-1">
           {onFocus && (
             <button
               onClick={onFocus}
-              className="p-1 hover:bg-[#F3F2F1] dark:hover:bg-[#323130] rounded text-[#605E5C] dark:text-[#C8C6C4] transition-colors cursor-pointer"
+              className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
               title="Chế độ tiêu điểm (Focus Mode)"
             >
-              <Maximize2 className="w-3 h-3" />
+              <Maximize2 className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
       </div>
 
       {/* Visual Content Body */}
-      <div className="p-3 flex-1 flex flex-col">
+      <div className="p-4 flex-1 flex flex-col">
         {children}
       </div>
     </div>
@@ -651,13 +648,13 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
   };
 
   return (
-    <div className="bg-[#F0F2F5] dark:bg-[#181818] text-[#252423] dark:text-[#F3F2F1] flex flex-col font-sans select-text pb-14 rounded-2xl overflow-hidden border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+    <div className="space-y-4 font-sans select-text pb-12">
       
-      {/* POWER BI SLICERS / FILTER PANE BAR (UNIFIED 2-GROUPS: DATE + CLASSIFICATION) */}
-      <div className="bg-[#FFFFFF] dark:bg-[#242424] border-b border-[#D2D0CE] dark:border-[#383838] px-4 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+      {/* 1. SLICERS / FILTER PANE BAR (UNIFIED 2-GROUPS: DATE + CLASSIFICATION) */}
+      <div className="bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs">
         <div className="flex items-center gap-2.5 flex-wrap text-xs">
-          <div className="flex items-center gap-1.5 text-[#605E5C] dark:text-[#A19F9D] font-semibold uppercase text-[11px] pr-2 border-r border-[#EDEBE9] dark:border-[#383838]">
-            <Filter className="w-3.5 h-3.5 text-[#118DFF]" />
+          <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 font-bold uppercase text-[11px] pr-2 border-r border-slate-200 dark:border-slate-800">
+            <Filter className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
             <span>Slicers:</span>
           </div>
 
@@ -667,23 +664,24 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
               onClick={() => {
                 setIsDateSlicerOpen(!isDateSlicerOpen);
                 setIsClassSlicerOpen(false);
+                setIsProjectSlicerOpen(false);
               }}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[2px] border transition-colors cursor-pointer font-semibold ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all cursor-pointer font-semibold ${
                 isDateFiltered
-                  ? 'bg-[#118DFF]/10 text-[#118DFF] border-[#118DFF]'
-                  : 'bg-[#F8F9FA] dark:bg-[#2A2A2A] border-[#D2D0CE] dark:border-[#3B3A39] text-[#252423] dark:text-[#F3F2F1]'
+                  ? 'bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border-sky-300 dark:border-sky-800 shadow-2xs'
+                  : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
               }`}
             >
-              <Calendar className="w-3.5 h-3.5 text-[#118DFF]" />
+              <Calendar className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
               <span>Thời gian: {getDateFilterLabel()}</span>
-              <ChevronDown className={`w-3 h-3 text-[#8A8886] transition-transform ${isDateSlicerOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isDateSlicerOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {isDateSlicerOpen && (
-              <div className="absolute left-0 mt-1.5 w-80 sm:w-96 bg-[#FFFFFF] dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] shadow-xl z-50 p-3.5 space-y-3">
-                <div className="flex items-center justify-between border-b border-[#EDEBE9] dark:border-[#383838] pb-2">
-                  <span className="font-bold text-xs flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-[#118DFF]" />
+              <div className="absolute left-0 mt-2 w-80 sm:w-96 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 p-4 space-y-3.5 animate-in fade-in zoom-in-95 duration-150">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2.5">
+                  <span className="font-bold text-xs flex items-center gap-1.5 text-slate-900 dark:text-slate-100">
+                    <Calendar className="w-3.5 h-3.5 text-sky-500" />
                     Bộ Lọc Thời Gian
                   </span>
                   {isDateFiltered && (
@@ -696,7 +694,7 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                         setDateFrom('');
                         setDateTo('');
                       }}
-                      className="text-[11px] text-[#D64550] hover:underline font-semibold"
+                      className="text-[11px] text-rose-600 dark:text-rose-400 hover:underline font-semibold cursor-pointer"
                     >
                       Đặt lại
                     </button>
@@ -714,7 +712,7 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                       setDateFrom('');
                       setDateTo('');
                     }}
-                    className={`px-2 py-0.5 rounded-[2px] text-[11px] font-semibold ${!isDateFiltered ? 'bg-[#118DFF] text-white' : 'bg-[#F3F2F1] dark:bg-[#323130]'}`}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${!isDateFiltered ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200'}`}
                   >
                     Tất cả
                   </button>
@@ -728,7 +726,7 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                       setDateFrom('');
                       setDateTo('');
                     }}
-                    className="px-2 py-0.5 bg-[#F3F2F1] dark:bg-[#323130] rounded-[2px] text-[11px] font-semibold hover:bg-[#EDEBE9]"
+                    className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-semibold hover:bg-slate-200 text-slate-700 dark:text-slate-300 cursor-pointer"
                   >
                     Năm nay ({new Date().getFullYear()})
                   </button>
@@ -742,7 +740,7 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                       setDateFrom('');
                       setDateTo('');
                     }}
-                    className="px-2 py-0.5 bg-[#F3F2F1] dark:bg-[#323130] rounded-[2px] text-[11px] font-semibold hover:bg-[#EDEBE9]"
+                    className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-semibold hover:bg-slate-200 text-slate-700 dark:text-slate-300 cursor-pointer"
                   >
                     Quý này (Q{Math.ceil((new Date().getMonth() + 1) / 3)})
                   </button>
@@ -756,7 +754,7 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                       setDateFrom('');
                       setDateTo('');
                     }}
-                    className="px-2 py-0.5 bg-[#F3F2F1] dark:bg-[#323130] rounded-[2px] text-[11px] font-semibold hover:bg-[#EDEBE9]"
+                    className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-semibold hover:bg-slate-200 text-slate-700 dark:text-slate-300 cursor-pointer"
                   >
                     Tháng này (T{new Date().getMonth() + 1})
                   </button>
@@ -765,11 +763,11 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                 {/* Grid selectors */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                   <div>
-                    <label className="text-[10px] text-[#605E5C] dark:text-[#A19F9D] block mb-0.5">Năm</label>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1 font-semibold">Năm</label>
                     <select
                       value={selectedYear}
                       onChange={(e) => setSelectedYear(e.target.value)}
-                      className="w-full p-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] text-xs font-semibold"
+                      className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold outline-none cursor-pointer"
                     >
                       <option value="all">Tất cả</option>
                       {uniqueYears.map(y => (
@@ -778,11 +776,11 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                     </select>
                   </div>
                   <div>
-                    <label className="text-[10px] text-[#605E5C] dark:text-[#A19F9D] block mb-0.5">Quý</label>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1 font-semibold">Quý</label>
                     <select
                       value={selectedQuarter}
                       onChange={(e) => setSelectedQuarter(e.target.value)}
-                      className="w-full p-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] text-xs font-semibold"
+                      className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold outline-none cursor-pointer"
                     >
                       <option value="all">Tất cả</option>
                       <option value="1">Quý 1</option>
@@ -792,24 +790,24 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                     </select>
                   </div>
                   <div>
-                    <label className="text-[10px] text-[#605E5C] dark:text-[#A19F9D] block mb-0.5">Tháng</label>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1 font-semibold">Tháng</label>
                     <select
                       value={selectedMonth}
                       onChange={(e) => setSelectedMonth(e.target.value)}
-                      className="w-full p-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] text-xs font-semibold"
+                      className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold outline-none cursor-pointer"
                     >
                       <option value="all">Tất cả</option>
                       {Array.from({ length: 12 }, (_, i) => String(i + 1)).map(m => (
-                        <option key={m} value={m}>T{m}</option>
+                        <option key={m} value={m}>Tháng {m}</option>
                       ))}
                     </select>
                   </div>
                   <div>
-                    <label className="text-[10px] text-[#605E5C] dark:text-[#A19F9D] block mb-0.5">Tuần</label>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1 font-semibold">Tuần</label>
                     <select
                       value={selectedWeek}
                       onChange={(e) => setSelectedWeek(e.target.value)}
-                      className="w-full p-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] text-xs font-semibold"
+                      className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold outline-none cursor-pointer"
                     >
                       <option value="all">Tất cả</option>
                       {Array.from({ length: 52 }, (_, i) => String(i + 1)).map(w => (
@@ -819,24 +817,21 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                   </div>
                 </div>
 
-                {/* Range */}
-                <div className="pt-2 border-t border-[#EDEBE9] dark:border-[#383838] grid grid-cols-2 gap-2">
-                  <div>
-                    <span className="text-[10px] text-[#605E5C] block mb-0.5">Từ ngày:</span>
+                {/* Custom Date Range */}
+                <div className="space-y-1.5 pt-1 border-t border-slate-100 dark:border-slate-800">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Khoảng ngày tùy chọn:</label>
+                  <div className="grid grid-cols-2 gap-2">
                     <input
                       type="date"
                       value={dateFrom}
                       onChange={(e) => setDateFrom(e.target.value)}
-                      className="w-full p-1 text-xs border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] bg-transparent"
+                      className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs outline-none"
                     />
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-[#605E5C] block mb-0.5">Đến ngày:</span>
                     <input
                       type="date"
                       value={dateTo}
                       onChange={(e) => setDateTo(e.target.value)}
-                      className="w-full p-1 text-xs border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] bg-transparent"
+                      className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs outline-none"
                     />
                   </div>
                 </div>
@@ -844,7 +839,7 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                 <div className="flex justify-end pt-1">
                   <button
                     onClick={() => setIsDateSlicerOpen(false)}
-                    className="px-3 py-1 bg-[#118DFF] text-white text-xs font-bold rounded-[2px]"
+                    className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 text-xs font-bold rounded-xl transition-colors cursor-pointer"
                   >
                     Áp dụng
                   </button>
@@ -859,23 +854,24 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
               onClick={() => {
                 setIsClassSlicerOpen(!isClassSlicerOpen);
                 setIsDateSlicerOpen(false);
+                setIsProjectSlicerOpen(false);
               }}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[2px] border transition-colors cursor-pointer font-semibold ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all cursor-pointer font-semibold ${
                 isClassFiltered
-                  ? 'bg-[#5C2D91]/10 text-[#5C2D91] dark:text-[#C58AF9] border-[#5C2D91]'
-                  : 'bg-[#F8F9FA] dark:bg-[#2A2A2A] border-[#D2D0CE] dark:border-[#3B3A39] text-[#252423] dark:text-[#F3F2F1]'
+                  ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-800 shadow-2xs'
+                  : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
               }`}
             >
-              <SlidersHorizontal className="w-3.5 h-3.5 text-[#5C2D91] dark:text-[#C58AF9]" />
+              <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
               <span>Phân loại: {isClassFiltered ? 'Đang lọc' : 'Tất cả'}</span>
-              <ChevronDown className={`w-3 h-3 text-[#8A8886] transition-transform ${isClassSlicerOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isClassSlicerOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {isClassSlicerOpen && (
-              <div className="absolute left-0 mt-1.5 w-80 sm:w-[380px] bg-[#FFFFFF] dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] shadow-xl z-50 p-3.5 space-y-2.5">
-                <div className="flex items-center justify-between border-b border-[#EDEBE9] dark:border-[#383838] pb-2">
-                  <span className="font-bold text-xs flex items-center gap-1.5">
-                    <SlidersHorizontal className="w-3.5 h-3.5 text-[#5C2D91]" />
+              <div className="absolute left-0 mt-2 w-80 sm:w-[380px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 p-4 space-y-3 animate-in fade-in zoom-in-95 duration-150">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2.5">
+                  <span className="font-bold text-xs flex items-center gap-1.5 text-slate-900 dark:text-slate-100">
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-500" />
                     Bộ Lọc Phân Loại POSM
                   </span>
                   {isClassFiltered && (
@@ -887,53 +883,53 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                         setSelectedPosmType('all');
                         setSelectedBrand('all');
                       }}
-                      className="text-[11px] text-[#D64550] hover:underline font-semibold"
+                      className="text-[11px] text-rose-600 dark:text-rose-400 hover:underline font-semibold cursor-pointer"
                     >
                       Đặt lại
                     </button>
                   )}
                 </div>
 
-                <div className="space-y-2 text-xs">
+                <div className="space-y-2.5 text-xs max-h-64 overflow-y-auto custom-scrollbar pr-1">
                   {/* VIS-Tech */}
                   <div>
-                    <label className="text-[10px] text-[#605E5C] dark:text-[#A19F9D] block mb-0.5">1. VIS-Tech</label>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1 font-semibold">1. Nhân sự VIS-Tech</label>
                     <select
                       value={selectedVisTech}
                       onChange={(e) => setSelectedVisTech(e.target.value)}
-                      className="w-full p-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px]"
+                      className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold outline-none cursor-pointer"
                     >
-                      <option value="all">Tất cả VIS-Tech ({uniqueVisTechs.length})</option>
-                      {uniqueVisTechs.map(t => (
-                        <option key={t} value={t}>{t}</option>
+                      <option value="all">Tất cả Nhân sự VIS-Tech ({uniqueVisTechs.length})</option>
+                      {uniqueVisTechs.map(v => (
+                        <option key={v} value={v}>{v}</option>
                       ))}
                     </select>
                   </div>
 
                   {/* Supplier */}
                   <div>
-                    <label className="text-[10px] text-[#605E5C] dark:text-[#A19F9D] block mb-0.5">2. Nhà thầu (Supplier)</label>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1 font-semibold">2. Nhà Thầu Sản Xuất</label>
                     <select
                       value={selectedSupplier}
                       onChange={(e) => setSelectedSupplier(e.target.value)}
-                      className="w-full p-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px]"
+                      className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold outline-none cursor-pointer"
                     >
-                      <option value="all">Tất cả Nhà thầu ({uniqueSuppliers.length})</option>
+                      <option value="all">Tất cả Nhà Thầu ({uniqueSuppliers.length})</option>
                       {uniqueSuppliers.map(s => (
                         <option key={s} value={s}>{s}</option>
                       ))}
                     </select>
                   </div>
 
-                  {/* Store */}
+                  {/* Store Name */}
                   <div>
-                    <label className="text-[10px] text-[#605E5C] dark:text-[#A19F9D] block mb-0.5">3. Siêu thị (Store)</label>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1 font-semibold">3. Tên Siêu Thị</label>
                     <select
                       value={selectedStore}
                       onChange={(e) => setSelectedStore(e.target.value)}
-                      className="w-full p-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px]"
+                      className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold outline-none cursor-pointer"
                     >
-                      <option value="all">Tất cả Siêu thị ({uniqueStores.length})</option>
+                      <option value="all">Tất cả Siêu Thị ({uniqueStores.length})</option>
                       {uniqueStores.map(st => (
                         <option key={st} value={st}>{st}</option>
                       ))}
@@ -942,11 +938,11 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
 
                   {/* Loại POSM */}
                   <div>
-                    <label className="text-[10px] text-[#605E5C] dark:text-[#A19F9D] block mb-0.5">4. Loại POSM</label>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1 font-semibold">4. Loại POSM</label>
                     <select
                       value={selectedPosmType}
                       onChange={(e) => setSelectedPosmType(e.target.value)}
-                      className="w-full p-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px]"
+                      className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold outline-none cursor-pointer"
                     >
                       <option value="all">Tất cả Loại POSM ({uniquePosmTypes.length})</option>
                       {uniquePosmTypes.map(p => (
@@ -957,11 +953,11 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
 
                   {/* Brand / Nhãn */}
                   <div>
-                    <label className="text-[10px] text-[#605E5C] dark:text-[#A19F9D] block mb-0.5">5. Nhãn / Brand</label>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1 font-semibold">5. Nhãn / Brand</label>
                     <select
                       value={selectedBrand}
                       onChange={(e) => setSelectedBrand(e.target.value)}
-                      className="w-full p-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px]"
+                      className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold outline-none cursor-pointer"
                     >
                       <option value="all">Tất cả Brand ({uniqueBrands.length})</option>
                       {uniqueBrands.map(b => (
@@ -974,7 +970,7 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                 <div className="flex justify-end pt-1">
                   <button
                     onClick={() => setIsClassSlicerOpen(false)}
-                    className="px-3 py-1 bg-[#5C2D91] text-white text-xs font-bold rounded-[2px]"
+                    className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 text-xs font-bold rounded-xl transition-colors cursor-pointer"
                   >
                     Áp dụng
                   </button>
@@ -991,80 +987,35 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                 setIsDateSlicerOpen(false);
                 setIsClassSlicerOpen(false);
               }}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[2px] border transition-colors cursor-pointer font-semibold ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all cursor-pointer font-semibold ${
                 isProjectFiltered
-                  ? 'bg-[#B146C2]/10 text-[#B146C2] dark:text-[#E289F2] border-[#B146C2]'
-                  : 'bg-[#F8F9FA] dark:bg-[#2A2A2A] border-[#D2D0CE] dark:border-[#3B3A39] text-[#252423] dark:text-[#F3F2F1]'
+                  ? 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-800 shadow-2xs'
+                  : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
               }`}
             >
-              <Layers className="w-3.5 h-3.5 text-[#B146C2] dark:text-[#E289F2]" />
-              <span>
-                Dự án: {selectedProjects.length === 0
-                  ? 'Tất cả'
-                  : selectedProjects.length === 1
-                  ? selectedProjects[0]
-                  : `${selectedProjects.length} mã đã chọn`}
-              </span>
-              <ChevronDown className={`w-3 h-3 text-[#8A8886] transition-transform ${isProjectSlicerOpen ? 'rotate-180' : ''}`} />
+              <Tag className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+              <span>Dự án: {isProjectFiltered ? `${selectedProjects.length} đang chọn` : 'Tất cả'}</span>
+              <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isProjectSlicerOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {isProjectSlicerOpen && (
-              <div className="absolute left-0 mt-1.5 w-80 sm:w-96 bg-[#FFFFFF] dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] shadow-xl z-50 p-3.5 space-y-2.5">
-                <div className="flex items-center justify-between border-b border-[#EDEBE9] dark:border-[#383838] pb-2">
-                  <span className="font-bold text-xs flex items-center gap-1.5">
-                    <Layers className="w-3.5 h-3.5 text-[#B146C2]" />
-                    Bộ Lọc Mã Dự Án ({uniqueProjects.length})
+              <div className="absolute left-0 mt-2 w-80 sm:w-96 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 p-4 space-y-3 animate-in fade-in zoom-in-95 duration-150">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2.5">
+                  <span className="font-bold text-xs flex items-center gap-1.5 text-slate-900 dark:text-slate-100">
+                    <Tag className="w-3.5 h-3.5 text-purple-500" />
+                    Bộ Lọc Mã Dự Án ({selectedProjects.length}/{uniqueProjects.length})
                   </span>
-                  {isProjectFiltered && (
+                  <div className="flex items-center gap-2 text-[11px]">
+                    <button
+                      onClick={() => setSelectedProjects(uniqueProjects.map(p => p.code))}
+                      className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold cursor-pointer"
+                    >
+                      Chọn tất cả
+                    </button>
+                    <span className="text-slate-300 dark:text-slate-700">•</span>
                     <button
                       onClick={() => setSelectedProjects([])}
-                      className="text-[11px] text-[#D64550] hover:underline font-semibold"
-                    >
-                      Bỏ chọn tất cả
-                    </button>
-                  )}
-                </div>
-
-                {/* In-Popover Search */}
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[#8A8886]" />
-                  <input
-                    type="text"
-                    placeholder="Tìm kiếm mã dự án..."
-                    value={projectSlicerSearch}
-                    onChange={(e) => setProjectSlicerSearch(e.target.value)}
-                    className="w-full pl-8 pr-6 py-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] text-xs outline-none focus:border-[#B146C2]"
-                  />
-                  {projectSlicerSearch && (
-                    <button
-                      onClick={() => setProjectSlicerSearch('')}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[#8A8886] hover:text-[#252423] text-xs"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-
-                {/* Quick actions */}
-                <div className="flex items-center justify-between text-[11px] text-[#605E5C] dark:text-[#A19F9D]">
-                  <span>{filteredProjects.length} mã phù hợp</span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const visibleCodes = filteredProjects.map(p => p.code);
-                        const merged = Array.from(new Set([...selectedProjects, ...visibleCodes]));
-                        setSelectedProjects(merged);
-                      }}
-                      className="text-[#118DFF] hover:underline font-semibold cursor-pointer"
-                    >
-                      Chọn tất cả ({filteredProjects.length})
-                    </button>
-                    <span>•</span>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedProjects([])}
-                      className="text-[#605E5C] hover:underline cursor-pointer"
+                      className="text-slate-500 hover:underline cursor-pointer"
                     >
                       Bỏ chọn
                     </button>
@@ -1072,9 +1023,9 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                 </div>
 
                 {/* Project Checklist */}
-                <div className="max-h-56 overflow-y-auto custom-scrollbar space-y-1 pr-1 border border-[#EDEBE9] dark:border-[#383838] p-1.5 rounded-[2px] bg-[#F8F9FA] dark:bg-[#2A2A2A]">
+                <div className="max-h-56 overflow-y-auto custom-scrollbar space-y-1 pr-1 border border-slate-200 dark:border-slate-800 p-2 rounded-xl bg-slate-50 dark:bg-slate-950">
                   {filteredProjects.length === 0 ? (
-                    <div className="text-center py-6 text-xs text-[#8A8886] italic">
+                    <div className="text-center py-6 text-xs text-slate-400 italic">
                       Không tìm thấy mã dự án nào khớp với "{projectSlicerSearch}"
                     </div>
                   ) : (
@@ -1090,25 +1041,25 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                               setSelectedProjects([...selectedProjects, code]);
                             }
                           }}
-                          className={`flex items-center justify-between px-2 py-1 rounded-[2px] text-xs cursor-pointer select-none transition-colors ${
+                          className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs cursor-pointer select-none transition-colors ${
                             isChecked
-                              ? 'bg-[#B146C2]/15 font-bold text-[#252423] dark:text-[#FFFFFF]'
-                              : 'hover:bg-[#EDEBE9] dark:hover:bg-[#323130] text-[#252423] dark:text-[#F3F2F1]'
+                              ? 'bg-purple-100/80 dark:bg-purple-950/80 font-bold text-purple-950 dark:text-purple-200'
+                              : 'hover:bg-slate-200/60 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
                           }`}
                         >
                           <div className="flex items-center gap-2 truncate pr-2">
                             <div
-                              className={`w-3.5 h-3.5 rounded-[2px] border flex items-center justify-center shrink-0 ${
+                              className={`w-3.5 h-3.5 rounded-md border flex items-center justify-center shrink-0 ${
                                 isChecked
-                                  ? 'bg-[#B146C2] border-[#B146C2] text-white'
-                                  : 'border-[#D2D0CE] dark:border-[#605E5C] bg-white dark:bg-[#202020]'
+                                  ? 'bg-purple-600 border-purple-600 text-white'
+                                  : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900'
                               }`}
                             >
                               {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                             </div>
                             <span className="truncate font-mono">{code}</span>
                           </div>
-                          <span className="text-[10px] text-[#605E5C] dark:text-[#A19F9D] shrink-0 font-mono">
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 shrink-0 font-mono">
                             {count} ca
                           </span>
                         </label>
@@ -1120,7 +1071,7 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                 <div className="flex justify-end pt-1">
                   <button
                     onClick={() => setIsProjectSlicerOpen(false)}
-                    className="px-3 py-1 bg-[#B146C2] text-white text-xs font-bold rounded-[2px]"
+                    className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 text-xs font-bold rounded-xl transition-colors cursor-pointer"
                   >
                     Áp dụng
                   </button>
@@ -1131,10 +1082,10 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
 
           {/* Active Cross Filter Indicator */}
           {crossFilter.type && (
-            <div className="flex items-center gap-1 bg-[#118DFF]/10 text-[#118DFF] border border-[#118DFF]/30 px-2 py-0.5 rounded-[2px] text-xs font-semibold">
-              <span>Đang lọc: {crossFilter.value}</span>
+            <div className="flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 px-2.5 py-1 rounded-xl text-xs font-semibold shadow-2xs">
+              <span>Đang lọc: <strong>{crossFilter.value}</strong></span>
               <X 
-                className="w-3 h-3 cursor-pointer hover:text-[#0B66C3]" 
+                className="w-3.5 h-3.5 cursor-pointer hover:text-indigo-900 dark:hover:text-white" 
                 onClick={() => setCrossFilter({ type: null, value: '' })}
               />
             </div>
@@ -1144,24 +1095,24 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
             {isFilterActive && (
               <button
                 onClick={handleResetFilters}
-                className="px-2.5 py-1 text-xs font-semibold bg-[#F3F2F1] hover:bg-[#EDEBE9] dark:bg-[#2D2D2D] dark:hover:bg-[#383838] text-[#252423] dark:text-[#FFFFFF] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="px-2.5 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
               >
-                <RotateCcw className="w-3.5 h-3.5 text-[#605E5C]" />
+                <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
                 <span>Xóa bộ lọc</span>
               </button>
             )}
 
             <button
               onClick={() => onExportExcel()}
-              className="px-3 py-1 text-xs font-bold bg-[#107C41] hover:bg-[#0E6C38] text-white rounded-[2px] flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+              className="px-3.5 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer border border-emerald-400/40"
               title="Xuất báo cáo Excel 3-Sheet đầy đủ theo chuẩn Weekly_Report"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Xuất Excel ({filteredData.length})</span>
             </button>
 
-            <div className="text-xs text-[#605E5C] dark:text-[#A19F9D] font-mono pl-2 border-l border-[#EDEBE9] dark:border-[#383838]">
-              Hiển thị <span className="font-bold text-[#252423] dark:text-[#FFFFFF]">{filteredData.length}</span> / {warrantyItems.length} ca
+            <div className="text-xs text-slate-500 dark:text-slate-400 font-mono pl-2 border-l border-slate-200 dark:border-slate-800">
+              Hiển thị <span className="font-bold text-slate-900 dark:text-slate-100">{filteredData.length}</span> / {warrantyItems.length} ca
             </div>
           </div>
         </div>
@@ -1174,120 +1125,120 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
         {activeReportPage === 'SUMMARY' && (
           <div className="space-y-4 animate-in fade-in duration-150">
             
-            {/* ROW 1: 9 KPI METRIC CARDS (POWER BI MULTI-ROW CARD VISUALS) */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-2.5">
+            {/* ROW 1: 9 KPI METRIC CARDS (MODERN SAAS METRICS) */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-3">
               
               {/* Card 1: Tổng Ca */}
-              <div className="bg-white dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] border-t-[3px] border-t-[#118DFF] p-2.5 rounded-[2px] shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-[#605E5C] dark:text-[#A19F9D] truncate">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-3.5 rounded-2xl shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition-all flex flex-col justify-between">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 truncate">
                   Tổng Ca Bảo Hành
                 </div>
-                <div className="text-2xl font-bold font-sans text-[#252423] dark:text-[#FFFFFF] mt-1">
+                <div className="text-2xl font-black font-sans text-slate-900 dark:text-slate-100 mt-1">
                   {kpiData.total}
                 </div>
-                <div className="text-[10px] text-[#8A8886] mt-0.5">Toàn bộ hồ sơ</div>
+                <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 font-medium">Toàn bộ hồ sơ</div>
               </div>
 
               {/* Card 2: % Đúng Hạn */}
-              <div className="bg-white dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] border-t-[3px] border-t-[#107C41] p-2.5 rounded-[2px] shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-[#605E5C] dark:text-[#A19F9D] truncate">
-                  % Xử Lý Đúng Hạn
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-3.5 rounded-2xl shadow-2xs hover:border-emerald-200 dark:hover:border-emerald-900/50 transition-all flex flex-col justify-between">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 truncate">
+                  % Đúng Hạn
                 </div>
-                <div className="text-2xl font-bold font-sans text-[#107C41] dark:text-[#27AE60] mt-1">
+                <div className="text-2xl font-black font-sans text-emerald-600 dark:text-emerald-400 mt-1">
                   {kpiData.onTimePct}
                 </div>
-                <div className="text-[10px] text-[#605E5C] font-mono mt-0.5">
+                <div className="text-[10px] text-emerald-700 dark:text-emerald-300 font-mono mt-0.5 font-semibold">
                   ⚡ {kpiData.onTimeCount}/{kpiData.total} ca
                 </div>
               </div>
 
               {/* Card 3: % Trễ Hạn */}
-              <div className="bg-white dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] border-t-[3px] border-t-[#D64550] p-2.5 rounded-[2px] shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-[#605E5C] dark:text-[#A19F9D] truncate">
-                  % Xử Lý Trễ Hạn
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-3.5 rounded-2xl shadow-2xs hover:border-rose-200 dark:hover:border-rose-900/50 transition-all flex flex-col justify-between">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 truncate">
+                  % Trễ Hạn
                 </div>
-                <div className="text-2xl font-bold font-sans text-[#D64550] mt-1">
+                <div className="text-2xl font-black font-sans text-rose-600 dark:text-rose-400 mt-1">
                   {kpiData.overduePct}
                 </div>
-                <div className="text-[10px] text-[#605E5C] font-mono mt-0.5">
+                <div className="text-[10px] text-rose-700 dark:text-rose-300 font-mono mt-0.5 font-semibold">
                   ⚠️ {kpiData.overdueCount}/{kpiData.total} ca
                 </div>
               </div>
 
               {/* Card 4: % Hỏng Sớm */}
-              <div className="bg-white dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] border-t-[3px] border-t-[#D9B300] p-2.5 rounded-[2px] shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-[#605E5C] dark:text-[#A19F9D] truncate" title="Hỏng sớm < 30 ngày từ ngày lắp đặt">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-3.5 rounded-2xl shadow-2xs hover:border-amber-200 dark:hover:border-amber-900/50 transition-all flex flex-col justify-between">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 truncate" title="Hỏng sớm < 30 ngày từ ngày lắp đặt">
                   % Hỏng Sớm (&lt;30d)
                 </div>
-                <div className="text-2xl font-bold font-sans text-[#D9B300] dark:text-[#F2C811] mt-1">
+                <div className="text-2xl font-black font-sans text-amber-600 dark:text-amber-400 mt-1">
                   {kpiData.earlyFailPct}
                 </div>
-                <div className="text-[10px] text-[#605E5C] font-mono mt-0.5">
+                <div className="text-[10px] text-amber-700 dark:text-amber-300 font-mono mt-0.5 font-semibold">
                   ⚠️ {kpiData.earlyFailCount}/{kpiData.total} ca
                 </div>
               </div>
 
               {/* Card 5: Top Nhà Thầu */}
-              <div className="bg-white dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] border-t-[3px] border-t-[#0078D4] p-2.5 rounded-[2px] shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-[#605E5C] dark:text-[#A19F9D] truncate">
-                  Top Nhà Thầu Sự Cố
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-3.5 rounded-2xl shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition-all flex flex-col justify-between">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 truncate">
+                  Top Nhà Thầu
                 </div>
-                <div className="text-lg font-bold font-sans text-[#252423] dark:text-[#FFFFFF] mt-1 truncate" title={kpiData.topSupplier.name}>
+                <div className="text-base font-black font-sans text-slate-900 dark:text-slate-100 mt-1 truncate" title={kpiData.topSupplier.name}>
                   {kpiData.topSupplier.name}
                 </div>
-                <div className="text-[10px] text-[#605E5C] font-mono mt-0.5">
+                <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono mt-0.5 font-semibold">
                   {kpiData.topSupplier.count} ca ({kpiData.topSupplier.pct})
                 </div>
               </div>
 
               {/* Card 6: Top Dự Án */}
-              <div className="bg-white dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] border-t-[3px] border-t-[#5C2D91] p-2.5 rounded-[2px] shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-[#605E5C] dark:text-[#A19F9D] truncate">
-                  Top Dự Án Sự Cố
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-3.5 rounded-2xl shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition-all flex flex-col justify-between">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 truncate">
+                  Top Dự Án
                 </div>
-                <div className="text-lg font-bold font-sans text-[#252423] dark:text-[#FFFFFF] mt-1 font-mono truncate" title={kpiData.topProject.name}>
+                <div className="text-base font-black font-sans text-indigo-600 dark:text-indigo-400 mt-1 font-mono truncate" title={kpiData.topProject.name}>
                   {kpiData.topProject.name}
                 </div>
-                <div className="text-[10px] text-[#605E5C] font-mono mt-0.5">
+                <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono mt-0.5 font-semibold">
                   {kpiData.topProject.count} ca ({kpiData.topProject.pct})
                 </div>
               </div>
 
               {/* Card 7: Top Siêu Thị */}
-              <div className="bg-white dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] border-t-[3px] border-t-[#008272] p-2.5 rounded-[2px] shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-[#605E5C] dark:text-[#A19F9D] truncate">
-                  Top Siêu Thị Sự Cố
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-3.5 rounded-2xl shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition-all flex flex-col justify-between">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 truncate">
+                  Top Siêu Thị
                 </div>
-                <div className="text-lg font-bold font-sans text-[#252423] dark:text-[#FFFFFF] mt-1 truncate" title={kpiData.topStore.name}>
+                <div className="text-base font-black font-sans text-slate-900 dark:text-slate-100 mt-1 truncate" title={kpiData.topStore.name}>
                   {kpiData.topStore.name}
                 </div>
-                <div className="text-[10px] text-[#605E5C] font-mono mt-0.5">
+                <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono mt-0.5 font-semibold">
                   {kpiData.topStore.count} ca ({kpiData.topStore.pct})
                 </div>
               </div>
 
               {/* Card 8: Top Ngành Hàng */}
-              <div className="bg-white dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] border-t-[3px] border-t-[#B4009E] p-2.5 rounded-[2px] shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-[#605E5C] dark:text-[#A19F9D] truncate">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-3.5 rounded-2xl shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition-all flex flex-col justify-between">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 truncate">
                   Top Ngành Hàng
                 </div>
-                <div className="text-lg font-bold font-sans text-[#252423] dark:text-[#FFFFFF] mt-1 truncate" title={kpiData.topBrand.name}>
+                <div className="text-base font-black font-sans text-slate-900 dark:text-slate-100 mt-1 truncate" title={kpiData.topBrand.name}>
                   {kpiData.topBrand.name}
                 </div>
-                <div className="text-[10px] text-[#605E5C] font-mono mt-0.5">
+                <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono mt-0.5 font-semibold">
                   {kpiData.topBrand.count} ca ({kpiData.topBrand.pct})
                 </div>
               </div>
 
               {/* Card 9: Top POSM */}
-              <div className="bg-white dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] border-t-[3px] border-t-[#E66C37] p-2.5 rounded-[2px] shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-[#605E5C] dark:text-[#A19F9D] truncate">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-3.5 rounded-2xl shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition-all flex flex-col justify-between">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 truncate">
                   Top Loại POSM
                 </div>
-                <div className="text-lg font-bold font-sans text-[#252423] dark:text-[#FFFFFF] mt-1 truncate" title={kpiData.topPosm.name}>
+                <div className="text-base font-black font-sans text-slate-900 dark:text-slate-100 mt-1 truncate" title={kpiData.topPosm.name}>
                   {kpiData.topPosm.name}
                 </div>
-                <div className="text-[10px] text-[#605E5C] font-mono mt-0.5">
+                <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono mt-0.5 font-semibold">
                   {kpiData.topPosm.count} ca ({kpiData.topPosm.pct})
                 </div>
               </div>
@@ -1296,12 +1247,12 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
 
             {/* Sub-bar: Active In-Progress Projects */}
             {kpiData.activeProjects.length > 0 && (
-              <div className="bg-[#FFFFFF] dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] px-3 py-1.5 rounded-[2px] flex items-center gap-2 text-xs">
-                <span className="font-bold text-[#D64550] flex items-center gap-1 shrink-0">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 px-4 py-2.5 rounded-2xl shadow-2xs flex items-center gap-2 text-xs flex-wrap">
+                <span className="font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1.5 shrink-0">
                   <Clock className="w-3.5 h-3.5" />
-                  ⏳ Đang xử lý:
+                  <span>Đang xử lý:</span>
                 </span>
-                <span className="text-[#605E5C] dark:text-[#A19F9D]">
+                <span className="text-slate-500 dark:text-slate-400">
                   Thuộc các mã dự án:
                 </span>
                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -1309,7 +1260,7 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                     <span 
                       key={prj}
                       onClick={() => setSelectedProject(prj)}
-                      className="px-1.5 py-0.2 bg-[#F3F2F1] dark:bg-[#323130] hover:bg-[#EDEBE9] text-[#252423] dark:text-[#FFFFFF] font-mono font-bold border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] cursor-pointer text-[11px]"
+                      className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 hover:text-indigo-600 text-slate-800 dark:text-slate-200 font-mono font-bold border border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer text-xs transition-colors"
                       title="Bấm để lọc theo dự án này"
                     >
                       {prj}
@@ -1322,29 +1273,28 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
             {/* ROW 2: 3 CORE OPERATIONAL TABLES / CHARTS */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
               
-              {/* Visual 1: Đánh Giá Nhà Thầu (Power BI Table with Progress Data Bars) */}
+              {/* Visual 1: Đánh Giá Nhà Thầu (Modern Performance Matrix) */}
               <PowerBIVisual
                 title="1. ĐÁNH GIÁ NHÀ THẦU"
                 subtitle="Thống kê hiệu suất & tỷ lệ đạt tiến độ"
-                accentColor="#118DFF"
                 filterActive={crossFilter.type === 'supplier'}
               >
                 <div className="overflow-x-auto flex-1">
                   <table className="w-full text-left text-xs border-collapse font-sans">
                     <thead>
-                      <tr className="border-b border-[#D2D0CE] dark:border-[#383838] text-[#605E5C] dark:text-[#A19F9D] font-bold text-[11px] bg-[#F8F9FA] dark:bg-[#2A2A2A]">
-                        <th className="py-1.5 px-2">Nhà Thầu</th>
-                        <th className="py-1.5 px-1 text-center">Total Case</th>
-                        <th className="py-1.5 px-1 text-center" title="Số ca hỏng sớm < 30 ngày từ ngày nghiệm thu lắp đặt">Hỏng Sớm (&lt;30d)</th>
-                        <th className="py-1.5 px-1 text-center" title="Số ca tái diễn trên cùng 1 POSM">Tái Diễn</th>
-                        <th className="py-1.5 px-1 text-center">Trễ Hạn</th>
-                        <th className="py-1.5 px-2 text-right">% Đạt Tiến Độ</th>
+                      <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-bold text-[11px] bg-slate-50/80 dark:bg-slate-950/80 uppercase">
+                        <th className="py-2 px-2.5">Nhà Thầu</th>
+                        <th className="py-2 px-1 text-center">Tổng Ca</th>
+                        <th className="py-2 px-1 text-center" title="Số ca hỏng sớm < 30 ngày từ ngày nghiệm thu lắp đặt">Hỏng Sớm (&lt;30d)</th>
+                        <th className="py-2 px-1 text-center" title="Số ca tái diễn trên cùng 1 POSM">Tái Diễn</th>
+                        <th className="py-2 px-1 text-center">Trễ Hạn</th>
+                        <th className="py-2 px-2.5 text-right">% Đạt Tiến Độ</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#EDEBE9] dark:divide-[#323130]">
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
                       {supplierMatrix.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="py-4 text-center text-[#A19F9D] italic">Không có dữ liệu</td>
+                          <td colSpan={6} className="py-6 text-center text-slate-400 italic">Không có dữ liệu</td>
                         </tr>
                       ) : (
                         supplierMatrix.map(row => {
@@ -1355,41 +1305,41 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                               key={row.supplier}
                               onClick={() => {
                                 setCrossFilter(prev => 
-                                  prev.type === 'supplier' && prev.value === row.supplier
+                                   prev.type === 'supplier' && prev.value === row.supplier
                                     ? { type: null, value: '' }
                                     : { type: 'supplier', value: row.supplier }
                                 );
                               }}
                               className={`cursor-pointer transition-colors ${
                                 isSelected 
-                                  ? 'bg-[#118DFF]/15 font-semibold' 
-                                  : 'hover:bg-[#F3F2F1] dark:hover:bg-[#2A2A2A]'
+                                  ? 'bg-indigo-50/80 dark:bg-indigo-950/50 font-bold' 
+                                  : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
                               }`}
                             >
-                              <td className="py-1.5 px-2 font-bold text-[#252423] dark:text-[#FFFFFF]">
+                              <td className="py-2 px-2.5 font-bold text-slate-900 dark:text-slate-100">
                                 {row.supplier}
                               </td>
-                              <td className="py-1.5 px-1 text-center font-mono font-bold">
+                              <td className="py-2 px-1 text-center font-mono font-bold text-slate-800 dark:text-slate-200">
                                 {row.total}
                               </td>
-                              <td className="py-1.5 px-1 text-center font-mono text-[#D9B300] font-semibold">
+                              <td className="py-2 px-1 text-center font-mono text-amber-600 dark:text-amber-400 font-semibold">
                                 {row.earlyFail > 0 ? row.earlyFail : '-'}
                               </td>
-                              <td className="py-1.5 px-1 text-center font-mono text-[#E66C37] font-semibold">
+                              <td className="py-2 px-1 text-center font-mono text-orange-600 dark:text-orange-400 font-semibold">
                                 {row.recurrent > 0 ? row.recurrent : '-'}
                               </td>
-                              <td className="py-1.5 px-1 text-center font-mono text-[#D64550] font-bold">
+                              <td className="py-2 px-1 text-center font-mono text-rose-600 dark:text-rose-400 font-bold">
                                 {row.overdue > 0 ? row.overdue : '-'}
                               </td>
-                              <td className="py-1.5 px-2 text-right">
+                              <td className="py-2 px-2.5 text-right">
                                 <div className="flex items-center justify-end gap-2">
-                                  <div className="w-16 h-2 bg-[#EDEBE9] dark:bg-[#383838] rounded-[1px] overflow-hidden">
+                                  <div className="w-16 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                                     <div 
-                                      className="h-full bg-[#107C41] transition-all"
+                                      className="h-full bg-emerald-500 rounded-full transition-all"
                                       style={{ width: `${rate}%` }}
                                     />
                                   </div>
-                                  <span className="font-mono text-[11px] font-bold w-9 text-right">
+                                  <span className="font-mono text-[11px] font-bold w-9 text-right text-slate-700 dark:text-slate-300">
                                     {rate}%
                                   </span>
                                 </div>
@@ -1407,39 +1357,35 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
               <PowerBIVisual
                 title="2. NGUYÊN NHÂN HƯ HỎNG"
                 subtitle="Nhóm lỗi chính theo ghi nhận thực tế"
-                accentColor="#E66C37"
               >
                 <div className="space-y-3 flex-1 flex flex-col justify-around">
                   {causeBreakdown.map((c, idx) => (
                     <div 
                       key={c.id}
-                      className="p-2.5 border border-[#EDEBE9] dark:border-[#383838] bg-[#F8F9FA] dark:bg-[#2A2A2A] rounded-[2px] space-y-1.5"
+                      className="p-3 border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 rounded-xl space-y-1.5"
                     >
                       <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-[#252423] dark:text-[#FFFFFF] flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-[1px]" style={{ backgroundColor: idx === 0 ? '#118DFF' : idx === 1 ? '#E66C37' : '#D64550' }} />
+                        <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                          <span className={`w-2 h-2 rounded-full ${idx === 0 ? 'bg-indigo-500' : idx === 1 ? 'bg-amber-500' : 'bg-rose-500'}`} />
                           {c.title}
                         </span>
-                        <span className="font-mono font-bold text-[#252423] dark:text-[#FFFFFF]">
+                        <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
                           {c.count} ca ({c.pct}%)
                         </span>
                       </div>
 
-                      {/* Power BI Bar */}
-                      <div className="w-full h-1.5 bg-[#EDEBE9] dark:bg-[#383838] rounded-[1px] overflow-hidden">
+                      {/* Progress Bar */}
+                      <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                         <div 
-                          className="h-full transition-all"
-                          style={{ 
-                            width: `${c.pct}%`, 
-                            backgroundColor: idx === 0 ? '#118DFF' : idx === 1 ? '#E66C37' : '#D64550' 
-                          }}
+                          className={`h-full rounded-full transition-all ${idx === 0 ? 'bg-indigo-500' : idx === 1 ? 'bg-amber-500' : 'bg-rose-500'}`}
+                          style={{ width: `${c.pct}%` }}
                         />
                       </div>
 
                       {c.suppliers.length > 0 && (
-                        <div className="text-[10px] text-[#605E5C] dark:text-[#A19F9D] flex items-center gap-1 truncate">
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1 truncate pt-0.5">
                           <span>Thầu liên quan:</span>
-                          <span className="font-mono text-[#252423] dark:text-[#F3F2F1]">
+                          <span className="font-medium text-slate-700 dark:text-slate-300">
                             {c.suppliers.join(', ')}
                           </span>
                         </div>
@@ -1453,27 +1399,26 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
               <PowerBIVisual
                 title="3. THỜI GIAN TRỄ HẠN"
                 subtitle="Phân tầng ca chậm tiến độ theo mức độ"
-                accentColor="#D64550"
               >
                 <div className="space-y-3 flex-1 flex flex-col justify-around">
                   {delayTiers.map(t => (
                     <div 
                       key={t.id}
-                      className="p-3 border border-[#EDEBE9] dark:border-[#383838] bg-[#F8F9FA] dark:bg-[#2A2A2A] rounded-[2px] flex items-center justify-between"
+                      className="p-3.5 border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 rounded-xl flex items-center justify-between"
                     >
                       <div className="space-y-0.5">
-                        <span className="text-xs font-bold text-[#252423] dark:text-[#FFFFFF] block">
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
                           {t.label}
                         </span>
-                        <span className="text-[11px] text-[#605E5C] dark:text-[#A19F9D] font-mono">
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
                           Chiếm {t.pct}% trên tổng số ca
                         </span>
                       </div>
                       <div className="text-right">
-                        <div className="text-xl font-bold font-mono" style={{ color: t.color }}>
+                        <div className="text-xl font-black font-mono" style={{ color: t.color }}>
                           {t.count}
                         </div>
-                        <div className="text-[10px] text-[#8A8886]">ca</div>
+                        <div className="text-[10px] text-slate-400 font-medium">ca</div>
                       </div>
                     </div>
                   ))}
@@ -1489,7 +1434,6 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
               <PowerBIVisual 
                 title="4. THEO LOẠI POSM" 
                 subtitle="Top phát sinh hư hỏng"
-                accentColor="#5C2D91"
                 filterActive={crossFilter.type === 'posm'}
               >
                 <div className="space-y-2 flex-1">
@@ -1497,18 +1441,18 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                     <div 
                       key={item.name}
                       onClick={() => setCrossFilter(prev => prev.type === 'posm' && prev.value === item.name ? { type: null, value: '' } : { type: 'posm', value: item.name })}
-                      className="space-y-1 cursor-pointer hover:bg-[#F3F2F1] dark:hover:bg-[#2A2A2A] p-1 rounded-[2px] transition-colors"
+                      className="space-y-1 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60 p-1.5 rounded-xl transition-colors"
                     >
                       <div className="flex items-center justify-between text-xs">
-                        <span className="font-semibold text-[#252423] dark:text-[#F3F2F1] truncate max-w-[140px]" title={item.name}>
+                        <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[140px]" title={item.name}>
                           {item.name}
                         </span>
-                        <span className="font-mono text-[#605E5C] dark:text-[#A19F9D]">
+                        <span className="font-mono text-slate-500 dark:text-slate-400">
                           {item.count} ca ({item.pct}%)
                         </span>
                       </div>
-                      <div className="w-full h-1.5 bg-[#EDEBE9] dark:bg-[#383838] rounded-[1px] overflow-hidden">
-                        <div className="h-full bg-[#5C2D91]" style={{ width: `${item.pct}%` }} />
+                      <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-purple-600 rounded-full" style={{ width: `${item.pct}%` }} />
                       </div>
                     </div>
                   ))}
@@ -1519,7 +1463,6 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
               <PowerBIVisual 
                 title="5. THEO SIÊU THỊ" 
                 subtitle="Top vị trí ghi nhận lỗi"
-                accentColor="#008272"
                 filterActive={crossFilter.type === 'store'}
               >
                 <div className="space-y-2 flex-1">
@@ -1527,18 +1470,18 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                     <div 
                       key={item.name}
                       onClick={() => setCrossFilter(prev => prev.type === 'store' && prev.value === item.name ? { type: null, value: '' } : { type: 'store', value: item.name })}
-                      className="space-y-1 cursor-pointer hover:bg-[#F3F2F1] dark:hover:bg-[#2A2A2A] p-1 rounded-[2px] transition-colors"
+                      className="space-y-1 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60 p-1.5 rounded-xl transition-colors"
                     >
                       <div className="flex items-center justify-between text-xs">
-                        <span className="font-semibold text-[#252423] dark:text-[#F3F2F1] truncate max-w-[140px]" title={item.name}>
+                        <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[140px]" title={item.name}>
                           {item.name}
                         </span>
-                        <span className="font-mono text-[#605E5C] dark:text-[#A19F9D]">
+                        <span className="font-mono text-slate-500 dark:text-slate-400">
                           {item.count} ca ({item.pct}%)
                         </span>
                       </div>
-                      <div className="w-full h-1.5 bg-[#EDEBE9] dark:bg-[#383838] rounded-[1px] overflow-hidden">
-                        <div className="h-full bg-[#008272]" style={{ width: `${item.pct}%` }} />
+                      <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-teal-600 rounded-full" style={{ width: `${item.pct}%` }} />
                       </div>
                     </div>
                   ))}
@@ -1549,7 +1492,6 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
               <PowerBIVisual 
                 title="6. THEO MÃ DỰ ÁN" 
                 subtitle="Top mã dự án phát sinh ca"
-                accentColor="#118DFF"
                 filterActive={crossFilter.type === 'project'}
               >
                 <div className="space-y-2 flex-1">
@@ -1557,18 +1499,18 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                     <div 
                       key={item.name}
                       onClick={() => setCrossFilter(prev => prev.type === 'project' && prev.value === item.name ? { type: null, value: '' } : { type: 'project', value: item.name })}
-                      className="space-y-1 cursor-pointer hover:bg-[#F3F2F1] dark:hover:bg-[#2A2A2A] p-1 rounded-[2px] transition-colors"
+                      className="space-y-1 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60 p-1.5 rounded-xl transition-colors"
                     >
                       <div className="flex items-center justify-between text-xs">
-                        <span className="font-mono font-bold text-[#118DFF] truncate max-w-[140px]" title={item.name}>
+                        <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 truncate max-w-[140px]" title={item.name}>
                           {item.name}
                         </span>
-                        <span className="font-mono text-[#605E5C] dark:text-[#A19F9D]">
+                        <span className="font-mono text-slate-500 dark:text-slate-400">
                           {item.count} ca ({item.pct}%)
                         </span>
                       </div>
-                      <div className="w-full h-1.5 bg-[#EDEBE9] dark:bg-[#383838] rounded-[1px] overflow-hidden">
-                        <div className="h-full bg-[#118DFF]" style={{ width: `${item.pct}%` }} />
+                      <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-indigo-600 rounded-full" style={{ width: `${item.pct}%` }} />
                       </div>
                     </div>
                   ))}
@@ -1579,7 +1521,6 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
               <PowerBIVisual 
                 title="7. THEO NGÀNH HÀNG" 
                 subtitle="Tỷ trọng sự cố theo Brand/Cat"
-                accentColor="#B4009E"
                 filterActive={crossFilter.type === 'brand'}
               >
                 <div className="space-y-2 flex-1">
@@ -1587,18 +1528,18 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                     <div 
                       key={item.name}
                       onClick={() => setCrossFilter(prev => prev.type === 'brand' && prev.value === item.name ? { type: null, value: '' } : { type: 'brand', value: item.name })}
-                      className="space-y-1 cursor-pointer hover:bg-[#F3F2F1] dark:hover:bg-[#2A2A2A] p-1 rounded-[2px] transition-colors"
+                      className="space-y-1 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60 p-1.5 rounded-xl transition-colors"
                     >
                       <div className="flex items-center justify-between text-xs">
-                        <span className="font-semibold text-[#252423] dark:text-[#F3F2F1] truncate max-w-[140px]" title={item.name}>
+                        <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[140px]" title={item.name}>
                           {item.name}
                         </span>
-                        <span className="font-mono text-[#605E5C] dark:text-[#A19F9D]">
+                        <span className="font-mono text-slate-500 dark:text-slate-400">
                           {item.count} ca ({item.pct}%)
                         </span>
                       </div>
-                      <div className="w-full h-1.5 bg-[#EDEBE9] dark:bg-[#383838] rounded-[1px] overflow-hidden">
-                        <div className="h-full bg-[#B4009E]" style={{ width: `${item.pct}%` }} />
+                      <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-pink-600 rounded-full" style={{ width: `${item.pct}%` }} />
                       </div>
                     </div>
                   ))}
@@ -1611,61 +1552,60 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
             <PowerBIVisual
               title="8. CHI TIẾT CÁC CASE BẢO HÀNH ĐÃ CÓ ACTION"
               subtitle="Khớp 1:1 theo 17 cột nghiệp vụ bảng Weekly_Report.xlsx (Bấm vào từng dòng để mở Drawer)"
-              accentColor="#252423"
             >
               {/* Search & Actions toolbar */}
               <div className="flex items-center justify-between gap-3 mb-3">
                 <div className="relative flex-1 max-w-md">
-                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[#8A8886]" />
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     type="text"
                     value={detailSearch}
                     onChange={(e) => setDetailSearch(e.target.value)}
                     placeholder="Tìm theo Mã Request, Dự án, Siêu thị, Thầu..."
-                    className="w-full pl-8 pr-3 py-1 text-xs border border-[#D2D0CE] dark:border-[#383838] bg-[#FFFFFF] dark:bg-[#1F1F1F] rounded-[2px] focus:outline-none focus:border-[#118DFF]"
+                    className="w-full pl-9 pr-8 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs outline-none focus:border-indigo-500 transition-colors"
                   />
                   {detailSearch && (
                     <X 
-                      className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8A8886] cursor-pointer hover:text-[#252423]" 
+                      className="w-3.5 h-3.5 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 cursor-pointer hover:text-slate-600" 
                       onClick={() => setDetailSearch('')} 
                     />
                   )}
                 </div>
 
-                <div className="text-xs text-[#605E5C] dark:text-[#A19F9D] font-mono">
+                <div className="text-xs text-slate-500 dark:text-slate-400 font-mono">
                   {detailTableRows.length} dòng dữ liệu
                 </div>
               </div>
 
               {/* Matrix Table */}
-              <div className="overflow-x-auto border border-[#D2D0CE] dark:border-[#383838] rounded-[2px]">
+              <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-2xl">
                 <table className="w-full text-left text-xs border-collapse font-sans min-w-[1400px]">
                   <thead>
-                    <tr className="border-b border-[#D2D0CE] dark:border-[#383838] bg-[#F3F2F1] dark:bg-[#2A2A2A] text-[#252423] dark:text-[#F3F2F1] font-bold text-[11px]">
-                      <th className="py-2 px-2.5 text-center w-10">STT</th>
-                      <th className="py-2 px-2.5">Mã Request</th>
-                      <th className="py-2 px-2.5">Mã Dự Án</th>
-                      <th className="py-2 px-2.5">Ngành Hàng</th>
-                      <th className="py-2 px-2.5">Brand</th>
-                      <th className="py-2 px-2.5">Loại POSM</th>
-                      <th className="py-2 px-2.5">Mã Store</th>
-                      <th className="py-2 px-2.5">Tên Siêu Thị</th>
-                      <th className="py-2 px-2.5">Tỉnh Thành</th>
-                      <th className="py-2 px-2.5">Nhà Thầu</th>
-                      <th className="py-2 px-2.5">Ngày Báo Lỗi</th>
-                      <th className="py-2 px-2.5">Ngày Lắp Đặt</th>
-                      <th className="py-2 px-2.5 text-center">Tuổi Thọ</th>
-                      <th className="py-2 px-2.5">Loại Lỗi</th>
-                      <th className="py-2 px-2.5">Tình Trạng Hư Hỏng</th>
-                      <th className="py-2 px-2.5">Ngày Hẹn Xử Lý</th>
-                      <th className="py-2 px-2.5">Ngày Hoàn Thành</th>
-                      <th className="py-2 px-2.5 text-center">Trạng Thái</th>
+                    <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-100/90 dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 font-bold text-[11px] uppercase">
+                      <th className="py-2.5 px-3 text-center w-10">STT</th>
+                      <th className="py-2.5 px-3">Mã Request</th>
+                      <th className="py-2.5 px-3">Mã Dự Án</th>
+                      <th className="py-2.5 px-3">Ngành Hàng</th>
+                      <th className="py-2.5 px-3">Brand</th>
+                      <th className="py-2.5 px-3">Loại POSM</th>
+                      <th className="py-2.5 px-3">Mã Store</th>
+                      <th className="py-2.5 px-3">Tên Siêu Thị</th>
+                      <th className="py-2.5 px-3">Tỉnh Thành</th>
+                      <th className="py-2.5 px-3">Nhà Thầu</th>
+                      <th className="py-2.5 px-3">Ngày Báo Lỗi</th>
+                      <th className="py-2.5 px-3">Ngày Lắp Đặt</th>
+                      <th className="py-2.5 px-3 text-center">Tuổi Thọ</th>
+                      <th className="py-2.5 px-3">Loại Lỗi</th>
+                      <th className="py-2.5 px-3">Tình Trạng Hư Hỏng</th>
+                      <th className="py-2.5 px-3">Ngày Hẹn Xử Lý</th>
+                      <th className="py-2.5 px-3">Ngày Hoàn Thành</th>
+                      <th className="py-2.5 px-3 text-center">Trạng Thái</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#EDEBE9] dark:divide-[#323130]">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
                     {detailTableRows.length === 0 ? (
                       <tr>
-                        <td colSpan={18} className="py-6 text-center text-[#8A8886] italic">
+                        <td colSpan={18} className="py-8 text-center text-slate-400 italic">
                           Không tìm thấy ca bảo hành nào phù hợp với bộ lọc hiện tại.
                         </td>
                       </tr>
@@ -1684,46 +1624,46 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                           <tr
                             key={item.id || idx}
                             onClick={() => onOpenWarrantyDrawer(item)}
-                            className="hover:bg-[#F3F2F1] dark:hover:bg-[#2A2A2A] cursor-pointer transition-colors text-xs font-normal"
+                            className="hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer transition-colors text-xs font-normal"
                           >
-                            <td className="py-2 px-2.5 text-center font-mono text-[#8A8886]">{idx + 1}</td>
-                            <td className="py-2 px-2.5 font-mono font-bold text-[#118DFF]">{item.requestId || item.id}</td>
-                            <td className="py-2 px-2.5 font-mono text-[#252423] dark:text-[#FFFFFF]">{item.projectCode || '-'}</td>
-                            <td className="py-2 px-2.5 text-[#605E5C] dark:text-[#A19F9D]">{item.category || item.brand || '-'}</td>
-                            <td className="py-2 px-2.5 font-medium text-[#252423] dark:text-[#FFFFFF]">{item.brand || '-'}</td>
-                            <td className="py-2 px-2.5 text-[#252423] dark:text-[#FFFFFF]">{item.posmType || '-'}</td>
-                            <td className="py-2 px-2.5 font-mono text-[#605E5C] dark:text-[#A19F9D]">{item.storeCode || '-'}</td>
-                            <td className="py-2 px-2.5 font-semibold text-[#252423] dark:text-[#FFFFFF] max-w-[200px] truncate" title={item.storeName}>
+                            <td className="py-2.5 px-3 text-center font-mono text-slate-400">{idx + 1}</td>
+                            <td className="py-2.5 px-3 font-mono font-bold text-sky-600 dark:text-sky-400">{item.requestId || item.id}</td>
+                            <td className="py-2.5 px-3 font-mono font-semibold text-slate-900 dark:text-slate-100">{item.projectCode || '-'}</td>
+                            <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400">{item.category || item.brand || '-'}</td>
+                            <td className="py-2.5 px-3 font-medium text-slate-900 dark:text-slate-100">{item.brand || '-'}</td>
+                            <td className="py-2.5 px-3 text-slate-800 dark:text-slate-200">{item.posmType || '-'}</td>
+                            <td className="py-2.5 px-3 font-mono text-slate-500 dark:text-slate-400">{item.storeCode || '-'}</td>
+                            <td className="py-2.5 px-3 font-semibold text-slate-900 dark:text-slate-100 max-w-[200px] truncate" title={item.storeName}>
                               {item.storeName || '-'}
                             </td>
-                            <td className="py-2 px-2.5 text-[#605E5C] dark:text-[#A19F9D]">{item.province || '-'}</td>
-                            <td className="py-2 px-2.5 font-semibold text-[#252423] dark:text-[#FFFFFF]">{item.supplier || '-'}</td>
-                            <td className="py-2 px-2.5 font-mono">{formatDateDisplay(item.sentDate || item.createdAt)}</td>
-                            <td className="py-2 px-2.5 font-mono">{formatDateDisplay(item.installationDate)}</td>
-                            <td className="py-2 px-2.5 text-center font-mono">
+                            <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400">{item.province || '-'}</td>
+                            <td className="py-2.5 px-3 font-semibold text-slate-900 dark:text-slate-100">{item.supplier || '-'}</td>
+                            <td className="py-2.5 px-3 font-mono text-slate-600 dark:text-slate-400">{formatDateDisplay(item.sentDate || item.createdAt)}</td>
+                            <td className="py-2.5 px-3 font-mono text-slate-600 dark:text-slate-400">{formatDateDisplay(item.installationDate)}</td>
+                            <td className="py-2.5 px-3 text-center font-mono">
                               {ageDays !== null ? (
-                                <span className={ageDays < 30 ? 'font-bold text-[#D9B300]' : 'text-[#605E5C]'}>
+                                <span className={ageDays < 30 ? 'font-bold text-amber-600 dark:text-amber-400' : 'text-slate-500'}>
                                   {ageDays} ngày
                                 </span>
                               ) : '-'}
                             </td>
-                            <td className="py-2 px-2.5 font-semibold text-[#252423] dark:text-[#FFFFFF] max-w-[160px] truncate" title={item.errorType}>
+                            <td className="py-2.5 px-3 font-semibold text-slate-900 dark:text-slate-100 max-w-[160px] truncate" title={item.errorType}>
                               {item.errorType ? (
-                                <span className="px-1.5 py-0.5 bg-[#F3F2F1] dark:bg-[#323130] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] text-[11px]">
+                                <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px]">
                                   {item.errorType}
                                 </span>
                               ) : '-'}
                             </td>
-                            <td className="py-2 px-2.5 max-w-[220px] truncate text-[#605E5C] dark:text-[#A19F9D]" title={item.errorDetail || item.reason || item.notes}>
+                            <td className="py-2.5 px-3 max-w-[220px] truncate text-slate-600 dark:text-slate-400" title={item.errorDetail || item.reason || item.notes}>
                               {item.errorDetail || item.reason || item.notes || '-'}
                             </td>
-                            <td className="py-2 px-2.5 font-mono">{formatDateDisplay(item.scheduledDate)}</td>
-                            <td className="py-2 px-2.5 font-mono">{formatDateDisplay(item.completedDate)}</td>
-                            <td className="py-2 px-2.5 text-center">
-                              <span className={`inline-block px-2 py-0.5 text-[10px] font-bold rounded-[2px] ${
+                            <td className="py-2.5 px-3 font-mono text-slate-600 dark:text-slate-400">{formatDateDisplay(item.scheduledDate)}</td>
+                            <td className="py-2.5 px-3 font-mono text-slate-600 dark:text-slate-400">{formatDateDisplay(item.completedDate)}</td>
+                            <td className="py-2.5 px-3 text-center">
+                              <span className={`inline-block px-2.5 py-0.5 text-[10px] font-bold rounded-lg ${
                                 isDone 
-                                  ? 'bg-[#107C41]/10 text-[#107C41] border border-[#107C41]/30' 
-                                  : 'bg-[#118DFF]/10 text-[#118DFF] border border-[#118DFF]/30'
+                                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' 
+                                  : 'bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200 dark:border-sky-800'
                               }`}>
                                 {isDone ? 'Hoàn thành' : 'Đang xử lý'}
                               </span>
@@ -1739,40 +1679,6 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
 
           </div>
         )}
-
-      </div>
-
-      {/* POWER BI DESKTOP BOTTOM PAGE NAVIGATION TABS BAR */}
-      <div className="fixed bottom-0 left-0 right-0 bg-[#FFFFFF] dark:bg-[#202020] border-t border-[#D2D0CE] dark:border-[#383838] px-4 py-1.5 flex items-center justify-between text-xs z-30 shadow-[0_-1px_3px_rgba(0,0,0,0.06)]">
-        
-        {/* Page Tabs */}
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setActiveReportPage('SUMMARY')}
-            className={`px-3 py-1 rounded-[2px] font-semibold text-xs transition-colors flex items-center gap-1.5 ${
-              activeReportPage === 'SUMMARY'
-                ? 'bg-[#F2C811] text-[#252423] shadow-xs'
-                : 'text-[#605E5C] dark:text-[#C8C6C4] hover:bg-[#F3F2F1] dark:hover:bg-[#2A2A2A]'
-            }`}
-          >
-            <span>📄 1. Báo Cáo Tuần (Weekly Summary)</span>
-          </button>
-          
-          <button
-            onClick={() => setActiveReportPage('SUMMARY')}
-            className="px-3 py-1 rounded-[2px] font-medium text-xs text-[#8A8886] hover:bg-[#F3F2F1] dark:hover:bg-[#2A2A2A] transition-colors"
-            title="Trang 2: Chi tiết các ca xử lý"
-          >
-            <span>📄 2. Dữ Liệu Chi Tiết</span>
-          </button>
-        </div>
-
-        {/* Zoom & Canvas controls */}
-        <div className="flex items-center gap-3 text-[#605E5C] dark:text-[#A19F9D] text-[11px] font-mono">
-          <span>Trang 1 / 1</span>
-          <span className="text-[#D2D0CE] dark:text-[#383838]">|</span>
-          <span>100% Fit to page</span>
-        </div>
 
       </div>
 
