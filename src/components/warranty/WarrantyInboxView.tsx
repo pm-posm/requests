@@ -4,7 +4,7 @@ import {
   User, CheckCircle2, Clock, AlertTriangle, ArrowRight, Eye, 
   Send, Filter, ShieldCheck, ChevronRight, Inbox, MessageSquare, 
   Sparkles, Check, Copy, Settings, X, Download, FileText, Image as ImageIcon,
-  Plus, Tag, Trash2, Globe, CheckCheck
+  Plus, Tag, Trash2, Globe, CheckCheck, CheckSquare, Square
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { WarrantyItem } from '@/types/warranty';
@@ -377,6 +377,17 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
   const [isKeywordPopoverOpen, setIsKeywordPopoverOpen] = useState(false);
   const keywordPopoverRef = useRef<HTMLDivElement>(null);
 
+  // Helper to build combined query with OR from multiple selected keywords
+  const buildCombinedQuery = (kws: string[]): string => {
+    const valid = (kws || []).filter(k => k && k.trim());
+    if (valid.length === 0) return 'subject:"bảo hành"';
+    if (valid.length === 1) return valid[0].trim();
+    return valid.map(k => {
+      const clean = k.trim();
+      return (clean.startsWith('(') && clean.endsWith(')')) ? clean : `(${clean})`;
+    }).join(' OR ');
+  };
+
   // DYNAMIC KEYWORDS ON DASHBOARD
   const [keywords, setKeywords] = useState<string[]>(() => {
     try {
@@ -387,8 +398,16 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
     }
   });
 
-  const [activeKeyword, setActiveKeyword] = useState<string>(() => {
-    return localStorage.getItem('WARRANTY_GMAIL_ACTIVE_KEYWORD') || keywords[0] || 'subject:"bảo hành"';
+  const [selectedKeywords, setSelectedKeywords] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('WARRANTY_GMAIL_SELECTED_KEYWORDS');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    const oldActive = localStorage.getItem('WARRANTY_GMAIL_ACTIVE_KEYWORD');
+    return oldActive ? [oldActive] : [DEFAULT_KEYWORD_PRESETS[0]];
   });
 
   const [newKeywordInput, setNewKeywordInput] = useState('');
@@ -409,8 +428,8 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
   }, [keywords]);
 
   useEffect(() => {
-    localStorage.setItem('WARRANTY_GMAIL_ACTIVE_KEYWORD', activeKeyword);
-  }, [activeKeyword]);
+    localStorage.setItem('WARRANTY_GMAIL_SELECTED_KEYWORDS', JSON.stringify(selectedKeywords));
+  }, [selectedKeywords]);
 
   // Click outside to close Keyword Popover
   useEffect(() => {
@@ -500,23 +519,23 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
     };
   }, [warrantyItems]);
 
-  // Auto-fetch live Gmail threads on Component Mount & Active Keyword change
+  // Auto-fetch live Gmail threads on Component Mount & Selected Keywords change
   useEffect(() => {
-    fetchLiveGmailThreads(activeKeyword, true);
-  }, [activeKeyword]);
+    fetchLiveGmailThreads(buildCombinedQuery(selectedKeywords), true);
+  }, [selectedKeywords]);
 
   // Periodic background auto-sync every 60 seconds from Supabase
   useEffect(() => {
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
-        fetchLiveGmailThreads(activeKeyword, true);
+        fetchLiveGmailThreads(buildCombinedQuery(selectedKeywords), true);
       }
     }, 60000);
     return () => clearInterval(interval);
-  }, [activeKeyword]);
+  }, [selectedKeywords]);
 
   // Fetch threads directly from Gmail Apps Script & Supabase Cloud
-  const fetchLiveGmailThreads = async (queryToSearch: string = activeKeyword, isSilent = false) => {
+  const fetchLiveGmailThreads = async (queryToSearch: string = buildCombinedQuery(selectedKeywords), isSilent = false) => {
     if (isFetchingRef.current) return;
 
     try {
@@ -528,7 +547,7 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
       // 1. If Apps Script URL is available, trigger live Gmail search & push to Supabase
       if (activeUrl) {
         try {
-          const targetUrl = `${activeUrl}${activeUrl.includes('?') ? '&' : '?'}action=gmail&q=${encodeURIComponent(queryToSearch || activeKeyword)}`;
+          const targetUrl = `${activeUrl}${activeUrl.includes('?') ? '&' : '?'}action=gmail&q=${encodeURIComponent(queryToSearch || buildCombinedQuery(selectedKeywords))}`;
           const res = await fetch(targetUrl);
           const json = await res.json();
           if (json.status === 'success') {
@@ -591,7 +610,7 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
         setLastSyncedTime(new Date().toLocaleTimeString('vi-VN'));
 
         if (!isSilent) {
-          toast.success(`✓ Đã kích hoạt quét Gmail thật & cập nhật ${mappedThreads.length} email trên Supabase!`, {
+          toast.success(`✓ Đã quét Gmail & cập nhật ${mappedThreads.length} email trên Supabase!`, {
             icon: '🚀',
             duration: 4000
           });
@@ -617,10 +636,28 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
     }
   };
 
-  const handleSelectKeyword = (kw: string) => {
-    setActiveKeyword(kw);
-    setIsKeywordPopoverOpen(false);
-    fetchLiveGmailThreads(kw, false);
+  const handleToggleKeyword = (kw: string) => {
+    setSelectedKeywords(prev => {
+      if (prev.includes(kw)) {
+        if (prev.length <= 1) {
+          toast('Phải giữ ít nhất 1 từ khóa tìm kiếm!', { icon: '⚠️' });
+          return prev;
+        }
+        return prev.filter(k => k !== kw);
+      } else {
+        return [...prev, kw];
+      }
+    });
+  };
+
+  const handleSelectAllKeywords = () => {
+    setSelectedKeywords([...keywords]);
+  };
+
+  const handleDeselectAllKeywords = () => {
+    if (keywords.length > 0) {
+      setSelectedKeywords([keywords[0]]);
+    }
   };
 
   const handleAddKeyword = () => {
@@ -632,25 +669,29 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
     }
     const updated = [...keywords, trimmed];
     setKeywords(updated);
-    setActiveKeyword(trimmed);
+    setSelectedKeywords(prev => [...prev, trimmed]);
     setNewKeywordInput('');
     toast.success(`Đã thêm keyword: "${trimmed}"`);
-    fetchLiveGmailThreads(trimmed);
   };
 
   const handleDeleteKeyword = (kwToDelete: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (keywords.length <= 1) {
-      toast.error('Cần giữ ít nhất 1 keyword tìm kiếm!');
+      toast.error('Cần giữ ít nhất 1 keyword trong danh sách!');
       return;
     }
     const updated = keywords.filter(k => k !== kwToDelete);
     setKeywords(updated);
-    if (activeKeyword === kwToDelete) {
-      setActiveKeyword(updated[0]);
-      fetchLiveGmailThreads(updated[0]);
-    }
+    setSelectedKeywords(prev => {
+      const filtered = prev.filter(k => k !== kwToDelete);
+      return filtered.length > 0 ? filtered : [updated[0]];
+    });
     toast.success('Đã xóa keyword!');
+  };
+
+  const handleApplyAndScan = () => {
+    setIsKeywordPopoverOpen(false);
+    fetchLiveGmailThreads(buildCombinedQuery(selectedKeywords), false);
   };
 
   // Selected thread object
@@ -900,7 +941,9 @@ function getAttachmentData(msgId, attIdx) {
               className="flex items-center gap-2 px-3.5 py-2 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-semibold transition-all cursor-pointer border border-indigo-200 dark:border-indigo-800 shadow-2xs"
             >
               <Tag className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-              <span>Keyword: <strong className="font-mono">{activeKeyword}</strong></span>
+              <span>
+                Từ khóa: <strong className="font-mono">{selectedKeywords.length === 1 ? selectedKeywords[0] : `${selectedKeywords.length} đang chọn`}</strong>
+              </span>
               <ChevronRight className={`w-3.5 h-3.5 text-indigo-500 transition-transform ${isKeywordPopoverOpen ? 'rotate-90' : ''}`} />
             </button>
 
@@ -911,41 +954,53 @@ function getAttachmentData(msgId, attIdx) {
                 <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2.5">
                   <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900 dark:text-slate-100">
                     <Tag className="w-4 h-4 text-indigo-500" />
-                    <span>Bộ Lọc Từ Khóa Gmail ({keywords.length})</span>
+                    <span>Bộ Lọc Từ Khóa Gmail ({selectedKeywords.length}/{keywords.length})</span>
                   </div>
-                  <span className="text-[10px] text-slate-400 font-mono">Bấm để quét ngay</span>
+                  <div className="flex items-center gap-2 text-[11px]">
+                    <button
+                      onClick={handleSelectAllKeywords}
+                      className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold cursor-pointer"
+                    >
+                      Chọn tất cả
+                    </button>
+                    <span className="text-slate-300 dark:text-slate-700">•</span>
+                    <button
+                      onClick={handleDeselectAllKeywords}
+                      className="text-slate-500 hover:underline cursor-pointer"
+                    >
+                      Bỏ chọn
+                    </button>
+                  </div>
                 </div>
 
-                {/* Preset List */}
+                {/* Preset List with Multi-select Checkboxes */}
                 <div className="space-y-1.5 max-h-52 overflow-y-auto custom-scrollbar pr-1">
                   {keywords.map((kw) => {
-                    const isActive = kw === activeKeyword;
+                    const isChecked = selectedKeywords.includes(kw);
                     return (
                       <div
                         key={kw}
-                        onClick={() => handleSelectKeyword(kw)}
+                        onClick={() => handleToggleKeyword(kw)}
                         className={`group flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs font-mono transition-all cursor-pointer select-none border ${
-                          isActive
-                            ? 'bg-indigo-600 text-white font-bold border-indigo-600 shadow-2xs'
-                            : 'bg-slate-50 dark:bg-slate-950/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800'
+                          isChecked
+                            ? 'bg-indigo-50 dark:bg-indigo-950/80 text-indigo-900 dark:text-indigo-200 font-bold border-indigo-300 dark:border-indigo-800 shadow-2xs'
+                            : 'bg-slate-50 dark:bg-slate-950/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800'
                         }`}
                       >
                         <div className="flex items-center gap-2 truncate">
-                          {isActive ? (
-                            <Check className="w-3.5 h-3.5 text-white shrink-0" />
+                          {isChecked ? (
+                            <CheckSquare className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
                           ) : (
-                            <div className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600 shrink-0 group-hover:bg-indigo-500" />
+                            <Square className="w-4 h-4 text-slate-400 shrink-0" />
                           )}
                           <span className="truncate">{kw}</span>
                         </div>
                         <button
                           onClick={(e) => handleDeleteKeyword(kw, e)}
-                          className={`p-1 rounded hover:bg-rose-500 hover:text-white transition-colors cursor-pointer ${
-                            isActive ? 'text-white/80' : 'text-slate-400 opacity-0 group-hover:opacity-100'
-                          }`}
+                          className="p-1 rounded hover:bg-rose-500 hover:text-white text-slate-400 opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
                           title="Xóa keyword này"
                         >
-                          <X className="w-3 h-3" />
+                          <X className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     );
@@ -977,13 +1032,21 @@ function getAttachmentData(msgId, attIdx) {
                   </div>
                 </div>
 
-                {/* Footer */}
-                <div className="pt-1 flex justify-end">
+                {/* Footer Actions */}
+                <div className="pt-1 flex items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-800/80">
                   <button
                     onClick={() => setIsKeywordPopoverOpen(false)}
-                    className="px-3 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
                   >
                     Đóng
+                  </button>
+                  <button
+                    onClick={handleApplyAndScan}
+                    disabled={isRefreshing}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    <span>Áp dụng &amp; Quét ({selectedKeywords.length})</span>
                   </button>
                 </div>
               </div>
@@ -992,7 +1055,7 @@ function getAttachmentData(msgId, attIdx) {
 
           {/* SCAN GMAIL BUTTON */}
           <button
-            onClick={() => fetchLiveGmailThreads(activeKeyword)}
+            onClick={() => fetchLiveGmailThreads(buildCombinedQuery(selectedKeywords))}
             disabled={isRefreshing}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-semibold transition-colors cursor-pointer border border-indigo-200/80 dark:border-indigo-800 disabled:opacity-60 disabled:cursor-not-allowed"
             title="Quét kiểm tra email bảo hành mới từ Gmail"
