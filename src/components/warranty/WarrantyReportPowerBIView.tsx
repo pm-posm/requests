@@ -423,57 +423,46 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
     return Array.from(map.values()).sort((a, b) => b.total - a.total);
   }, [filteredData]);
 
-  // Section 2: Nguyên Nhân Hư Hỏng Breakdown (3 root categories matching Excel)
+  // Section 2: Nguyên Nhân Hư Hỏng Breakdown (Dynamic from Column W / errorType, with fallback)
   const causeBreakdown = useMemo(() => {
-    let fuseCount = 0;
-    let powerCount = 0;
-    let externalCount = 0;
-
-    const fuseSuppliers = new Set<string>();
-    const powerSuppliers = new Set<string>();
-    const extSuppliers = new Set<string>();
+    const map = new Map<string, { count: number; suppliers: Set<string> }>();
 
     filteredData.forEach(item => {
-      const err = (item.errorDetail || item.reason || item.notes || '').toLowerCase();
+      // 1. Prioritize explicit Column W / errorType from Sheet
+      let causeKey = (item.errorType || '').trim();
       const sup = (item.supplier || '').trim();
 
-      if (err.includes('cầu chì') || err.includes('đèn led') || err.includes('led') || err.includes('đèn') || err.includes('tắt đèn')) {
-        fuseCount++;
-        if (sup) fuseSuppliers.add(sup);
-      } else if (err.includes('nguồn') || err.includes('điện') || err.includes('adapter') || err.includes('chập')) {
-        powerCount++;
-        if (sup) powerSuppliers.add(sup);
-      } else if (err.includes('xe đẩy') || err.includes('ngoại lực') || err.includes('khách') || err.includes('va đập') || err.includes('gãy') || err.includes('vỡ') || err.includes('móp')) {
-        externalCount++;
-        if (sup) extSuppliers.add(sup);
+      // 2. Fallback to keyword matching if column W is empty on this row
+      if (!causeKey) {
+        const err = (item.errorDetail || item.reason || item.notes || '').toLowerCase();
+        if (err.includes('cầu chì') || err.includes('đèn led') || err.includes('led') || err.includes('đèn') || err.includes('tắt đèn')) {
+          causeKey = 'Tắt, hỏng hệ thống cầu chì/Đèn LED';
+        } else if (err.includes('nguồn') || err.includes('điện') || err.includes('adapter') || err.includes('chập')) {
+          causeKey = 'Thiết bị nguồn/Điện thông minh hư hại';
+        } else if (err.includes('xe đẩy') || err.includes('ngoại lực') || err.includes('khách') || err.includes('va đập') || err.includes('gãy') || err.includes('vỡ') || err.includes('móp')) {
+          causeKey = 'Tác động ngoại lực (Xe đẩy siêu thị, khách hàng)';
+        } else {
+          causeKey = 'Khác / Chưa phân loại';
+        }
       }
+
+      if (!map.has(causeKey)) {
+        map.set(causeKey, { count: 0, suppliers: new Set<string>() });
+      }
+      const entry = map.get(causeKey)!;
+      entry.count++;
+      if (sup) entry.suppliers.add(sup);
     });
 
     const total = filteredData.length || 1;
 
-    return [
-      {
-        id: 'fuse',
-        title: 'Tắt, hỏng hệ thống cầu chì/Đèn LED',
-        count: fuseCount,
-        pct: ((fuseCount / total) * 100).toFixed(1),
-        suppliers: Array.from(fuseSuppliers)
-      },
-      {
-        id: 'power',
-        title: 'Thiết bị nguồn/Điện thông minh hư hại',
-        count: powerCount,
-        pct: ((powerCount / total) * 100).toFixed(1),
-        suppliers: Array.from(powerSuppliers)
-      },
-      {
-        id: 'external',
-        title: 'Tác động ngoại lực (Xe đẩy siêu thị, khách hàng)',
-        count: externalCount,
-        pct: ((externalCount / total) * 100).toFixed(1),
-        suppliers: Array.from(extSuppliers)
-      }
-    ];
+    return Array.from(map.entries()).map(([title, val], idx) => ({
+      id: `cause_${idx}`,
+      title,
+      count: val.count,
+      pct: ((val.count / total) * 100).toFixed(1),
+      suppliers: Array.from(val.suppliers)
+    })).sort((a, b) => b.count - a.count);
   }, [filteredData]);
 
   // Section 3: Cảnh Báo Trễ Hạn Breakdown (3 standard operational brackets)
@@ -1224,6 +1213,7 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                       <th className="py-2 px-2.5">Ngày Báo Lỗi</th>
                       <th className="py-2 px-2.5">Ngày Lắp Đặt</th>
                       <th className="py-2 px-2.5 text-center">Tuổi Thọ</th>
+                      <th className="py-2 px-2.5">Loại Lỗi (Cột W)</th>
                       <th className="py-2 px-2.5">Tình Trạng Hư Hỏng</th>
                       <th className="py-2 px-2.5">Ngày Hẹn Xử Lý</th>
                       <th className="py-2 px-2.5">Ngày Hoàn Thành</th>
@@ -1233,7 +1223,7 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                   <tbody className="divide-y divide-[#EDEBE9] dark:divide-[#323130]">
                     {detailTableRows.length === 0 ? (
                       <tr>
-                        <td colSpan={17} className="py-6 text-center text-[#8A8886] italic">
+                        <td colSpan={18} className="py-6 text-center text-[#8A8886] italic">
                           Không tìm thấy ca bảo hành nào phù hợp với bộ lọc hiện tại.
                         </td>
                       </tr>
@@ -1272,6 +1262,13 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                               {ageDays !== null ? (
                                 <span className={ageDays < 30 ? 'font-bold text-[#D9B300]' : 'text-[#605E5C]'}>
                                   {ageDays} ngày
+                                </span>
+                              ) : '-'}
+                            </td>
+                            <td className="py-2 px-2.5 font-semibold text-[#252423] dark:text-[#FFFFFF] max-w-[160px] truncate" title={item.errorType}>
+                              {item.errorType ? (
+                                <span className="px-1.5 py-0.5 bg-[#F3F2F1] dark:bg-[#323130] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] text-[11px]">
+                                  {item.errorType}
                                 </span>
                               ) : '-'}
                             </td>

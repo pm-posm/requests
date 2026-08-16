@@ -23,6 +23,7 @@ export interface WarrantyItem {
   proofImage?: string;        // Link ảnh nghiệm thu
   note?: string;              // Ghi chú
   precedingRequestId?: string;// Mã bảo hành lần trước (Cột V BaoHanh_Model)
+  errorType?: string;         // Loại lỗi (Cột W BaoHanh_Model)
 }
 
 export interface WarrantyStats {

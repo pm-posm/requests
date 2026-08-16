@@ -176,6 +176,7 @@ export default function TrackingWarranty() {
   const [editTitleMail, setEditTitleMail] = useState('');
   const [editRaiseMailTime, setEditRaiseMailTime] = useState('');
   const [editPrecedingRequestId, setEditPrecedingRequestId] = useState('');
+  const [editErrorType, setEditErrorType] = useState('');
   const [drawerSaveSuccess, setDrawerSaveSuccess] = useState<string | null>(null);
   const [isDrawerSaving, setIsDrawerSaving] = useState(false);
 
@@ -277,6 +278,7 @@ export default function TrackingWarranty() {
       setEditTitleMail(selectedItem.mailTitle || (selectedItem as any).titleEmail || '');
       setEditRaiseMailTime(selectedItem.raiseMailTime || '');
       setEditPrecedingRequestId(selectedItem.precedingRequestId || (selectedItem as any).preceding_request_id || '');
+      setEditErrorType(selectedItem.errorType || '');
       setDrawerSaveSuccess(null);
     }
   }, [selectedItem]);
@@ -397,7 +399,8 @@ export default function TrackingWarranty() {
       note: editNote.trim(),
       mailTitle: editTitleMail.trim(),
       raiseMailTime: editRaiseMailTime.trim(),
-      precedingRequestId: editPrecedingRequestId.trim()
+      precedingRequestId: editPrecedingRequestId.trim(),
+      errorType: editErrorType.trim()
     };
 
     // Update local state
@@ -444,6 +447,10 @@ export default function TrackingWarranty() {
         if (editExpectedDate.trim()) payload.expectedDate = editExpectedDate.trim();
         if (editCompletedDate.trim()) payload.completedDate = editCompletedDate.trim();
         if (editPrecedingRequestId.trim()) payload.precedingRequestId = editPrecedingRequestId.trim();
+        if (editErrorType.trim()) {
+          payload.errorType = editErrorType.trim();
+          payload.loaiLoi = editErrorType.trim();
+        }
         if (editNote.trim()) payload.note = editNote.trim();
 
         const queryParams = new URLSearchParams(payload).toString();
@@ -543,6 +550,7 @@ export default function TrackingWarranty() {
               const col19Val = (objVals[19] !== undefined && objVals[19] !== null) ? String(objVals[19]).trim() : '';
               const col20Val = (objVals[20] !== undefined && objVals[20] !== null) ? String(objVals[20]).trim() : '';
               const col21Val = (objVals[21] !== undefined && objVals[21] !== null) ? String(objVals[21]).trim() : '';
+              const col22Val = (objVals[22] !== undefined && objVals[22] !== null) ? String(objVals[22]).trim() : '';
 
               const raiseMailTime = getFlexibleVal(row, [
                 'Ngày Rasie Mail',
@@ -568,6 +576,19 @@ export default function TrackingWarranty() {
                 'preceding_request_id', 
                 'precedingRequestId'
               ]) || (Array.isArray(row) ? row[21] : '') || col21Val || '';
+
+              const errorType = getFlexibleVal(row, [
+                'Loại lỗi',
+                'Loại Lỗi',
+                'loai_loi',
+                'loaiLoi',
+                'Loại Lỗi (Cột W)',
+                'Error Type',
+                'error_type',
+                'errorType',
+                'Phân loại lỗi',
+                'Nhóm lỗi'
+              ]) || (Array.isArray(row) ? row[22] : '') || col22Val || '';
 
               const note = getFlexibleVal(row, ['Note', 'Ghi chú', 'vis_note', 'mer_note']) || (Array.isArray(row) ? row[18] : '') || '';
               const requestDeadline = getFlexibleVal(row, ['Deadline', 'Deadline request', 'Deadline RQ', 'deadline']) || '';
@@ -596,7 +617,8 @@ export default function TrackingWarranty() {
                 completedDate: completedDate.trim(),
                 proofImage: proofImage.trim(),
                 note: note.trim(),
-                precedingRequestId: precedingRequestId.trim()
+                precedingRequestId: precedingRequestId.trim(),
+                errorType: errorType.trim()
               };
             });
             setWarrantyItems(parsedItems);
@@ -1752,6 +1774,39 @@ export default function TrackingWarranty() {
                     placeholder="Nhập hoặc chọn mã BH lần trước (ví dụ: BH-586)..."
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl font-mono text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:border-sky-500"
                   />
+                </div>
+
+                {/* Edit Error Type / Loại Lỗi (Cột W BaoHanh_Model - Sync 2 Chiều) */}
+                <div className="space-y-1 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <label className="font-semibold text-xs text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                      Loại Lỗi (Cột W Sheet BaoHanh_Model):
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-normal">Ánh xạ 1:1 từ Sheet</span>
+                  </label>
+                  <div className="flex flex-col sm:flex-row items-center gap-2">
+                    <select
+                      value={editErrorType}
+                      onChange={(e) => setEditErrorType(e.target.value)}
+                      className="w-full sm:w-1/2 px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer outline-none focus:border-sky-500"
+                    >
+                      <option value="">-- Chọn danh mục Loại Lỗi từ Sheet --</option>
+                      {Array.from(new Set(warrantyItems.map(i => (i.errorType || '').trim()).filter(Boolean))).sort().map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                      {editErrorType && !Array.from(new Set(warrantyItems.map(i => (i.errorType || '').trim()).filter(Boolean))).includes(editErrorType) && (
+                        <option value={editErrorType}>{editErrorType} (Tùy chỉnh)</option>
+                      )}
+                    </select>
+                    <input
+                      type="text"
+                      placeholder="Hoặc nhập loại lỗi mới..."
+                      value={editErrorType}
+                      onChange={(e) => setEditErrorType(e.target.value)}
+                      className="w-full sm:w-1/2 px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs outline-none focus:border-sky-500"
+                    />
+                  </div>
                 </div>
 
                 {/* Edit Title Mail & Raise Mail Date (DD/MM/YYYY FORMAT) */}
