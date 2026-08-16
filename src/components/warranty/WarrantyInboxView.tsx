@@ -503,10 +503,10 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
 
             return {
               threadId: item.thread_id,
-              requestId: reqId || (matchedSheetItem ? matchedSheetItem.requestId : ''),
-              storeName: matchedSheetItem?.storeName || '',
-              storeCode: matchedSheetItem?.storeCode || '',
-              projectCode: prjCode || matchedSheetItem?.projectCode || '',
+              requestId: '',
+              storeName: '',
+              storeCode: '',
+              projectCode: '',
               subject: item.subject || 'Không có tiêu đề',
               from: item.from_email || '',
               fromName: item.from_name || (item.from_email ? item.from_email.split('@')[0] : ''),
@@ -586,28 +586,16 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
 
       if (data && data.length > 0) {
         const mappedThreads: WarrantyEmailThread[] = data.map((item: any) => {
-          const fullSubject = item.subject || '';
-          const reqMatch = fullSubject.match(/BH-\d+/i);
-          const reqId = reqMatch ? reqMatch[0].toUpperCase() : '';
-          const prjMatch = fullSubject.match(/\b\d{6}\b/);
-          const prjCode = prjMatch ? prjMatch[0] : '';
-
-          const matchedSheetItem = warrantyItems.find(w => {
-            if (reqId && (w.requestId || '').toUpperCase() === reqId) return true;
-            if (prjCode && (w.projectCode || '').includes(prjCode)) return true;
-            return false;
-          });
-
           const rawTime = item.last_updated ? new Date(item.last_updated).getTime() : Date.now();
           const msgs = Array.isArray(item.messages) ? item.messages : [];
           const attCount = msgs.reduce((acc: number, m: any) => acc + (Array.isArray(m.attachments) ? m.attachments.length : 0), 0);
 
           return {
             threadId: item.thread_id,
-            requestId: reqId || (matchedSheetItem ? matchedSheetItem.requestId : ''),
-            storeName: matchedSheetItem?.storeName || '',
-            storeCode: matchedSheetItem?.storeCode || '',
-            projectCode: prjCode || matchedSheetItem?.projectCode || '',
+            requestId: '',
+            storeName: '',
+            storeCode: '',
+            projectCode: '',
             subject: item.subject || 'Không có tiêu đề',
             from: item.from_email || '',
             fromName: item.from_name || (item.from_email ? item.from_email.split('@')[0] : ''),
@@ -1110,7 +1098,7 @@ function getAttachmentData(msgId, attIdx) {
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Tìm mã BH-xxx, mã dự án, tiêu đề, người gửi..."
+                placeholder="Tìm theo người gửi, tiêu đề, nội dung thư..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs outline-none focus:border-indigo-500 transition-colors"
@@ -1142,16 +1130,6 @@ function getAttachmentData(msgId, attIdx) {
                   <span>Mới nhận ({newThreadIds.size})</span>
                 </button>
               )}
-              <button
-                onClick={() => setFilterType('MATCHED')}
-                className={`px-2.5 py-1 rounded-lg font-semibold transition-colors shrink-0 cursor-pointer ${
-                  filterType === 'MATCHED'
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100'
-                }`}
-              >
-                Khớp Sheet BH
-              </button>
               <button
                 onClick={() => setFilterType('HAS_ATTACHMENT')}
                 className={`px-2.5 py-1 rounded-lg font-semibold transition-colors shrink-0 cursor-pointer ${
@@ -1207,7 +1185,7 @@ function getAttachmentData(msgId, attIdx) {
                         : 'hover:bg-slate-50 dark:hover:bg-slate-800/40 border-l-4 border-l-transparent'
                     }`}
                   >
-                    {/* Row 1: Badges & Date */}
+                    {/* Row 1: Sender & Date */}
                     <div className="flex items-center justify-between gap-2 mb-1.5">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {isNew && (
@@ -1216,16 +1194,7 @@ function getAttachmentData(msgId, attIdx) {
                             <span>Mới</span>
                           </span>
                         )}
-                        {thread.requestId ? (
-                          <span className="px-2 py-0.5 rounded-md font-mono font-bold text-[10px] bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                            {thread.requestId}
-                          </span>
-                        ) : (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 font-semibold">
-                            Chưa gán mã
-                          </span>
-                        )}
-                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate max-w-[150px]">
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate max-w-[200px]">
                           {thread.fromName || thread.from}
                         </span>
                       </div>
@@ -1286,11 +1255,6 @@ function getAttachmentData(msgId, attIdx) {
                     </button>
 
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      {activeThread.requestId && (
-                        <span className="px-2.5 py-0.5 rounded-lg text-xs font-mono font-bold bg-indigo-600 text-white shadow-2xs">
-                          {activeThread.requestId}
-                        </span>
-                      )}
                       <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
                         Chuỗi gồm {activeThread.messagesCount} email trao đổi
                       </span>
@@ -1317,41 +1281,8 @@ function getAttachmentData(msgId, attIdx) {
                       <span>Mở trên Gmail</span>
                       <ExternalLink className="w-3 h-3 opacity-70" />
                     </button>
-
-                    {matchedWarrantyItem && onOpenWarrantyDrawer && (
-                      <button
-                        onClick={() => onOpenWarrantyDrawer(matchedWarrantyItem)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-bold transition-colors cursor-pointer border border-indigo-200 dark:border-indigo-800 shrink-0 shadow-2xs"
-                        title="Mở Drawer chỉnh sửa ca bảo hành này trên Sheet"
-                      >
-                        <span>Mở Ca #{matchedWarrantyItem.rowId || matchedWarrantyItem.requestId}</span>
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </button>
-                    )}
                   </div>
                 </div>
-
-                {/* Sheet Metadata Card if matched */}
-                {matchedWarrantyItem && (
-                  <div className="p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-between text-xs flex-wrap gap-2">
-                    <div className="flex items-center gap-3">
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">Cửa hàng:</span>
-                        <strong className="text-slate-800 dark:text-slate-200 font-semibold">{matchedWarrantyItem.storeName}</strong>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">Nhà thầu:</span>
-                        <span className="text-slate-700 dark:text-slate-300 font-mono">{matchedWarrantyItem.supplier || 'Chưa gán'}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">Tiến độ:</span>
-                        <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                          {matchedWarrantyItem.progress || 'Chưa cập nhật'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Messages Timeline */}
