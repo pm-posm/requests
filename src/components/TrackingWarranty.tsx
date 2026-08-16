@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Papa from 'papaparse';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
@@ -136,7 +137,31 @@ const INITIAL_REAL_WARRANTY_ITEMS: WarrantyItem[] = [
 
 export default function TrackingWarranty() {
   const { isAdmin } = useDashboardStore();
-  const [activeModuleTab, setActiveModuleTab] = useState<'DATA_LIST' | 'ANALYST' | 'INBOX'>('DATA_LIST');
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Derive activeModuleTab directly from URL path (Single Source of Truth)
+  const activeModuleTab = useMemo<'DATA_LIST' | 'ANALYST' | 'INBOX'>(() => {
+    const path = location.pathname.toLowerCase();
+    if (path.includes('/tracking/warranty/analytics') || path.includes('/tracking/warranty/report')) {
+      return 'ANALYST';
+    }
+    if (path.includes('/tracking/warranty/inbox')) {
+      return 'INBOX';
+    }
+    return 'DATA_LIST';
+  }, [location.pathname]);
+
+  const handleTabChange = (tab: 'DATA_LIST' | 'ANALYST' | 'INBOX') => {
+    if (tab === 'ANALYST') {
+      navigate('/tracking/warranty/analytics');
+    } else if (tab === 'INBOX') {
+      navigate('/tracking/warranty/inbox');
+    } else {
+      navigate('/tracking/warranty');
+    }
+  };
+
   const [sheetUrl, setSheetUrl] = useState<string>(() => {
     return localStorage.getItem('warranty_sheet_url') || DEFAULT_WARRANTY_SHEET_CSV;
   });
@@ -1252,7 +1277,7 @@ export default function TrackingWarranty() {
         <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap self-start xl:self-auto">
           <div className="bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl flex items-center gap-1 border border-slate-200/60 dark:border-slate-700 shrink-0">
             <button
-              onClick={() => setActiveModuleTab('DATA_LIST')}
+              onClick={() => handleTabChange('DATA_LIST')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 activeModuleTab === 'DATA_LIST'
                   ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs font-bold'
@@ -1264,7 +1289,7 @@ export default function TrackingWarranty() {
             </button>
 
             <button
-              onClick={() => setActiveModuleTab('ANALYST')}
+              onClick={() => handleTabChange('ANALYST')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 activeModuleTab === 'ANALYST'
                   ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs font-bold'
@@ -1276,7 +1301,7 @@ export default function TrackingWarranty() {
             </button>
 
             <button
-              onClick={() => setActiveModuleTab('INBOX')}
+              onClick={() => handleTabChange('INBOX')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 activeModuleTab === 'INBOX'
                   ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-2xs font-bold'

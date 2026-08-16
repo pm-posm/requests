@@ -176,6 +176,13 @@ export default function Dashboard() {
           }>
             <Routes>
               {/* Active Operations & Tracking Routes */}
+              <Route path="/tracking/warranty/*" element={
+                <div className="absolute inset-0 p-2.5 sm:p-4 md:p-5 overflow-y-auto custom-scrollbar bg-background">
+                  <div className="w-full max-w-[1920px] mx-auto">
+                    <TrackingWarranty />
+                  </div>
+                </div>
+              } />
               <Route path="/tracking/warranty" element={
                 <div className="absolute inset-0 p-2.5 sm:p-4 md:p-5 overflow-y-auto custom-scrollbar bg-background">
                   <div className="w-full max-w-[1920px] mx-auto">

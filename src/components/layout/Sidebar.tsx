@@ -169,6 +169,28 @@ export function Sidebar({
                 isLocked={false}
                 onClick={() => handleRouteClick('/tracking/warranty', 'tracking_warranty', false)} 
               />
+              {!isCollapsed && pathname.startsWith('/tracking/warranty') && (
+                <div className="pl-6 pr-2 py-1 space-y-0.5 border-l border-slate-200 dark:border-slate-800 ml-5 my-1">
+                  <SubSidebarItem 
+                    label="Danh Sách Ca" 
+                    active={pathname === '/tracking/warranty' || pathname === '/tracking/warranty/list'} 
+                    isLocked={false}
+                    onClick={() => handleRouteClick('/tracking/warranty', 'tracking_warranty', false)} 
+                  />
+                  <SubSidebarItem 
+                    label="Báo Cáo Phân Tích" 
+                    active={pathname.startsWith('/tracking/warranty/analytics') || pathname.startsWith('/tracking/warranty/report')} 
+                    isLocked={false}
+                    onClick={() => handleRouteClick('/tracking/warranty/analytics', 'tracking_warranty', false)} 
+                  />
+                  <SubSidebarItem 
+                    label="Hộp Thư Gmail" 
+                    active={pathname.startsWith('/tracking/warranty/inbox')} 
+                    isLocked={false}
+                    onClick={() => handleRouteClick('/tracking/warranty/inbox', 'tracking_warranty', false)} 
+                  />
+                </div>
+              )}
               <SidebarItem 
                 icon={<Factory />} label="Nghiệm thu Xuất xưởng" 
                 active={pathname.startsWith('/tracking/ntxx')} 
