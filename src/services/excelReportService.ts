@@ -225,10 +225,66 @@ export const exportAnalystExecutiveReport = async (
 
   const ws = wb.getWorksheet('Weekly') || wb.worksheets[0];
 
+  // =========================================================================
+  // 3. SET EXPANDED COLUMN WIDTHS & ROW HEIGHTS (NO TRUNCATION / NO CLIPPING)
+  // =========================================================================
+  ws.columns = [
+    { width: 22 }, // A: TỔNG CA BẢO HÀNH / Nhà Thầu / Loại POSM / ID
+    { width: 15 }, // B: % XỬ LÝ ĐÚNG HẠN / Total Case / Số ca / Store
+    { width: 14 }, // C: POSM
+    { width: 16 }, // D: % XỬ LÝ TRỄ HẠN / Store (Bảng 5) / Brand
+    { width: 14 }, // E: Số ca (Bảng 5) / Cat
+    { width: 18 }, // F: % HỎNG SỚM / % Đạt tiến độ / Mã dự án
+    { width: 16 }, // G: Mã dự án (Bảng 6) / Supplier
+    { width: 22 }, // H: TOP SUPPLIER / Nguyên nhân lỗi / Ngày lắp đặt
+    { width: 15 }, // I: Ngày gửi BH
+    { width: 26 }, // J: TOP PROJECT / Loại lỗi (Cột W) / CAT
+    { width: 16 }, // K: % Tỷ lệ / Số ca (Bảng 7)
+    { width: 28 }, // L: TOP STORE / Chi tiết lỗi
+    { width: 16 }, // M: Thời gian trễ hạn
+    { width: 18 }, // N: TOP CAT / Ngày hẹn
+    { width: 16 }, // O: Số ca (Bảng 3) / Ngày hoàn thành
+    { width: 22 }, // P: TOP POSM / % Tỷ lệ (Bảng 3) / Status
+    { width: 25 }  // Q: Mức độ cảnh báo / Note
+  ];
+
+  // Set explicit, spacious row heights
+  ws.getRow(1).height = 42; // Title banner
+  ws.getRow(4).height = 28; // Header for KPI cards
+  ws.getRow(5).height = 44; // 24pt large KPI numbers
+  ws.getRow(6).height = 24; // Subtitles (⚡ 36/62 ca)
+  ws.getRow(7).height = 26; // ⏳ Đang xử lí note
+  ws.getRow(10).height = 28; // Section headers (1. BY SUPPLIER, 2. BY CAUSE, 3. BY TIMELINE)
+  ws.getRow(11).height = 26; // Table headers
+  ws.getRow(19).height = 28; // Section headers (4. BY POSM, 5. BY STORE, 6. BY PROJECT, 7. BY CAT)
+  ws.getRow(20).height = 26; // Table headers
+  ws.getRow(29).height = 28; // Section header CHI TIẾT CÁC CASE...
+  ws.getRow(30).height = 26; // Action table header
+
+  // Common Reusable Styles
+  const thinBorder: Partial<ExcelJS.Borders> = {
+    top: { style: 'thin', color: { argb: 'FFD2D0CE' } },
+    bottom: { style: 'thin', color: { argb: 'FFD2D0CE' } },
+    left: { style: 'thin', color: { argb: 'FFD2D0CE' } },
+    right: { style: 'thin', color: { argb: 'FFD2D0CE' } }
+  };
+
+  const greenCellFill: ExcelJS.Fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FFB7E1CD' }
+  };
+
+  const numberCellFill: ExcelJS.Fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FFF2F4F7' }
+  };
+
   // 1. Title Header
   ws.getCell('A1').value = dateRangeLabel;
 
-  // 2. Row 5: KPI Values
+  // 2. Row 5: KPI Values (Keep 24pt bold colors)
   ws.getCell('A5').value = totalCount;
   ws.getCell('B5').value = totalCount > 0 ? onTimeCount / totalCount : 0;
   ws.getCell('B5').numFmt = '0.0%';
@@ -257,8 +313,7 @@ export const exportAnalystExecutiveReport = async (
   ws.getCell('A7').value = `⏳ Đang xử lí ${inProgressCount} ca thuộc dự án:`;
   ws.getCell('D7').value = activePrjStr;
 
-  // 5. Rows 12-16: 3 Evaluation Tables (BY SUPPLIER, BY CAUSE, BY TIMELINE)
-  // Clear rows 12 to 17
+  // 5. Rows 12-17: 3 Evaluation Tables (BY SUPPLIER, BY CAUSE, BY TIMELINE)
   for (let r = 12; r <= 17; r++) {
     ['A', 'B', 'C', 'D', 'E', 'F', 'H', 'J', 'K', 'M', 'O', 'P', 'Q'].forEach(col => {
       ws.getCell(`${col}${r}`).value = null;
@@ -269,44 +324,100 @@ export const exportAnalystExecutiveReport = async (
   const sortedSuppliers = Array.from(supplierMap.entries()).sort((a, b) => b[1].total - a[1].total);
   sortedSuppliers.forEach(([sup, d], idx) => {
     const r = 12 + idx;
+    ws.getRow(r).height = 22;
     ws.getCell(`A${r}`).value = sup;
+    ws.getCell(`A${r}`).border = thinBorder;
+    ws.getCell(`A${r}`).font = { name: 'Calibri', size: 11 };
+    ws.getCell(`A${r}`).fill = greenCellFill;
+
     ws.getCell(`B${r}`).value = d.total;
+    ws.getCell(`B${r}`).border = thinBorder;
+    ws.getCell(`B${r}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF1F4E79' } };
+    ws.getCell(`B${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
+
     ws.getCell(`C${r}`).value = d.early;
+    ws.getCell(`C${r}`).border = thinBorder;
+    ws.getCell(`C${r}`).font = { name: 'Calibri', size: 11, bold: d.early > 0, color: { argb: d.early > 0 ? 'FFFF0000' : 'FF57BB8A' } };
+    ws.getCell(`C${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
+
     ws.getCell(`D${r}`).value = d.repeat;
+    ws.getCell(`D${r}`).border = thinBorder;
+    ws.getCell(`D${r}`).font = { name: 'Calibri', size: 11, color: { argb: 'FF57BB8A' } };
+    ws.getCell(`D${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
+
     ws.getCell(`E${r}`).value = d.overdue;
-    ws.getCell(`F${r}`).value = d.total > 0 ? (d.total - d.overdue) / d.total : 1;
+    ws.getCell(`E${r}`).border = thinBorder;
+    ws.getCell(`E${r}`).font = { name: 'Calibri', size: 11, bold: d.overdue > 0, color: { argb: d.overdue > 0 ? 'FFFF0000' : 'FF57BB8A' } };
+    ws.getCell(`E${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
+
+    const rate = d.total > 0 ? (d.total - d.overdue) / d.total : 1;
+    ws.getCell(`F${r}`).value = rate;
     ws.getCell(`F${r}`).numFmt = '0.0%';
+    ws.getCell(`F${r}`).border = thinBorder;
+    ws.getCell(`F${r}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: rate < 0.8 ? 'FFFF0000' : 'FF57BB8A' } };
+    ws.getCell(`F${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
   });
 
   // Populate Bảng 2: BY CAUSE
   const sortedCauses = Array.from(causeMap.entries()).sort((a, b) => b[1].count - a[1].count);
   sortedCauses.slice(0, 6).forEach(([cause, d], idx) => {
     const r = 12 + idx;
+    ws.getRow(r).height = 22;
     ws.getCell(`H${r}`).value = cause;
+    ws.getCell(`H${r}`).border = thinBorder;
+    ws.getCell(`H${r}`).font = { name: 'Calibri', size: 11 };
+    ws.getCell(`H${r}`).fill = greenCellFill;
+
     ws.getCell(`J${r}`).value = `${d.count}\n(${d.topSupplier}>>)`;
-    ws.getCell(`K${r}`).value = totalCount > 0 ? d.count / totalCount : 0;
+    ws.getCell(`J${r}`).border = thinBorder;
+    ws.getCell(`J${r}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF1F4E79' } };
+    ws.getCell(`J${r}`).alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+
+    const pct = totalCount > 0 ? d.count / totalCount : 0;
+    ws.getCell(`K${r}`).value = pct;
     ws.getCell(`K${r}`).numFmt = '0.0%';
+    ws.getCell(`K${r}`).border = thinBorder;
+    ws.getCell(`K${r}`).font = { name: 'Calibri', size: 11, color: { argb: 'FF252423' } };
+    ws.getCell(`K${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
   });
 
   // Populate Bảng 3: BY TIMELINE
   const timelineData = [
-    { label: '1 - 3 ngày (Trễ nhẹ)', count: delay1to3, badge: 'Nhắc nhở' },
-    { label: '4 - 7 ngày (Cảnh báo tiến độ)', count: delay4to7, badge: 'Đôn đốc xử lý gấp' },
-    { label: '> 7 ngày (Quá hạn nghiêm trọng)', count: delayOver7, badge: 'Yêu cầu giải trình' }
+    { label: '1 - 3 ngày (Trễ nhẹ)', count: delay1to3, badge: 'Nhắc nhở', color: 'FF1F4E79' },
+    { label: '4 - 7 ngày (Cảnh báo tiến độ)', count: delay4to7, badge: 'Đôn đốc xử lý gấp', color: 'FFFF0000' },
+    { label: '> 7 ngày (Quá hạn nghiêm trọng)', count: delayOver7, badge: 'Yêu cầu giải trình', color: 'FFFF0000' }
   ];
   timelineData.forEach((t, idx) => {
     const r = 12 + idx;
+    ws.getRow(r).height = 22;
     ws.getCell(`M${r}`).value = t.label;
+    ws.getCell(`M${r}`).border = thinBorder;
+    ws.getCell(`M${r}`).font = { name: 'Calibri', size: 11 };
+
     ws.getCell(`O${r}`).value = t.count;
-    ws.getCell(`P${r}`).value = totalCount > 0 ? t.count / totalCount : 0;
+    ws.getCell(`O${r}`).border = thinBorder;
+    ws.getCell(`O${r}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: t.count > 0 ? t.color : 'FF57BB8A' } };
+    ws.getCell(`O${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
+
+    const pct = totalCount > 0 ? t.count / totalCount : 0;
+    ws.getCell(`P${r}`).value = pct;
     ws.getCell(`P${r}`).numFmt = '0.0%';
+    ws.getCell(`P${r}`).border = thinBorder;
+    ws.getCell(`P${r}`).font = { name: 'Calibri', size: 11 };
+    ws.getCell(`P${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
+
     ws.getCell(`Q${r}`).value = t.badge;
+    ws.getCell(`Q${r}`).border = thinBorder;
+    ws.getCell(`Q${r}`).font = { name: 'Calibri', size: 11, italic: true, color: { argb: 'FF605E5C' } };
   });
 
-  // 6. Rows 21-25: 4 Breakdown Tables (BY POSM, BY STORE, BY PROJECT, BY CAT)
+  // 6. Rows 21-27: 4 Breakdown Tables (BY POSM, BY STORE, BY PROJECT, BY CAT)
+  // Clear rows 21 to 27 first
   for (let r = 21; r <= 27; r++) {
     ['A', 'B', 'D', 'E', 'G', 'H', 'J', 'K'].forEach(col => {
       ws.getCell(`${col}${r}`).value = null;
+      ws.getCell(`${col}${r}`).fill = { type: 'pattern', pattern: 'none' };
+      ws.getCell(`${col}${r}`).border = {};
     });
   }
 
@@ -316,23 +427,70 @@ export const exportAnalystExecutiveReport = async (
   const sortedCat = Array.from(catMap.entries()).sort((a, b) => b[1] - a[1]);
 
   const maxBreakdown = Math.max(sortedPosm.length, sortedStore.length, sortedProject.length, sortedCat.length, 3);
+  
+  // Format each row with uniform green label background and gray number styling!
   for (let i = 0; i < maxBreakdown && i < 6; i++) {
     const r = 21 + i;
+    ws.getRow(r).height = 22;
+
+    // Col A & B (Loại POSM)
     if (sortedPosm[i]) {
       ws.getCell(`A${r}`).value = sortedPosm[i][0];
+      ws.getCell(`A${r}`).fill = greenCellFill;
+      ws.getCell(`A${r}`).font = { name: 'Calibri', size: 11, color: { argb: 'FF252423' } };
+      ws.getCell(`A${r}`).border = thinBorder;
+      ws.getCell(`A${r}`).alignment = { vertical: 'middle' };
+
       ws.getCell(`B${r}`).value = sortedPosm[i][1];
+      ws.getCell(`B${r}`).fill = numberCellFill;
+      ws.getCell(`B${r}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF1F4E79' } };
+      ws.getCell(`B${r}`).border = thinBorder;
+      ws.getCell(`B${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
     }
+
+    // Col D & E (Store)
     if (sortedStore[i]) {
       ws.getCell(`D${r}`).value = sortedStore[i][0];
+      ws.getCell(`D${r}`).fill = greenCellFill;
+      ws.getCell(`D${r}`).font = { name: 'Calibri', size: 11, color: { argb: 'FF252423' } };
+      ws.getCell(`D${r}`).border = thinBorder;
+      ws.getCell(`D${r}`).alignment = { vertical: 'middle' };
+
       ws.getCell(`E${r}`).value = sortedStore[i][1];
+      ws.getCell(`E${r}`).fill = numberCellFill;
+      ws.getCell(`E${r}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF1F4E79' } };
+      ws.getCell(`E${r}`).border = thinBorder;
+      ws.getCell(`E${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
     }
+
+    // Col G & H (Mã dự án)
     if (sortedProject[i]) {
       ws.getCell(`G${r}`).value = sortedProject[i][0];
+      ws.getCell(`G${r}`).fill = greenCellFill;
+      ws.getCell(`G${r}`).font = { name: 'Calibri', size: 11, color: { argb: 'FF252423' } };
+      ws.getCell(`G${r}`).border = thinBorder;
+      ws.getCell(`G${r}`).alignment = { vertical: 'middle' };
+
       ws.getCell(`H${r}`).value = sortedProject[i][1];
+      ws.getCell(`H${r}`).fill = numberCellFill;
+      ws.getCell(`H${r}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF1F4E79' } };
+      ws.getCell(`H${r}`).border = thinBorder;
+      ws.getCell(`H${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
     }
+
+    // Col J & K (CAT / Brand)
     if (sortedCat[i]) {
       ws.getCell(`J${r}`).value = sortedCat[i][0];
+      ws.getCell(`J${r}`).fill = greenCellFill;
+      ws.getCell(`J${r}`).font = { name: 'Calibri', size: 11, color: { argb: 'FF252423' } };
+      ws.getCell(`J${r}`).border = thinBorder;
+      ws.getCell(`J${r}`).alignment = { vertical: 'middle' };
+
       ws.getCell(`K${r}`).value = sortedCat[i][1];
+      ws.getCell(`K${r}`).fill = numberCellFill;
+      ws.getCell(`K${r}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF1F4E79' } };
+      ws.getCell(`K${r}`).border = thinBorder;
+      ws.getCell(`K${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
     }
   }
 
@@ -345,15 +503,10 @@ export const exportAnalystExecutiveReport = async (
   }
 
   // Inject all active items with styling
-  const thinBorder: Partial<ExcelJS.Borders> = {
-    top: { style: 'thin', color: { argb: 'FFD2D0CE' } },
-    bottom: { style: 'thin', color: { argb: 'FFD2D0CE' } },
-    left: { style: 'thin', color: { argb: 'FFD2D0CE' } },
-    right: { style: 'thin', color: { argb: 'FFD2D0CE' } }
-  };
-
   activeItems.forEach((item, idx) => {
     const r = 31 + idx;
+    ws.getRow(r).height = 22;
+
     const pLower = (item.progress || '').toLowerCase();
     const isDone = pLower.includes('hoàn thành');
     const pExp = parseDateToMs(item.expectedDate || item.requestDeadline);
@@ -393,7 +546,7 @@ export const exportAnalystExecutiveReport = async (
     ws.getCell(`Q${r}`).value = noteText;
 
     // Apply borders & font styling
-    ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'L', 'N', 'O', 'P', 'Q'].forEach(c => {
+    ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q'].forEach(c => {
       const cell = ws.getCell(`${c}${r}`);
       cell.border = thinBorder;
       cell.font = { name: 'Calibri', size: 11, color: { argb: 'FF252423' } };
@@ -410,7 +563,7 @@ export const exportAnalystExecutiveReport = async (
   });
 
   // =========================================================================
-  // 3. BUILD SHEET 2: "Raw Data" (FULL 21 COLUMNS WITH CLEAN STYLING)
+  // 4. BUILD SHEET 2: "Raw Data" (FULL 21 COLUMNS WITH CLEAN STYLING)
   // =========================================================================
   const existingRaw = wb.getWorksheet('Raw Data');
   if (existingRaw) wb.removeWorksheet(existingRaw.id);
@@ -512,7 +665,7 @@ export const exportAnalystExecutiveReport = async (
   ];
 
   // =========================================================================
-  // 4. GENERATE BINARY & TRIGGER BROWSER DOWNLOAD
+  // 5. GENERATE BINARY & TRIGGER BROWSER DOWNLOAD
   // =========================================================================
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], {
