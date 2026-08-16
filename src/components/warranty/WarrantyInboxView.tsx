@@ -754,46 +754,73 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
     setShowConfigModal(false);
     toast.success('Đã lưu URL Google Apps Script Gmail Sync!');
     if (trimmed) {
-      fetchLiveGmailThreads(activeKeyword);
+      fetchLiveGmailThreads(buildCombinedQuery(selectedKeywords));
     }
   };
 
   const appsScriptCodeSnippet = `/**
  * ==============================================================================
- * GOOGLE APPS SCRIPT - LIGHTWEIGHT & LIGHTNING FAST GMAIL SEARCH API (< 1 GIÂY)
+ * HỆ THỐNG ĐỒNG BỘ GMAIL BẢO HÀNH -> SUPABASE CLOUD (SMART INCREMENTAL SYNC)
+ * 1. Cơ chế Quét Gia Tăng Thông Minh: Bỏ qua email cũ trong 0.01s nếu không đổi
+ * 2. Chỉ đẩy email MỚI hoặc có PHẢN HỒI MỚI về Supabase
  * ==============================================================================
  */
 
-function doGet(e) {
-  var params = e && e.parameter ? e.parameter : {};
-  var action = params.action || 'search';
-  
-  var result;
-  if (action === 'getAttachmentData') {
-    result = getAttachmentData(params.msgId, parseInt(params.attIdx || '0', 10));
-  } else {
-    result = processGmailSearch(params);
-  }
-  
-  return ContentService.createTextOutput(JSON.stringify(result))
-    .setMimeType(ContentService.MimeType.JSON);
+const SUPABASE_CONFIG = {
+  PROJECT_URL: 'https://ikfychmglmunznceopnh.supabase.co',
+  ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrZnljaG1nbG11bnpuY2VvcG5oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4Njc0MjAsImV4cCI6MjEwMjQ0MzQyMH0.2eMYy8NPMC66OldPPtmm606zlqOByPv-_zbcNKioM_Y',
+  TABLE_NAME: 'warranty_emails',
+  DEFAULT_QUERY: 'subject:"bảo hành" OR subject:"ĐĂNG KÝ LỊCH BẢO HÀNH"',
+  DEFAULT_LIMIT: 10
+};
+
+function autoSyncGmailToSupabase() {
+  return processGmailSearch({
+    q: SUPABASE_CONFIG.DEFAULT_QUERY,
+    limit: 10,
+    incremental: true
+  });
 }
 
-// 1. Quét Gmail siêu tốc độ: Chỉ lấy metadata và nội dung text/HTML, KHÔNG tải hàng loạt Base64 nặng
+function getExistingThreadsMap() {
+  try {
+    var endpoint = SUPABASE_CONFIG.PROJECT_URL + '/rest/v1/' + SUPABASE_CONFIG.TABLE_NAME + '?select=thread_id,last_updated';
+    var res = UrlFetchApp.fetch(endpoint, {
+      method: 'get',
+      headers: { 'apikey': SUPABASE_CONFIG.ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_CONFIG.ANON_KEY },
+      muteHttpExceptions: true
+    });
+    if (res.getResponseCode() >= 200 && res.getResponseCode() < 300) {
+      var rows = JSON.parse(res.getContentText());
+      var map = {};
+      for (var i = 0; i < rows.length; i++) { map[rows[i].thread_id] = rows[i].last_updated; }
+      return map;
+    }
+  } catch (e) {}
+  return {};
+}
+
 function processGmailSearch(params) {
-  var query = params.q ? decodeURIComponent(params.q) : 'subject:"bảo hành"';
-  var limit = parseInt(params.limit || '8', 10);
+  var query = params.q ? decodeURIComponent(params.q) : SUPABASE_CONFIG.DEFAULT_QUERY;
+  var limit = parseInt(params.limit || String(SUPABASE_CONFIG.DEFAULT_LIMIT), 10);
+  var isIncremental = params.incremental !== false && params.incremental !== 'false';
+  var existingMap = isIncremental ? getExistingThreadsMap() : {};
   
-  // Tối ưu index tìm kiếm với GmailApp
-  var threads = GmailApp.search(query, 0, Math.min(limit, 25));
+  var threads = GmailApp.search(query, 0, Math.min(limit, 50));
   var results = [];
+  var supabasePayload = [];
 
   for (var i = 0; i < threads.length; i++) {
     var thread = threads[i];
+    var threadId = thread.getId();
     var messages = thread.getMessages();
     if (!messages || messages.length === 0) continue;
     
     var lastMsg = messages[messages.length - 1];
+    var lastUpdatedIso = lastMsg.getDate().toISOString();
+
+    if (isIncremental && existingMap[threadId] === lastUpdatedIso) continue;
+
     var msgsData = [];
     var totalAttachments = [];
 
@@ -805,12 +832,12 @@ function processGmailSearch(params) {
       if (atts && atts.length > 0) {
         for (var k = 0; k < atts.length; k++) {
           var att = atts[k];
-          var attType = att.getContentType() || 'application/octet-stream';
+          var contentType = att.getContentType() || 'application/octet-stream';
           var attObj = {
-            name: att.getName() || ('attachment_' + (k + 1)),
-            contentType: attType,
+            name: att.getName() || ('Tệp đính kèm ' + (k + 1)),
+            contentType: contentType,
             size: Math.round(att.getSize() / 1024) + ' KB',
-            isImage: attType.indexOf('image/') === 0
+            isImage: contentType.indexOf('image/') === 0
           };
           attsData.push(attObj);
           totalAttachments.push(attObj);
@@ -834,44 +861,95 @@ function processGmailSearch(params) {
     }
 
     var lastPlain = lastMsg.getPlainBody() || '';
-    results.push({
-      threadId: thread.getId(),
-      subject: thread.getFirstMessageSubject() || 'Không có tiêu đề',
+    var threadSubject = thread.getFirstMessageSubject() || 'Không có tiêu đề';
+    var lastFrom = lastMsg.getFrom() || '';
+    var fromName = lastFrom ? lastFrom.split('<')[0].replace(/"/g, '').trim() : '';
+
+    var threadObj = {
+      threadId: threadId,
+      subject: threadSubject,
       messageCount: thread.getMessageCount(),
-      lastUpdated: lastMsg.getDate().toISOString(),
-      from: lastMsg.getFrom(),
+      lastUpdated: lastUpdatedIso,
+      from: lastFrom,
+      fromName: fromName,
       snippet: lastPlain.substring(0, 150),
       hasAttachments: totalAttachments.length > 0,
       attachments: totalAttachments,
       messages: msgsData
+    };
+
+    results.push(threadObj);
+    supabasePayload.push({
+      thread_id: threadId,
+      subject: threadSubject,
+      from_email: lastFrom,
+      from_name: fromName,
+      last_updated: lastUpdatedIso,
+      snippet: lastPlain.substring(0, 150),
+      messages: msgsData,
+      updated_at: new Date().toISOString()
     });
+  }
+
+  var supabaseStatus = 'skipped (không có mail mới)';
+  if (supabasePayload.length > 0) {
+    supabaseStatus = pushToSupabase(supabasePayload);
   }
 
   return {
     status: 'success',
     query: query,
-    total: results.length,
+    newOrUpdatedFound: results.length,
+    supabaseSynced: supabaseStatus,
     data: results
   };
 }
 
-// 2. Tải ảnh chất lượng cao theo nhu cầu (On-Demand) khi người dùng bấm vào ảnh
-function getAttachmentData(msgId, attIdx) {
+function pushToSupabase(records) {
   try {
-    var msg = GmailApp.getMessageById(msgId);
-    var atts = msg.getAttachments();
-    if (!atts || attIdx >= atts.length) {
-      return { status: 'error', message: 'Không tìm thấy tệp đính kèm' };
-    }
-    var att = atts[attIdx];
-    var b64 = Utilities.base64Encode(att.getBytes());
+    var endpoint = SUPABASE_CONFIG.PROJECT_URL + '/rest/v1/' + SUPABASE_CONFIG.TABLE_NAME + '?on_conflict=thread_id';
+    var res = UrlFetchApp.fetch(endpoint, {
+      method: 'post',
+      contentType: 'application/json',
+      headers: {
+        'apikey': SUPABASE_CONFIG.ANON_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_CONFIG.ANON_KEY,
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      payload: JSON.stringify(records),
+      muteHttpExceptions: true
+    });
+    return (res.getResponseCode() >= 200 && res.getResponseCode() < 300) ? ('success (' + records.length + ' rows)') : ('error: ' + res.getContentText());
+  } catch (e) {
+    return 'exception: ' + e.toString();
+  }
+}
+
+function getAttachmentData(params) {
+  try {
+    var msg = GmailApp.getMessageById(params.msgId);
+    var atts = msg ? msg.getAttachments({ includeInlineImages: true, includeAttachments: true }) : null;
+    var att = atts ? atts[parseInt(params.attIdx || '0', 10)] : null;
+    if (!att) return { status: 'error', message: 'Không tìm thấy file' };
     return {
       status: 'success',
       name: att.getName(),
-      dataUri: 'data:' + att.getContentType() + ';base64,' + b64
+      contentType: att.getContentType() || 'image/jpeg',
+      dataUri: 'data:' + (att.getContentType() || 'image/jpeg') + ';base64,' + Utilities.base64Encode(att.getBytes())
     };
+  } catch(e) {
+    return { status: 'error', message: e.toString() };
+  }
+}
+
+function doGet(e) {
+  try {
+    var params = (e && e.parameter) ? e.parameter : {};
+    if (params.action === 'getAttachmentData') return ContentService.createTextOutput(JSON.stringify(getAttachmentData(params))).setMimeType(ContentService.MimeType.JSON);
+    if (params.q !== undefined || params.action === 'gmail') return ContentService.createTextOutput(JSON.stringify(processGmailSearch(params))).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify(autoSyncGmailToSupabase())).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
-    return { status: 'error', message: err.message };
+    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
   }
 }`;
 

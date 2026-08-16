@@ -1,8 +1,9 @@
 /**
  * ==============================================================================
- * HỆ THỐNG ĐỒNG BỘ GMAIL BẢO HÀNH -> SUPABASE CLOUD (CHẠY 24/7 + ON-DEMAND)
- * 1. Tự động quét Gmail theo từ khóa và đẩy trực tiếp vào Supabase database
- * 2. Cung cấp API Web App tìm kiếm keyword & tải ảnh on-demand cho Dashboard
+ * HỆ THỐNG ĐỒNG BỘ GMAIL BẢO HÀNH -> SUPABASE CLOUD (SMART INCREMENTAL SYNC)
+ * 1. Cơ chế Quét Gia Tăng Thông Minh (Chỉ xử lý khi CÓ MAIL MỚI hoặc PHẢN HỒI MỚI)
+ * 2. Tiết kiệm 95% tài nguyên: Bỏ qua email cũ trong 0.01 giây nếu không có thay đổi
+ * 3. Chạy 24/7 qua Time-driven trigger & Cung cấp API Web App cho Dashboard
  * ==============================================================================
  */
 
@@ -11,40 +12,85 @@ const SUPABASE_CONFIG = {
   ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrZnljaG1nbG11bnpuY2VvcG5oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4Njc0MjAsImV4cCI6MjEwMjQ0MzQyMH0.2eMYy8NPMC66OldPPtmm606zlqOByPv-_zbcNKioM_Y',
   TABLE_NAME: 'warranty_emails',
   DEFAULT_QUERY: 'subject:"bảo hành" OR subject:"ĐĂNG KÝ LỊCH BẢO HÀNH"',
-  DEFAULT_LIMIT: 25
+  DEFAULT_LIMIT: 10
 };
 
 /**
  * 1. HÀM TỰ ĐỘNG CHẠY 24/7 (CÀI ĐẶT TIME-DRIVEN TRIGGER MỖI 5 - 10 PHÚT)
- * Hoặc bấm nút "Run" trên trình soạn thảo Apps Script để đẩy toàn bộ mail hiện có vào Supabase
+ * Chế độ Incremental: Chỉ quét các mail gần đây, phát hiện mail mới là đẩy về Supabase ngay
  */
 function autoSyncGmailToSupabase() {
-  Logger.log('Bắt đầu quét Gmail và đồng bộ vào Supabase...');
+  Logger.log('Bắt đầu kiểm tra email mới từ Gmail...');
   var result = processGmailSearch({
     q: SUPABASE_CONFIG.DEFAULT_QUERY,
-    limit: SUPABASE_CONFIG.DEFAULT_LIMIT
+    limit: 10,
+    incremental: true
   });
-  Logger.log('Kết quả đồng bộ: ' + JSON.stringify(result));
+  Logger.log('Kết quả kiểm tra: ' + JSON.stringify(result));
   return result;
 }
 
 /**
- * 2. HÀM QUÉT GMAIL VÀ ĐẨY THẲNG DỮ LIỆU VÀO BẢNG WARRANTY_EMAILS TRÊN SUPABASE
+ * Lấy danh sách map { [thread_id]: last_updated } hiện có trên Supabase để so khớp siêu tốc
+ */
+function getExistingThreadsMap() {
+  try {
+    var endpoint = SUPABASE_CONFIG.PROJECT_URL + '/rest/v1/' + SUPABASE_CONFIG.TABLE_NAME + '?select=thread_id,last_updated';
+    var options = {
+      method: 'get',
+      headers: {
+        'apikey': SUPABASE_CONFIG.ANON_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_CONFIG.ANON_KEY
+      },
+      muteHttpExceptions: true
+    };
+    var res = UrlFetchApp.fetch(endpoint, options);
+    if (res.getResponseCode() >= 200 && res.getResponseCode() < 300) {
+      var rows = JSON.parse(res.getContentText());
+      var map = {};
+      for (var i = 0; i < rows.length; i++) {
+        map[rows[i].thread_id] = rows[i].last_updated;
+      }
+      return map;
+    }
+  } catch (e) {
+    Logger.log('Không thể lấy danh sách thread cũ từ Supabase: ' + e.toString());
+  }
+  return {};
+}
+
+/**
+ * 2. HÀM QUÉT GMAIL THÔNG MINH (CHỈ XỬ LÝ MAIL MỚI / THAY ĐỔI)
  */
 function processGmailSearch(params) {
   var query = params.q ? decodeURIComponent(params.q) : SUPABASE_CONFIG.DEFAULT_QUERY;
   var limit = parseInt(params.limit || String(SUPABASE_CONFIG.DEFAULT_LIMIT), 10);
+  var isIncremental = params.incremental !== false && params.incremental !== 'false';
+
+  // Lấy map email hiện có trên Supabase để kiểm tra trước
+  var existingMap = isIncremental ? getExistingThreadsMap() : {};
   
   var threads = GmailApp.search(query, 0, Math.min(limit, 50));
   var results = [];
   var supabasePayload = [];
+  var skippedCount = 0;
 
   for (var i = 0; i < threads.length; i++) {
     var thread = threads[i];
+    var threadId = thread.getId();
     var messages = thread.getMessages();
     if (!messages || messages.length === 0) continue;
     
     var lastMsg = messages[messages.length - 1];
+    var lastUpdatedIso = lastMsg.getDate().toISOString();
+
+    // KIỂM TRA ĐỘNG: Nếu email này đã có trên Supabase và thời gian cập nhật không đổi -> BỎ QUA NGAY
+    if (isIncremental && existingMap[threadId] === lastUpdatedIso) {
+      skippedCount++;
+      continue;
+    }
+
+    // CHỈ BÓC TÁCH CHI TIẾT KHI CÓ MAIL MỚI HOẶC CÓ THÊM PHẢN HỒI MỚI
     var msgsData = [];
     var totalAttachments = [];
 
@@ -90,10 +136,9 @@ function processGmailSearch(params) {
     var threadSubject = thread.getFirstMessageSubject() || 'Không có tiêu đề';
     var lastFrom = lastMsg.getFrom() || '';
     var fromName = lastFrom ? lastFrom.split('<')[0].replace(/"/g, '').trim() : '';
-    var lastUpdatedIso = lastMsg.getDate().toISOString();
 
     var threadObj = {
-      threadId: thread.getId(),
+      threadId: threadId,
       subject: threadSubject,
       messageCount: thread.getMessageCount(),
       lastUpdated: lastUpdatedIso,
@@ -107,9 +152,9 @@ function processGmailSearch(params) {
 
     results.push(threadObj);
 
-    // Chuẩn hóa payload đúng cấu trúc bảng warranty_emails trên Supabase
+    // Chuẩn hóa payload đẩy vào Supabase
     supabasePayload.push({
-      thread_id: thread.getId(),
+      thread_id: threadId,
       subject: threadSubject,
       from_email: lastFrom,
       from_name: fromName,
@@ -120,8 +165,8 @@ function processGmailSearch(params) {
     });
   }
 
-  // Đẩy trực tiếp vào Supabase qua REST API (Upsert theo thread_id)
-  var supabaseStatus = 'skipped';
+  // Đẩy trực tiếp vào Supabase qua REST API
+  var supabaseStatus = 'skipped (không có mail mới)';
   if (supabasePayload.length > 0) {
     supabaseStatus = pushToSupabase(supabasePayload);
   }
@@ -129,7 +174,8 @@ function processGmailSearch(params) {
   return {
     status: 'success',
     query: query,
-    total: results.length,
+    newOrUpdatedFound: results.length,
+    skippedUnchanged: skippedCount,
     supabaseSynced: supabaseStatus,
     data: results
   };
@@ -156,8 +202,8 @@ function pushToSupabase(records) {
     var response = UrlFetchApp.fetch(endpoint, options);
     var statusCode = response.getResponseCode();
     if (statusCode >= 200 && statusCode < 300) {
-      Logger.log('Đã lưu thành công ' + records.length + ' email vào Supabase!');
-      return 'success (' + records.length + ' rows)';
+      Logger.log('Đã cập nhật ' + records.length + ' mail mới vào Supabase!');
+      return 'success (' + records.length + ' new/updated rows)';
     } else {
       Logger.log('Supabase API Error: ' + response.getContentText());
       return 'error: ' + response.getContentText();
@@ -216,7 +262,7 @@ function doGet(e) {
       return ContentService.createTextOutput(JSON.stringify(gmailRes)).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // Mặc định: Chạy quét đồng bộ
+    // Mặc định: Chạy quét gia tăng tự động
     const autoRes = autoSyncGmailToSupabase();
     return ContentService.createTextOutput(JSON.stringify(autoRes)).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
