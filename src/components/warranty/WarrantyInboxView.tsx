@@ -684,12 +684,8 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
     const trimmed = newUrl.trim();
     setAppsScriptUrl(trimmed);
     localStorage.setItem('WARRANTY_GMAIL_APPS_SCRIPT_URL', trimmed);
-    localStorage.setItem('warranty_web_app_url', trimmed);
-    if (onUpdateWebAppUrl) {
-      onUpdateWebAppUrl(trimmed);
-    }
     setShowConfigModal(false);
-    toast.success('Đã lưu Google Apps Script Web App Endpoint & Đồng bộ toàn hệ thống!');
+    toast.success('Đã lưu URL Google Apps Script Gmail Sync!');
     if (trimmed) {
       fetchLiveGmailThreads(activeKeyword);
     }
@@ -1449,9 +1445,14 @@ function getAttachmentData(msgId, attIdx) {
             <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <Globe className="w-5 h-5 text-indigo-500" />
-                <h3 className="font-bold text-base text-slate-900 dark:text-slate-100">
-                  Cấu hình Google Apps Script Gmail Web App
-                </h3>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900 dark:text-slate-100">
+                    Cấu hình Google Apps Script Gmail Sync (File 2)
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Dành riêng cho kích hoạt quét Gmail và tải ảnh. Hoàn toàn độc lập với URL Đồng bộ Sheet (File 1).
+                  </p>
+                </div>
               </div>
               <button
                 onClick={() => setShowConfigModal(false)}
@@ -1464,7 +1465,7 @@ function getAttachmentData(msgId, attIdx) {
             {/* URL Input */}
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                1. Web App URL Endpoint (Sau khi Deploy Web App trên Apps Script):
+                1. Web App URL của File 2 (gmailsync.gs):
               </label>
               <input
                 type="text"
