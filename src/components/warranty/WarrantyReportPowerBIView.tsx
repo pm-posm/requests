@@ -1213,7 +1213,7 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                       <th className="py-2 px-2.5">Ngày Báo Lỗi</th>
                       <th className="py-2 px-2.5">Ngày Lắp Đặt</th>
                       <th className="py-2 px-2.5 text-center">Tuổi Thọ</th>
-                      <th className="py-2 px-2.5">Loại Lỗi (Cột W)</th>
+                      <th className="py-2 px-2.5">Loại Lỗi</th>
                       <th className="py-2 px-2.5">Tình Trạng Hư Hỏng</th>
                       <th className="py-2 px-2.5">Ngày Hẹn Xử Lý</th>
                       <th className="py-2 px-2.5">Ngày Hoàn Thành</th>

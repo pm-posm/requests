@@ -1712,7 +1712,7 @@ export default function TrackingWarranty() {
               <div className="space-y-3 p-4 border border-slate-200/80 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950">
                 <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-200 dark:border-slate-800 pb-2">
                   <Edit3 className="w-3.5 h-3.5 text-sky-500" />
-                  Chỉnh Sửa Mã Dự Án, Supplier & Tiến Độ (Sync 2 Chiều)
+                  Chỉnh Sửa Thông Tin Bảo Hành
                 </h4>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1730,7 +1730,7 @@ export default function TrackingWarranty() {
 
                   {/* Edit Supplier */}
                   <div className="space-y-1">
-                    <label className="font-semibold text-slate-700 dark:text-slate-300">Supplier (Thầu Sản Xuất):</label>
+                    <label className="font-semibold text-slate-700 dark:text-slate-300">Supplier:</label>
                     <input
                       type="text"
                       value={editSupplier}
@@ -1743,18 +1743,18 @@ export default function TrackingWarranty() {
 
                 {/* Edit Progress Dropdown */}
                 <div className="space-y-1">
-                  <label className="font-semibold text-slate-700 dark:text-slate-300">Tiến Độ Bảo Hành (Progress):</label>
+                  <label className="font-semibold text-slate-700 dark:text-slate-300">Tiến Độ Bảo Hành:</label>
                   <select
                     value={editProgress}
                     onChange={(e) => setEditProgress(e.target.value)}
                     className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 cursor-pointer outline-none focus:border-sky-500"
                   >
                     <option value="Not Started">⚪ Not Started (Mới tạo)</option>
-                    <option value="Vis - Đã gửi RQ tới Agency">🔵 Vis - Đã gửi RQ tới Agency (Đã gửi mail)</option>
-                    <option value="Tiếp nhận">🔵 Tiếp nhận (Agency tiếp nhận)</option>
-                    <option value="Gửi lịch đăng ký">📅 Gửi lịch đăng ký (Đã hẹn lịch sửa)</option>
-                    <option value="Hoàn Thành">🟢 Hoàn Thành (Đã hoàn tất bảo hành)</option>
-                    <option value="Cancelled">🔴 Cancelled (Đã hủy yêu cầu)</option>
+                    <option value="Vis - Đã gửi RQ tới Agency">🔵 Vis - Đã gửi RQ tới Agency</option>
+                    <option value="Tiếp nhận">🔵 Tiếp nhận</option>
+                    <option value="Gửi lịch đăng ký">📅 Gửi lịch đăng ký</option>
+                    <option value="Hoàn Thành">🟢 Hoàn Thành</option>
+                    <option value="Cancelled">🔴 Cancelled</option>
                   </select>
                 </div>
 
@@ -1763,50 +1763,37 @@ export default function TrackingWarranty() {
                   <label className="font-semibold text-xs text-slate-700 dark:text-slate-300 flex items-center justify-between">
                     <span className="flex items-center gap-1.5">
                       <ShieldCheck className="w-3.5 h-3.5 text-amber-500" />
-                      Mã Bảo Hành Lần Trước (Preceding Request ID):
+                      Mã Bảo Hành Lần Trước:
                     </span>
-                    <span className="text-[10px] text-slate-400 font-normal">Chỉ điền nếu là ca bảo hành lặp lại</span>
                   </label>
                   <input
                     type="text"
                     value={editPrecedingRequestId}
                     onChange={(e) => setEditPrecedingRequestId(e.target.value)}
-                    placeholder="Nhập hoặc chọn mã BH lần trước (ví dụ: BH-586)..."
+                    placeholder="Nhập mã BH lần trước (ví dụ: BH-586)..."
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl font-mono text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:border-sky-500"
                   />
                 </div>
 
-                {/* Edit Error Type / Loại Lỗi (Cột W BaoHanh_Model - Sync 2 Chiều) */}
+                {/* Edit Error Type / Loại Lỗi */}
                 <div className="space-y-1 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <label className="font-semibold text-xs text-slate-700 dark:text-slate-300 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                      Loại Lỗi (Cột W Sheet BaoHanh_Model):
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-normal">Ánh xạ 1:1 từ Sheet</span>
+                  <label className="font-semibold text-xs text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                    Loại Lỗi:
                   </label>
-                  <div className="flex flex-col sm:flex-row items-center gap-2">
-                    <select
-                      value={editErrorType}
-                      onChange={(e) => setEditErrorType(e.target.value)}
-                      className="w-full sm:w-1/2 px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer outline-none focus:border-sky-500"
-                    >
-                      <option value="">-- Chọn danh mục Loại Lỗi từ Sheet --</option>
-                      {Array.from(new Set(warrantyItems.map(i => (i.errorType || '').trim()).filter(Boolean))).sort().map(t => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                      {editErrorType && !Array.from(new Set(warrantyItems.map(i => (i.errorType || '').trim()).filter(Boolean))).includes(editErrorType) && (
-                        <option value={editErrorType}>{editErrorType} (Tùy chỉnh)</option>
-                      )}
-                    </select>
-                    <input
-                      type="text"
-                      placeholder="Hoặc nhập loại lỗi mới..."
-                      value={editErrorType}
-                      onChange={(e) => setEditErrorType(e.target.value)}
-                      className="w-full sm:w-1/2 px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs outline-none focus:border-sky-500"
-                    />
-                  </div>
+                  <select
+                    value={editErrorType}
+                    onChange={(e) => setEditErrorType(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer outline-none focus:border-sky-500"
+                  >
+                    <option value="">-- Chọn loại lỗi --</option>
+                    {Array.from(new Set(warrantyItems.map(i => (i.errorType || '').trim()).filter(Boolean))).sort().map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                    {editErrorType && !Array.from(new Set(warrantyItems.map(i => (i.errorType || '').trim()).filter(Boolean))).includes(editErrorType) && (
+                      <option value={editErrorType}>{editErrorType}</option>
+                    )}
+                  </select>
                 </div>
 
                 {/* Edit Title Mail & Raise Mail Date (DD/MM/YYYY FORMAT) */}
