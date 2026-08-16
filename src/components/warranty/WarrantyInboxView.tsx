@@ -2,9 +2,9 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Search, Mail, RefreshCw, Paperclip, ExternalLink, Calendar, 
   User, CheckCircle2, Clock, AlertTriangle, ArrowRight, Eye, 
-  Send, Filter, ShieldCheck, ChevronRight, Inbox, MessageSquare, 
+  Send, Filter, ShieldCheck, ChevronRight, ChevronLeft, Inbox, MessageSquare, 
   Sparkles, Check, Copy, Settings, X, Download, FileText, Image as ImageIcon,
-  Plus, Tag, Trash2, Globe, CheckCheck, CheckSquare, Square
+  Plus, Tag, Trash2, Globe, CheckCheck, CheckSquare, Square, Layers
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { WarrantyItem } from '@/types/warranty';
@@ -429,6 +429,10 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
   const [appsScriptUrl, setAppsScriptUrl] = useState<string>(() => {
     return localStorage.getItem('WARRANTY_GMAIL_APPS_SCRIPT_URL') || webAppUrl || DEFAULT_WARRANTY_GMAIL_APPS_SCRIPT_URL;
   });
+
+  // THREAD MESSAGE NAVIGATION (PAGINATION / NEXT / PREV)
+  const [activeMessageIndex, setActiveMessageIndex] = useState<number>(0);
+  const [viewAllMessages, setViewAllMessages] = useState<boolean>(false);
 
   useEffect(() => {
     if (webAppUrl && !appsScriptUrl) {
@@ -1339,6 +1343,22 @@ function doGet(e) {
 
                   {/* Header Actions */}
                   <div className="flex items-center gap-2 flex-wrap shrink-0">
+                    {/* Mode Toggle Button (Single Focused Message vs All Messages) */}
+                    {activeThread.messages && activeThread.messages.length > 1 && (
+                      <button
+                        onClick={() => setViewAllMessages(!viewAllMessages)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border shadow-2xs ${
+                          viewAllMessages
+                            ? 'bg-indigo-600 text-white border-indigo-600'
+                            : 'bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'
+                        }`}
+                        title={viewAllMessages ? 'Chuyển về chế độ xem từng thư một' : 'Xem toàn bộ các thư nối tiếp nhau'}
+                      >
+                        <Layers className="w-3.5 h-3.5" />
+                        <span>{viewAllMessages ? 'Xem từng thư' : `Xem tất cả (${activeThread.messages.length})`}</span>
+                      </button>
+                    )}
+
                     {/* Direct link to original Gmail Thread */}
                     <button
                       onClick={() => {
@@ -1356,25 +1376,114 @@ function doGet(e) {
                     </button>
                   </div>
                 </div>
+
+                {/* THREAD MESSAGE NAVIGATION BAR (When more than 1 message) */}
+                {activeThread.messages && activeThread.messages.length > 1 && !viewAllMessages && (
+                  <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    {/* Number buttons and Prev/Next */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-0.5">
+                      {/* Prev Button */}
+                      <button
+                        disabled={activeMessageIndex <= 0}
+                        onClick={() => setActiveMessageIndex(prev => Math.max(0, prev - 1))}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ${
+                          activeMessageIndex <= 0
+                            ? 'opacity-40 cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400'
+                            : 'bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950 hover:text-indigo-600 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 cursor-pointer shadow-2xs'
+                        }`}
+                        title="Xem thư trước đó"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                        <span>Trước</span>
+                      </button>
+
+                      {/* Numbered Pills */}
+                      <div className="flex items-center gap-1">
+                        {activeThread.messages.map((m, idx) => {
+                          const isActive = idx === activeMessageIndex;
+                          const isFirst = idx === 0;
+                          const isLast = idx === activeThread.messages.length - 1;
+                          return (
+                            <button
+                              key={m.id || idx}
+                              onClick={() => setActiveMessageIndex(idx)}
+                              className={`h-7 px-2.5 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                                isActive
+                                  ? 'bg-indigo-600 text-white shadow-xs ring-2 ring-indigo-300 dark:ring-indigo-700'
+                                  : 'bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700/60 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                              }`}
+                              title={`Thư #${idx + 1}: ${m.fromName || m.from}`}
+                            >
+                              <span>#{idx + 1}</span>
+                              {isFirst && <span className="text-[9px] opacity-70">🌱</span>}
+                              {isLast && <span className="text-[9px] opacity-70">⚡</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Next Button */}
+                      <button
+                        disabled={activeMessageIndex >= activeThread.messages.length - 1}
+                        onClick={() => setActiveMessageIndex(prev => Math.min(activeThread.messages.length - 1, prev + 1))}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ${
+                          activeMessageIndex >= activeThread.messages.length - 1
+                            ? 'opacity-40 cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400'
+                            : 'bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950 hover:text-indigo-600 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 cursor-pointer shadow-2xs'
+                        }`}
+                        title="Xem thư tiếp theo"
+                      >
+                        <span>Sau</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    {/* Quick Jump Shortcuts */}
+                    <div className="flex items-center gap-1.5 shrink-0 text-[11px]">
+                      <button
+                        onClick={() => setActiveMessageIndex(0)}
+                        className={`px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer ${
+                          activeMessageIndex === 0
+                            ? 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300 font-bold'
+                            : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                        }`}
+                      >
+                        Yêu cầu gốc (#1)
+                      </button>
+                      <span className="text-slate-300 dark:text-slate-700">•</span>
+                      <button
+                        onClick={() => setActiveMessageIndex(activeThread.messages.length - 1)}
+                        className={`px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer ${
+                          activeMessageIndex === activeThread.messages.length - 1
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-bold'
+                            : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                        }`}
+                      >
+                        Mới nhất (#{activeThread.messages.length})
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Messages Timeline */}
-              <div className="flex-1 p-3 sm:p-4 space-y-5 overflow-y-auto custom-scrollbar max-h-[520px]">
-                {activeThread.messages.map((msg, msgIdx) => {
-                  const isLatest = msgIdx === activeThread.messages.length - 1;
-                  const isFirst = msgIdx === 0;
+              {/* Messages Timeline or Single Focused Message View */}
+              <div className="flex-1 p-3 sm:p-4 space-y-5 overflow-y-auto custom-scrollbar max-h-[540px]">
+                {(viewAllMessages ? activeThread.messages : [activeThread.messages[activeMessageIndex] || activeThread.messages[0]]).filter(Boolean).map((msg, displayedIdx) => {
+                  const actualMsgIdx = viewAllMessages ? displayedIdx : activeMessageIndex;
+                  const isLatest = actualMsgIdx === activeThread.messages.length - 1;
+                  const isFirst = actualMsgIdx === 0;
 
                   return (
                     <div 
-                      key={msg.id}
+                      key={msg.id || actualMsgIdx}
                       className={`relative p-4 sm:p-5 rounded-2xl border transition-all shadow-xs ${
                         isLatest
                           ? 'bg-white dark:bg-slate-900 border-indigo-200 dark:border-indigo-800/80 ring-2 ring-indigo-500/10'
                           : 'bg-slate-50/90 dark:bg-slate-950/70 border-slate-200/80 dark:border-slate-800/80'
                       }`}
                     >
-                      {/* Timeline Connector Line (if not last) */}
-                      {msgIdx < activeThread.messages.length - 1 && (
+                      {/* Timeline Connector Line (only if viewing all messages and not last) */}
+                      {viewAllMessages && actualMsgIdx < activeThread.messages.length - 1 && (
                         <div className="absolute left-6 -bottom-5 w-0.5 h-5 bg-indigo-200 dark:bg-indigo-900 z-0" />
                       )}
 
@@ -1389,7 +1498,7 @@ function doGet(e) {
                                 ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900'
                                 : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
                           }`}>
-                            #{msgIdx + 1}
+                            #{actualMsgIdx + 1}
                           </div>
 
                           <div>
