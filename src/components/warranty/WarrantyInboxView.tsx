@@ -70,12 +70,12 @@ export const formatFileSize = (size: string | number | undefined): string => {
 };
 
 // Sub-component: Clean & Beautiful Email Body Viewer with Precise Image Resolution & DOMPurify Sanitization
-const EmailBodyViewer: React.FC<{ 
+const EmailBodyViewer = React.memo<{ 
   body: string; 
   htmlBody?: string;
   attachments?: WarrantyEmailAttachment[];
   onImageClick?: (url: string) => void;
-}> = ({ body, htmlBody, attachments, onImageClick }) => {
+}>(({ body, htmlBody, attachments, onImageClick }) => {
   const [viewMode, setViewMode] = useState<'RICH' | 'TEXT'>(htmlBody ? 'RICH' : 'TEXT');
 
   // Format plain text
@@ -90,7 +90,11 @@ const EmailBodyViewer: React.FC<{
   // Clean HTML, inject Base64 Data URIs with multi-strategy CID matching, and sanitize with DOMPurify
   const cleanedHtml = useMemo(() => {
     if (!htmlBody) return '';
-    let clean = htmlBody
+    
+    // Safety cap: Truncate excessively large HTML strings (> 60KB) to prevent DOMPurify main thread lockup
+    let safeHtml = htmlBody.length > 60000 ? htmlBody.substring(0, 60000) + '<p class="text-xs text-slate-400 font-mono">[Nội dung dài đã được rút gọn để tăng tốc độ hiển thị...]</p>' : htmlBody;
+
+    let clean = safeHtml
       .replace(/<html[^>]*>/gi, '')
       .replace(/<\/html>/gi, '')
       .replace(/<body[^>]*>/gi, '')
@@ -102,11 +106,10 @@ const EmailBodyViewer: React.FC<{
     );
 
     if (imageAttachments.length > 0) {
-      imageAttachments.forEach((att, idx) => {
+      imageAttachments.forEach((att) => {
         const src = att.dataUri || att.url;
         if (!src) return;
 
-        // Strategy 1: Match by exact contentId if provided (e.g. cid:part1.xxx or cid:<part1.xxx>)
         if (att.contentId) {
           const cleanCid = att.contentId.replace(/[<>]/g, '').trim();
           if (cleanCid) {
@@ -115,7 +118,6 @@ const EmailBodyViewer: React.FC<{
           }
         }
 
-        // Strategy 2: Match by base filename inside cid
         if (att.name) {
           const baseName = att.name.split('.')[0];
           if (baseName && baseName.length >= 2) {
@@ -126,13 +128,9 @@ const EmailBodyViewer: React.FC<{
       });
     }
 
-    // Remove unresolvable cid: tags so they NEVER render ugly broken box frames
     clean = clean.replace(/<img[^>]*src=["']cid:[^"']*["'][^>]*>/gi, '');
-    
-    // Add onerror auto-removal to any broken external/inline img tags
     clean = clean.replace(/<img\s+/gi, '<img onerror="this.style.display=\'none\';this.remove();" ');
 
-    // Sanitize with DOMPurify against XSS while allowing rich email formatting
     return DOMPurify.sanitize(clean, {
       ADD_TAGS: ['table', 'thead', 'tbody', 'tr', 'th', 'td', 'style', 'img', 'span', 'b', 'strong', 'i', 'em', 'p', 'div', 'br', 'hr', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'font'],
       ADD_ATTR: ['src', 'alt', 'width', 'height', 'style', 'class', 'target', 'href', 'align', 'valign', 'border', 'cellpadding', 'cellspacing', 'color', 'size', 'face', 'onerror'],
@@ -187,7 +185,7 @@ const EmailBodyViewer: React.FC<{
       )}
     </div>
   );
-};
+});
 
 // Default Official Production Apps Script Gmail Web App URL
 const DEFAULT_WARRANTY_GMAIL_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw4AFv2uLyxRStagWmELA6htViMMC_arnmPcTGVFQw865rvRG8eE_BTqTpEDA4kif-F/exec';
@@ -506,33 +504,23 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
 
     loadFromSupabase();
 
-    // Supabase Realtime Channel Subscription
+    // Supabase Realtime Channel Subscription with Debounce to prevent render storms
+    let realtimeDebounceTimer: any = null;
     const channel = supabase
       .channel('public:warranty_emails')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'warranty_emails' }, () => {
-        loadFromSupabase();
+        if (realtimeDebounceTimer) clearTimeout(realtimeDebounceTimer);
+        realtimeDebounceTimer = setTimeout(() => {
+          loadFromSupabase();
+        }, 800);
       })
       .subscribe();
 
     return () => {
+      if (realtimeDebounceTimer) clearTimeout(realtimeDebounceTimer);
       supabase.removeChannel(channel);
     };
   }, [warrantyItems]);
-
-  // Auto-fetch live Gmail threads on Component Mount & Selected Keywords change
-  useEffect(() => {
-    fetchLiveGmailThreads(buildCombinedQuery(selectedKeywords), true);
-  }, [selectedKeywords]);
-
-  // Periodic background auto-sync every 60 seconds from Supabase
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        fetchLiveGmailThreads(buildCombinedQuery(selectedKeywords), true);
-      }
-    }, 60000);
-    return () => clearInterval(interval);
-  }, [selectedKeywords]);
 
   // Fetch threads directly from Gmail Apps Script & Supabase Cloud
   const fetchLiveGmailThreads = async (queryToSearch: string = buildCombinedQuery(selectedKeywords), isSilent = false) => {
