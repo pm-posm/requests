@@ -4,7 +4,8 @@ import {
   User, CheckCircle2, Clock, AlertTriangle, ArrowRight, Eye, 
   Send, Filter, ShieldCheck, ChevronRight, ChevronLeft, Inbox, MessageSquare, 
   Sparkles, Check, Copy, Settings, X, Download, FileText, Image as ImageIcon,
-  Plus, Tag, Trash2, Globe, CheckCheck, CheckSquare, Square, Layers
+  Plus, Tag, Trash2, Globe, CheckCheck, CheckSquare, Square, Layers,
+  Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { WarrantyItem } from '@/types/warranty';
@@ -433,6 +434,7 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
   // THREAD MESSAGE NAVIGATION (PAGINATION / NEXT / PREV)
   const [activeMessageIndex, setActiveMessageIndex] = useState<number>(0);
   const [viewAllMessages, setViewAllMessages] = useState<boolean>(false);
+  const [isReaderExpanded, setIsReaderExpanded] = useState<boolean>(false);
 
   useEffect(() => {
     if (webAppUrl && !appsScriptUrl) {
@@ -1150,71 +1152,64 @@ function doGet(e) {
       {/* 2. MAIN 2-COLUMN WEBMAIL LAYOUT (MASTER - DETAIL) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-[640px]">
         
-        {/* LEFT COLUMN: THREAD LIST (5 cols) */}
-        <div className={`lg:col-span-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs flex-col overflow-hidden ${
-          mobileShowDetail ? 'hidden lg:flex' : 'flex'
-        }`}>
-          
-          {/* Search & Filter bar */}
-          <div className="p-3.5 border-b border-slate-100 dark:border-slate-800 space-y-2.5">
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Tìm theo người gửi, tiêu đề, nội dung thư..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs outline-none focus:border-indigo-500 transition-colors"
-              />
-            </div>
+        {/* LEFT COLUMN: THREAD LIST (5 cols or hidden if reader expanded) */}
+        {!isReaderExpanded && (
+          <div className={`lg:col-span-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs flex-col overflow-hidden ${
+            mobileShowDetail ? 'hidden lg:flex' : 'flex'
+          }`}>
+            
+            {/* Search & Filter bar */}
+            <div className="p-3.5 border-b border-slate-100 dark:border-slate-800 space-y-2.5">
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Tìm theo người gửi, tiêu đề, nội dung thư..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs outline-none focus:border-indigo-500 transition-colors"
+                />
+              </div>
 
-            {/* Filter Pills */}
-            <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1 text-[11px]">
-              <button
-                onClick={() => setFilterType('ALL')}
-                className={`px-2.5 py-1 rounded-lg font-semibold transition-colors shrink-0 cursor-pointer ${
-                  filterType === 'ALL'
-                    ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
-                }`}
-              >
-                Tất cả ({threads.length})
-              </button>
-              {newThreadIds.size > 0 && (
+              {/* Filter Pills & Zoom Button */}
+              <div className="flex items-center justify-between gap-1.5 pb-0.5 text-[11px]">
+                <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar">
+                  <button
+                    onClick={() => setFilterType('ALL')}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition-colors shrink-0 cursor-pointer ${
+                      filterType === 'ALL'
+                        ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                    }`}
+                  >
+                    Tất cả ({threads.length})
+                  </button>
+                  {newThreadIds.size > 0 && (
+                    <button
+                      onClick={() => setFilterType('NEW')}
+                      className={`px-2.5 py-1 rounded-lg font-bold transition-colors shrink-0 cursor-pointer flex items-center gap-1 ${
+                        filterType === 'NEW'
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800'
+                      }`}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                      <span>Mới nhận ({newThreadIds.size})</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* NÚT THU PHÓNG (EXPAND / COLLAPSE) */}
                 <button
-                  onClick={() => setFilterType('NEW')}
-                  className={`px-2.5 py-1 rounded-lg font-bold transition-colors shrink-0 cursor-pointer flex items-center gap-1 ${
-                    filterType === 'NEW'
-                      ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800'
-                  }`}
+                  onClick={() => setIsReaderExpanded(!isReaderExpanded)}
+                  className="hidden lg:flex items-center gap-1 px-2.5 py-1 rounded-lg font-semibold bg-slate-100 hover:bg-indigo-50 dark:bg-slate-800 dark:hover:bg-indigo-950/60 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer shrink-0 shadow-2xs border border-slate-200/60 dark:border-slate-700"
+                  title="Phóng to khung đọc email (Thu gọn danh sách)"
                 >
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
-                  <span>Mới nhận ({newThreadIds.size})</span>
+                  <Maximize2 className="w-3.5 h-3.5" />
+                  <span>Phóng to</span>
                 </button>
-              )}
-              <button
-                onClick={() => setFilterType('HAS_ATTACHMENT')}
-                className={`px-2.5 py-1 rounded-lg font-semibold transition-colors shrink-0 cursor-pointer ${
-                  filterType === 'HAS_ATTACHMENT'
-                    ? 'bg-sky-600 text-white'
-                    : 'bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 hover:bg-sky-100'
-                }`}
-              >
-                Có File/Ảnh
-              </button>
-              <button
-                onClick={() => setFilterType('IN_PROGRESS')}
-                className={`px-2.5 py-1 rounded-lg font-semibold transition-colors shrink-0 cursor-pointer ${
-                  filterType === 'IN_PROGRESS'
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 hover:bg-amber-100'
-                }`}
-              >
-                Đang xử lý
-              </button>
+              </div>
             </div>
-          </div>
 
           {/* Thread Cards Scrollable Container */}
           <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60 custom-scrollbar max-h-[580px]">
@@ -1297,9 +1292,10 @@ function doGet(e) {
             )}
           </div>
         </div>
+        )}
 
-        {/* RIGHT COLUMN: THREAD READER & CONVERSATION VIEW (7 cols) */}
-        <div className={`lg:col-span-7 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs flex-col overflow-hidden ${
+        {/* RIGHT COLUMN: THREAD READER & CONVERSATION VIEW (7 cols or 12 cols expanded) */}
+        <div className={`${isReaderExpanded ? 'lg:col-span-12' : 'lg:col-span-7'} bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs flex-col overflow-hidden ${
           !mobileShowDetail ? 'hidden lg:flex' : 'flex'
         }`}>
           {activeThread ? (
@@ -1329,6 +1325,25 @@ function doGet(e) {
 
                   {/* Header Actions */}
                   <div className="flex items-center gap-2 flex-wrap shrink-0">
+                    {/* Zoom / Expand Toggle Button */}
+                    <button
+                      onClick={() => setIsReaderExpanded(!isReaderExpanded)}
+                      className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-colors cursor-pointer border border-slate-200 dark:border-slate-700 shrink-0 shadow-2xs"
+                      title={isReaderExpanded ? 'Khôi phục hiển thị 2 cột danh sách' : 'Phóng to toàn màn hình đọc email'}
+                    >
+                      {isReaderExpanded ? (
+                        <>
+                          <PanelLeftOpen className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                          <span>Mở danh sách</span>
+                        </>
+                      ) : (
+                        <>
+                          <Maximize2 className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300" />
+                          <span>Phóng to</span>
+                        </>
+                      )}
+                    </button>
+
                     {/* Mode Toggle Button (Single Focused Message vs All Messages) */}
                     {activeThread.messages && activeThread.messages.length > 1 && (
                       <button
