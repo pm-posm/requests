@@ -1,8 +1,9 @@
 import * as XLSX from 'xlsx';
 import type { RawRequestRecord } from '@/services/sheetSyncService';
 import type { WarrantyItem } from '@/types/warranty';
+import { WEEKLY_REPORT_TEMPLATE_BASE64 } from './weeklyReportTemplate';
 
-// Helper parsing date string or number to ms
+// Helper parsing date string or serial number to ms
 const parseDateToMs = (str?: string): number | null => {
   if (!str || !str.trim()) return null;
   const trimmed = str.trim();
@@ -46,18 +47,37 @@ const formatDateStr = (str?: string): string => {
   return `${dd}/${mm}/${yyyy}`;
 };
 
+// Helper to set cell value cleanly
+const setCellValue = (ws: XLSX.WorkSheet, cellAddr: string, val: any, numFmt?: string) => {
+  if (val === null || val === undefined) {
+    delete ws[cellAddr];
+    return;
+  }
+  if (!ws[cellAddr]) {
+    ws[cellAddr] = {};
+  }
+  ws[cellAddr].v = val;
+  if (typeof val === 'number') {
+    ws[cellAddr].t = 'n';
+    if (numFmt) ws[cellAddr].z = numFmt;
+  } else if (typeof val === 'boolean') {
+    ws[cellAddr].t = 'b';
+  } else {
+    ws[cellAddr].t = 's';
+  }
+};
+
 /**
- * Service xuất Báo Cáo Bảo Hành bám sát 1:1 theo Template Weekly_Report.xlsx
- * - Sheet 1: Weekly (Báo Cáo Phân Tích Sự Cố Bảo Hành POSM chuẩn Template)
- * - Sheet 2: Checklist Bảo Hành (Dữ liệu hoạt động chi tiết đầy đủ 21 cột)
+ * Service xuất Báo Cáo Bảo Hành trực tiếp từ File Template gốc Weekly_Report.xlsx
+ * - Sheet 1: Weekly (Giữ 100% định dạng, màu sắc, font chữ, merged cells và banner của file template gốc)
+ * - Sheet 2: Raw Data (Dữ liệu thô 100% ca bảo hành với 21 cột chi tiết)
  */
 export const exportAnalystExecutiveReport = (
   _requests: RawRequestRecord[],
   warrantyItems: WarrantyItem[],
-  filenamePrefix = 'POSM_Warranty_Report',
+  filenamePrefix = 'Weekly_Report',
   targetProjectCode?: string
 ) => {
-  const wb = XLSX.utils.book_new();
   const dateStr = new Date().toISOString().slice(0, 10);
 
   // Filter dataset strictly by project code if requested
@@ -73,7 +93,7 @@ export const exportAnalystExecutiveReport = (
 
   const totalCount = activeItems.length;
   const finalFilename = isFilteredByProject
-    ? `POSM_Warranty_Report_Project_${cleanProjectCode.replace(/[^a-zA-Z0-9_-]/g, '_')}`
+    ? `Weekly_Report_Project_${cleanProjectCode.replace(/[^a-zA-Z0-9_-]/g, '_')}`
     : filenamePrefix;
 
   // =========================================================================
@@ -85,7 +105,7 @@ export const exportAnalystExecutiveReport = (
   let inProgressCount = 0;
 
   const supplierMap = new Map<string, { total: number; early: number; repeat: number; overdue: number; done: number }>();
-  const causeMap = new Map<string, number>();
+  const causeMap = new Map<string, { count: number; topSupplier: string }>();
   const posmMap = new Map<string, number>();
   const storeMap = new Map<string, number>();
   const projectMap = new Map<string, number>();
@@ -162,7 +182,10 @@ export const exportAnalystExecutiveReport = (
 
     // Cause stats (Cột W errorType fallback to detail)
     const cause = (item.errorType || item.errorDetail || 'Chưa xác định').trim();
-    causeMap.set(cause, (causeMap.get(cause) || 0) + 1);
+    if (!causeMap.has(cause)) {
+      causeMap.set(cause, { count: 0, topSupplier: sup });
+    }
+    causeMap.get(cause)!.count++;
 
     // POSM stats
     const posm = (item.posmType || 'Chưa xác định').trim();
@@ -195,12 +218,8 @@ export const exportAnalystExecutiveReport = (
   const topCat = getTop(catMap);
   const topPosm = getTop(posmMap);
 
-  const onTimePct = totalCount > 0 ? ((onTimeCount / totalCount) * 100).toFixed(1) + '%' : '0.0%';
-  const overduePct = totalCount > 0 ? ((overdueCount / totalCount) * 100).toFixed(1) + '%' : '0.0%';
-  const earlyFailPct = totalCount > 0 ? ((earlyFailCount / totalCount) * 100).toFixed(1) + '%' : '0.0%';
-
   // Date Range title
-  let dateRangeLabel = 'Tất cả các ca';
+  let dateRangeLabel = 'Weekly (Toàn bộ dữ liệu)';
   if (dateTimestamps.length > 0) {
     const minD = new Date(Math.min(...dateTimestamps));
     const maxD = new Date(Math.max(...dateTimestamps));
@@ -210,251 +229,138 @@ export const exportAnalystExecutiveReport = (
   }
 
   // =========================================================================
-  // 2. BUILD SHEET 1: "Weekly" (EXACT CLONE OF Weekly_Report.xlsx)
+  // 2. LOAD ORIGINAL TEMPLATE WORKBOOK & INJECT DATA
   // =========================================================================
-  const weeklyRows: any[][] = [];
-
-  // Row 1: Title
-  weeklyRows[0] = [dateRangeLabel];
-  weeklyRows[1] = [];
-  weeklyRows[2] = [];
-
-  // Row 4: Executive KPI Headers (Row index 3)
-  weeklyRows[3] = [
-    'TỔNG CA BẢO HÀNH',
-    '% XỬ  LÝ ĐÚNG HẠN',
-    null,
-    '% XỬ  LÝ TRỄ HẠN',
-    null,
-    '% HỎNG SỚM (<30 NGÀY TỪ NGÀY LẮP ĐẶT)',
-    null,
-    'SUPPLIER\n(TOP SUPPLIER BY ISSUES)',
-    null,
-    'DỰ ÁN\n(TOP PROJECT BY ISSUES)',
-    null,
-    'SIÊU THỊ\n(TOP STORE BY ISSUES)',
-    null,
-    'NGÀNH HÀNG\n(TOP CAT BY ISSUES)',
-    null,
-    'LOẠI POSM\n(TOP POSM BY ISSUES)'
-  ];
-
-  // Row 5: KPI Values (Row index 4)
-  weeklyRows[4] = [
-    totalCount,
-    totalCount > 0 ? onTimeCount / totalCount : 0,
-    null,
-    totalCount > 0 ? overdueCount / totalCount : 0,
-    null,
-    totalCount > 0 ? earlyFailCount / totalCount : 0,
-    null,
-    topSupplier.name,
-    null,
-    topProject.name,
-    null,
-    topStore.name,
-    null,
-    topCat.name,
-    null,
-    topPosm.name
-  ];
-
-  // Row 6: KPI Subtitles (Row index 5)
-  weeklyRows[5] = [
-    null,
-    `⚡ ${onTimeCount}/${totalCount} ca`,
-    null,
-    `⚠️ ${overdueCount}/${totalCount} ca`,
-    null,
-    `⚠️ ${earlyFailCount}/${totalCount} ca`,
-    null,
-    `${topSupplier.count} ca (${topSupplier.pct})`,
-    null,
-    `${topProject.count} ca (${topProject.pct})`,
-    null,
-    `${topStore.count} ca (${topStore.pct})`,
-    null,
-    `${topCat.count} ca (${topCat.pct})`,
-    null,
-    `${topPosm.count} ca (${topPosm.pct})`
-  ];
-
-  // Row 7: Active in-progress note (Row index 6)
-  const activePrjStr = Array.from(activeProjectsSet).join(', ') || 'Không có ca tồn đọng';
-  weeklyRows[6] = [
-    `⏳ Đang xử lí ${inProgressCount} ca thuộc dự án:`,
-    null,
-    null,
-    activePrjStr
-  ];
-
-  weeklyRows[7] = [];
-  weeklyRows[8] = [];
-
-  // Row 10: Section Headers for 3 Evaluation Tables (Row index 9)
-  weeklyRows[9] = [
-    '1. BY SUPPLIER',
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    '2. BY CAUSE',
-    null,
-    null,
-    null,
-    null,
-    '3. BY TIMELINE'
-  ];
-
-  // Row 11: Table Column Headers (Row index 10)
-  weeklyRows[10] = [
-    'Nhà Thầu',
-    'Total Case',
-    'Số Ca Hỏng Sớm (<31d)\nCa',
-    'Số Ca Tái Diễn Trên cùng 1 POSM',
-    'Số Ca Trễ Hạn',
-    '% Đạt Tiến Độ',
-    null,
-    'Nguyên Nhân Lỗi',
-    null,
-    'Số Ca',
-    '% Tỷ Lệ',
-    null,
-    'Thời Gian Trễ Hạn',
-    null,
-    'Số Ca',
-    '% Tỷ Lệ',
-    'Mức Độ Cảnh Báo'
-  ];
-
-  // Prepare data rows for 3 tables
-  const supplierRows = Array.from(supplierMap.entries())
-    .sort((a, b) => b[1].total - a[1].total)
-    .map(([sup, data]) => [
-      sup,
-      data.total,
-      data.early,
-      data.repeat,
-      data.overdue,
-      data.total > 0 ? ((data.total - data.overdue) / data.total) : 1
-    ]);
-
-  const causeRows = Array.from(causeMap.entries())
-    .sort((a, b) => b[1] - a[1])
-    .map(([cause, count]) => [
-      cause,
-      null,
-      count,
-      totalCount > 0 ? count / totalCount : 0
-    ]);
-
-  const timelineRows = [
-    ['1 - 3 ngày (Trễ nhẹ)', null, delay1to3, totalCount > 0 ? delay1to3 / totalCount : 0, 'Nhắc nhở'],
-    ['4 - 7 ngày (Cảnh báo tiến độ)', null, delay4to7, totalCount > 0 ? delay4to7 / totalCount : 0, 'Đôn đốc xử lý gấp'],
-    ['> 7 ngày (Quá hạn nghiêm trọng)', null, delayOver7, totalCount > 0 ? delayOver7 / totalCount : 0, 'Yêu cầu giải trình']
-  ];
-
-  const maxEvaluationRows = Math.max(supplierRows.length, causeRows.length, timelineRows.length, 3);
-
-  for (let i = 0; i < maxEvaluationRows; i++) {
-    const sRow = supplierRows[i] || [null, null, null, null, null, null];
-    const cRow = causeRows[i] || [null, null, null, null];
-    const tRow = timelineRows[i] || [null, null, null, null, null];
-
-    weeklyRows[11 + i] = [
-      sRow[0], sRow[1], sRow[2], sRow[3], sRow[4], sRow[5],
-      null,
-      cRow[0], cRow[1], cRow[2], cRow[3],
-      null,
-      tRow[0], tRow[1], tRow[2], tRow[3], tRow[4]
-    ];
+  let wb: XLSX.WorkBook;
+  try {
+    wb = XLSX.read(WEEKLY_REPORT_TEMPLATE_BASE64, { type: 'base64', cellStyles: true });
+  } catch (err) {
+    wb = XLSX.utils.book_new();
+    wb.Sheets['Weekly'] = XLSX.utils.aoa_to_sheet([]);
+    wb.SheetNames = ['Weekly'];
   }
 
-  const rowAfterEval = 11 + maxEvaluationRows;
-  weeklyRows[rowAfterEval] = [];
-  weeklyRows[rowAfterEval + 1] = [];
+  const ws = wb.Sheets['Weekly'];
 
-  // Row 19 (Dynamic): 4 Breakdown Tables (BY POSM • BY STORE • BY PROJECT • BY CAT)
-  weeklyRows[rowAfterEval + 2] = [
-    '4. BY POSM',
-    null,
-    null,
-    '5. BY STORE',
-    null,
-    null,
-    '6. BY PROJECT',
-    null,
-    null,
-    '7. BY CAT'
-  ];
+  // Row 1: Header title
+  setCellValue(ws, 'A1', dateRangeLabel);
 
-  weeklyRows[rowAfterEval + 3] = [
-    'Loại POSM',
-    'Số Ca Lỗi',
-    null,
-    'Store',
-    'Số Ca Lỗi',
-    null,
-    'Mã dự án',
-    'Số Ca Lỗi',
-    null,
-    'CAT',
-    'Số Ca Lỗi'
+  // Row 5: KPI values
+  setCellValue(ws, 'A5', totalCount);
+  setCellValue(ws, 'B5', totalCount > 0 ? onTimeCount / totalCount : 0, '0.0%');
+  setCellValue(ws, 'D5', totalCount > 0 ? overdueCount / totalCount : 0, '0.0%');
+  setCellValue(ws, 'F5', totalCount > 0 ? earlyFailCount / totalCount : 0, '0.0%');
+  setCellValue(ws, 'H5', topSupplier.name);
+  setCellValue(ws, 'J5', topProject.name);
+  setCellValue(ws, 'L5', topStore.name);
+  setCellValue(ws, 'N5', topCat.name);
+  setCellValue(ws, 'P5', topPosm.name);
+
+  // Row 6: KPI subtitles
+  setCellValue(ws, 'B6', `⚡ ${onTimeCount}/${totalCount} ca`);
+  setCellValue(ws, 'D6', `⚠️ ${overdueCount}/${totalCount} ca`);
+  setCellValue(ws, 'F6', `⚠️ ${earlyFailCount}/${totalCount} ca`);
+  setCellValue(ws, 'H6', `${topSupplier.count} ca (${topSupplier.pct})`);
+  setCellValue(ws, 'J6', `${topProject.count} ca (${topProject.pct})`);
+  setCellValue(ws, 'L6', `${topStore.count} ca (${topStore.pct})`);
+  setCellValue(ws, 'N6', `${topCat.count} ca (${topCat.pct})`);
+  setCellValue(ws, 'P6', `${topPosm.count} ca (${topPosm.pct})`);
+
+  // Row 7: In-progress note
+  const activePrjStr = Array.from(activeProjectsSet).join(', ') || 'Không có ca tồn đọng';
+  setCellValue(ws, 'A7', `⏳ Đang xử lí ${inProgressCount} ca thuộc dự án:`);
+  setCellValue(ws, 'D7', activePrjStr);
+
+  // Rows 12-16: 3 Evaluation tables (BY SUPPLIER, BY CAUSE, BY TIMELINE)
+  // Clear rows 12-17
+  for (let r = 12; r <= 17; r++) {
+    ['A', 'B', 'C', 'D', 'E', 'F', 'H', 'J', 'K', 'M', 'O', 'P', 'Q'].forEach(col => {
+      setCellValue(ws, `${col}${r}`, null);
+    });
+  }
+
+  // Populate Bảng 1: BY SUPPLIER
+  const sortedSuppliers = Array.from(supplierMap.entries()).sort((a, b) => b[1].total - a[1].total);
+  sortedSuppliers.forEach(([sup, d], idx) => {
+    const r = 12 + idx;
+    setCellValue(ws, `A${r}`, sup);
+    setCellValue(ws, `B${r}`, d.total);
+    setCellValue(ws, `C${r}`, d.early);
+    setCellValue(ws, `D${r}`, d.repeat);
+    setCellValue(ws, `E${r}`, d.overdue);
+    setCellValue(ws, `F${r}`, d.total > 0 ? (d.total - d.overdue) / d.total : 1, '0.0%');
+  });
+
+  // Populate Bảng 2: BY CAUSE
+  const sortedCauses = Array.from(causeMap.entries()).sort((a, b) => b[1].count - a[1].count);
+  sortedCauses.slice(0, 6).forEach(([cause, d], idx) => {
+    const r = 12 + idx;
+    setCellValue(ws, `H${r}`, cause);
+    setCellValue(ws, `J${r}`, `${d.count}\n(${d.topSupplier}>>)`);
+    setCellValue(ws, `K${r}`, totalCount > 0 ? d.count / totalCount : 0, '0.0%');
+  });
+
+  // Populate Bảng 3: BY TIMELINE
+  const timelineData = [
+    { label: '1 - 3 ngày (Trễ nhẹ)', count: delay1to3, badge: 'Nhắc nhở' },
+    { label: '4 - 7 ngày (Cảnh báo tiến độ)', count: delay4to7, badge: 'Đôn đốc xử lý gấp' },
+    { label: '> 7 ngày (Quá hạn nghiêm trọng)', count: delayOver7, badge: 'Yêu cầu giải trình' }
   ];
+  timelineData.forEach((t, idx) => {
+    const r = 12 + idx;
+    setCellValue(ws, `M${r}`, t.label);
+    setCellValue(ws, `O${r}`, t.count);
+    setCellValue(ws, `P${r}`, totalCount > 0 ? t.count / totalCount : 0, '0.0%');
+    setCellValue(ws, `Q${r}`, t.badge);
+  });
+
+  // Rows 21-25: 4 Breakdown tables (BY POSM, BY STORE, BY PROJECT, BY CAT)
+  for (let r = 21; r <= 27; r++) {
+    ['A', 'B', 'D', 'E', 'G', 'H', 'J', 'K'].forEach(col => {
+      setCellValue(ws, `${col}${r}`, null);
+    });
+  }
 
   const sortedPosm = Array.from(posmMap.entries()).sort((a, b) => b[1] - a[1]);
   const sortedStore = Array.from(storeMap.entries()).sort((a, b) => b[1] - a[1]);
   const sortedProject = Array.from(projectMap.entries()).sort((a, b) => b[1] - a[1]);
   const sortedCat = Array.from(catMap.entries()).sort((a, b) => b[1] - a[1]);
 
-  const maxBreakdownRows = Math.max(sortedPosm.length, sortedStore.length, sortedProject.length, sortedCat.length, 3);
-
-  for (let i = 0; i < maxBreakdownRows; i++) {
-    const p = sortedPosm[i] || [null, null];
-    const s = sortedStore[i] || [null, null];
-    const prj = sortedProject[i] || [null, null];
-    const c = sortedCat[i] || [null, null];
-
-    weeklyRows[rowAfterEval + 4 + i] = [
-      p[0], p[1],
-      null,
-      s[0], s[1],
-      null,
-      prj[0], prj[1],
-      null,
-      c[0], c[1]
-    ];
+  const maxBreakdown = Math.max(sortedPosm.length, sortedStore.length, sortedProject.length, sortedCat.length, 3);
+  for (let i = 0; i < maxBreakdown && i < 6; i++) {
+    const r = 21 + i;
+    if (sortedPosm[i]) {
+      setCellValue(ws, `A${r}`, sortedPosm[i][0]);
+      setCellValue(ws, `B${r}`, sortedPosm[i][1]);
+    }
+    if (sortedStore[i]) {
+      setCellValue(ws, `D${r}`, sortedStore[i][0]);
+      setCellValue(ws, `E${r}`, sortedStore[i][1]);
+    }
+    if (sortedProject[i]) {
+      setCellValue(ws, `G${r}`, sortedProject[i][0]);
+      setCellValue(ws, `H${r}`, sortedProject[i][1]);
+    }
+    if (sortedCat[i]) {
+      setCellValue(ws, `J${r}`, sortedCat[i][0]);
+      setCellValue(ws, `K${r}`, sortedCat[i][1]);
+    }
   }
 
-  const rowAfterBreakdown = rowAfterEval + 4 + maxBreakdownRows;
-  weeklyRows[rowAfterBreakdown] = [];
-  weeklyRows[rowAfterBreakdown + 1] = [];
+  // Row 29+: Clear existing detail rows from row 31 upwards to 1000
+  for (let r = 31; r <= 1000; r++) {
+    ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q'].forEach(col => {
+      setCellValue(ws, `${col}${r}`, null);
+    });
+  }
 
-  // Row 28+ (Dynamic): DETAIL ACTION TABLE
-  weeklyRows[rowAfterBreakdown + 2] = ['CHI TIẾT CÁC CASE BẢO HÀNH ĐÃ CÓ ACTION'];
-  weeklyRows[rowAfterBreakdown + 3] = [
-    'ID',
-    'Store',
-    'POSM',
-    'Brand',
-    'Cat',
-    'Mã dự án',
-    'Supplier',
-    'Ngày lắp đặt',
-    'Ngày gửi bảo hành',
-    'Loại lỗi',
-    null,
-    'Chi tiết lỗi',
-    null,
-    'Ngày xử lí dự kiến',
-    'Ngày hoàn thành',
-    'Status',
-    'Note'
-  ];
+  // Ensure merges list has merges for new detail rows
+  if (!ws['!merges']) ws['!merges'] = [];
+  const existingMerges = ws['!merges'];
 
+  // Inject all active items into Row 31+
   activeItems.forEach((item, idx) => {
+    const r = 31 + idx;
     const pLower = (item.progress || '').toLowerCase();
     const isDone = pLower.includes('hoàn thành');
     const pExp = parseDateToMs(item.expectedDate || item.requestDeadline);
@@ -477,54 +383,33 @@ export const exportAnalystExecutiveReport = (
       noteText = 'Hỏng sớm';
     }
 
-    weeklyRows[rowAfterBreakdown + 4 + idx] = [
-      item.requestId || `BH-${item.rowId || idx + 1}`,
-      item.storeName || 'Chưa xác định',
-      item.posmType || 'Chưa xác định',
-      item.brand || 'Chưa xác định',
-      item.category || item.brand || 'Chưa xác định',
-      item.projectCode || 'Chưa xác định',
-      item.supplier || 'Chưa xác định',
-      formatDateStr(item.installationDate),
-      formatDateStr(item.sentDate || item.createdAt),
-      item.errorType || item.errorDetail || 'Chưa xác định',
-      null,
-      item.errorDetail || 'Chưa xác định',
-      null,
-      formatDateStr(item.expectedDate || item.requestDeadline),
-      formatDateStr(item.completedDate),
-      item.progress || 'Not started',
-      noteText
-    ];
+    setCellValue(ws, `A${r}`, item.requestId || `BH-${item.rowId || idx + 1}`);
+    setCellValue(ws, `B${r}`, item.storeName || 'Chưa xác định');
+    setCellValue(ws, `C${r}`, item.posmType || 'Chưa xác định');
+    setCellValue(ws, `D${r}`, item.brand || 'Chưa xác định');
+    setCellValue(ws, `E${r}`, item.category || item.brand || 'Chưa xác định');
+    setCellValue(ws, `F${r}`, item.projectCode || 'Chưa xác định');
+    setCellValue(ws, `G${r}`, item.supplier || 'Chưa xác định');
+    setCellValue(ws, `H${r}`, formatDateStr(item.installationDate));
+    setCellValue(ws, `I${r}`, formatDateStr(item.sentDate || item.createdAt));
+    setCellValue(ws, `J${r}`, item.errorType || item.errorDetail || 'Chưa xác định');
+    setCellValue(ws, `L${r}`, item.errorDetail || 'Chưa xác định');
+    setCellValue(ws, `N${r}`, formatDateStr(item.expectedDate || item.requestDeadline));
+    setCellValue(ws, `O${r}`, formatDateStr(item.completedDate));
+    setCellValue(ws, `P${r}`, item.progress || 'Not started');
+    setCellValue(ws, `Q${r}`, noteText);
+
+    // Merge J:K and L:M for each detail row
+    const rowIdx0 = r - 1;
+    existingMerges.push({ s: { r: rowIdx0, c: 9 }, e: { r: rowIdx0, c: 10 } }); // J:K
+    existingMerges.push({ s: { r: rowIdx0, c: 11 }, e: { r: rowIdx0, c: 12 } }); // L:M
   });
 
-  const wsWeekly = XLSX.utils.aoa_to_sheet(weeklyRows);
-
-  // Set nice column widths matching Power BI & Excel template
-  wsWeekly['!cols'] = [
-    { wch: 22 }, // A: ID / Nhà thầu / Loại POSM / Tiêu đề
-    { wch: 18 }, // B: Store / Total Case / Số ca
-    { wch: 18 }, // C: POSM / Số ca hỏng sớm
-    { wch: 18 }, // D: Brand / Số ca tái diễn / Store
-    { wch: 16 }, // E: Cat / Số ca trễ hạn
-    { wch: 18 }, // F: Mã dự án / % Đạt tiến độ
-    { wch: 18 }, // G: Supplier / Mã dự án
-    { wch: 22 }, // H: Ngày lắp đặt / Nguyên nhân lỗi
-    { wch: 18 }, // I: Ngày gửi BH
-    { wch: 26 }, // J: Loại lỗi / Số ca / CAT
-    { wch: 16 }, // K: % Tỷ lệ / Số ca
-    { wch: 16 }, // L: Dummy separator
-    { wch: 30 }, // M: Thời gian trễ hạn
-    { wch: 16 }, // N: Dummy separator
-    { wch: 18 }, // O: Ngày xử lý dự kiến / Số ca
-    { wch: 18 }, // P: Ngày hoàn thành / % Tỷ lệ
-    { wch: 25 }  // Q: Status / Mức độ cảnh báo
-  ];
-
-  XLSX.utils.book_append_sheet(wb, wsWeekly, 'Weekly');
+  const lastRow = Math.max(32 + activeItems.length, 40);
+  ws['!ref'] = `A1:Q${lastRow}`;
 
   // =========================================================================
-  // 3. BUILD SHEET 2: "Checklist Bảo Hành" (FULL RAW OPERATIONAL DATA)
+  // 3. BUILD SHEET 2: "Raw Data" (100% OPERATIONAL RAW DATA - 21 COLUMNS)
   // =========================================================================
   const rawHeader = [
     'STT / Row ID',
@@ -592,7 +477,14 @@ export const exportAnalystExecutiveReport = (
     { wch: 30 }
   ];
 
-  XLSX.utils.book_append_sheet(wb, wsRaw, 'Checklist Bảo Hành');
+  // Remove existing Raw Data sheet if any and append fresh one
+  const rawSheetName = 'Raw Data';
+  const existingRawIdx = wb.SheetNames.indexOf(rawSheetName);
+  if (existingRawIdx >= 0) {
+    wb.SheetNames.splice(existingRawIdx, 1);
+    delete wb.Sheets[rawSheetName];
+  }
+  XLSX.utils.book_append_sheet(wb, wsRaw, rawSheetName);
 
   // Trigger download in browser
   XLSX.writeFile(wb, `${finalFilename}_${dateStr}.xlsx`);
