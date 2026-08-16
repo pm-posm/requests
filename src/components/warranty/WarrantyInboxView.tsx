@@ -479,6 +479,34 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
           setThreads(mappedThreads);
           setSelectedThreadId(prev => prev || mappedThreads[0]?.threadId || '');
           setLastSyncedTime(new Date().toLocaleTimeString('vi-VN'));
+        } else {
+          // If Supabase is empty: Auto-migrate existing local threads (27 emails) to Supabase Cloud!
+          try {
+            const saved = localStorage.getItem('WARRANTY_GMAIL_SAVED_THREADS');
+            if (saved) {
+              const localThreads: WarrantyEmailThread[] = JSON.parse(saved);
+              const realLocalThreads = localThreads.filter(t => !t.threadId.startsWith('th-00'));
+              if (realLocalThreads.length > 0) {
+                const payload = realLocalThreads.map(t => ({
+                  thread_id: t.threadId,
+                  subject: t.subject,
+                  from_email: t.from,
+                  from_name: t.fromName,
+                  last_updated: t.rawTimestamp ? new Date(t.rawTimestamp).toISOString() : new Date().toISOString(),
+                  snippet: t.snippet,
+                  messages: t.messages,
+                  updated_at: new Date().toISOString()
+                }));
+                const { error: upsertErr } = await supabase.from('warranty_emails').upsert(payload, { onConflict: 'thread_id' });
+                if (!upsertErr) {
+                  toast.success(`Đã tự động đồng bộ ${realLocalThreads.length} email lên Supabase Cloud!`, { duration: 4000 });
+                  loadFromSupabase();
+                }
+              }
+            }
+          } catch (migErr) {
+            console.warn('Auto-push local threads to Supabase error:', migErr);
+          }
         }
       } catch (err) {
         console.warn('Supabase initial load error:', err);
