@@ -592,7 +592,7 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
           toast.success(`Đã tải ${supaData.length} email từ Supabase Cloud`, { icon: '☁️', duration: 3500 });
         }
       } else if (!isSilent) {
-        toast.error('Không thể kết nối tới Apps Script: ' + err.message);
+        toast.error('Lỗi kết nối Supabase: ' + err.message);
       }
     } finally {
       isFetchingRef.current = false;
