@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { 
-  BarChart3, Filter, RotateCcw, Download, Calendar, 
+  Filter, RotateCcw, Download, Calendar, 
   Building2, AlertTriangle, CheckCircle2, Clock, 
-  Layers, Store, Tag, ChevronRight, Search, ExternalLink,
-  ShieldAlert, Sparkles, PieChart
+  Layers, Store, Tag, Search, Maximize2, Minimize2,
+  FileSpreadsheet, SlidersHorizontal, ChevronDown, Check,
+  X, Info, ExternalLink, HelpCircle
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import type { WarrantyItem } from '@/types/warranty';
 import toast from 'react-hot-toast';
 
@@ -60,1194 +60,1283 @@ const formatDateDisplay = (str?: string): string => {
   return `${dd}/${mm}/${yyyy}`;
 };
 
-// Smart Categorization of Error Causes based on actual operations
-const detectErrorCause = (item: WarrantyItem): { cause: string; supplierTag: string } => {
-  const detail = `${item.errorDetail || ''} ${item.note || ''}`.toLowerCase();
-  const sup = item.supplier?.trim() || 'Chưa rõ';
+// Power BI Visual Container Component with Standard Fluent Header Toolbar
+const PowerBIVisual: React.FC<{
+  title: string;
+  subtitle?: string;
+  className?: string;
+  children: React.ReactNode;
+  onFocus?: () => void;
+  accentColor?: string;
+  filterActive?: boolean;
+}> = ({ title, subtitle, className = '', children, onFocus, accentColor, filterActive }) => {
+  return (
+    <div className={`bg-white dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] shadow-[0_1px_3px_rgba(0,0,0,0.06)] flex flex-col relative transition-all group/pbi ${className}`}>
+      {accentColor && (
+        <div className="h-[3px] w-full" style={{ backgroundColor: accentColor }} />
+      )}
+      
+      {/* Power BI Visual Header */}
+      <div className="px-3 py-2 border-b border-[#EDEBE9] dark:border-[#323130] flex items-center justify-between gap-2 select-none">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <h3 className="text-[12px] font-semibold text-[#252423] dark:text-[#F3F2F1] tracking-tight truncate font-sans">
+              {title}
+            </h3>
+            {filterActive && (
+              <span className="w-1.5 h-1.5 rounded-full bg-[#118DFF]" title="Đang lọc theo visual này" />
+            )}
+          </div>
+          {subtitle && (
+            <p className="text-[10px] text-[#605E5C] dark:text-[#A19F9D] truncate font-sans">
+              {subtitle}
+            </p>
+          )}
+        </div>
 
-  if (detail.includes('đèn') || detail.includes('led') || detail.includes('cầu chì') || detail.includes('tắt đèn') || detail.includes('nguồn đèn') || detail.includes('sáng')) {
-    return {
-      cause: 'Tắt, hỏng hệ thống cầu chì/Đèn LED',
-      supplierTag: sup
-    };
-  }
+        {/* Visual Header Hover Icons */}
+        <div className="flex items-center gap-1 opacity-40 group-hover/pbi:opacity-100 transition-opacity">
+          {onFocus && (
+            <button
+              onClick={onFocus}
+              className="p-1 hover:bg-[#F3F2F1] dark:hover:bg-[#323130] rounded text-[#605E5C] dark:text-[#C8C6C4] transition-colors cursor-pointer"
+              title="Chế độ tiêu điểm (Focus Mode)"
+            >
+              <Maximize2 className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+      </div>
 
-  if (detail.includes('màn hình') || detail.includes('dummy') || detail.includes('xoay 3d') || detail.includes('mô tơ') || detail.includes('adapter') || detail.includes('thông minh') || detail.includes('hút nổi') || detail.includes('nguồn')) {
-    return {
-      cause: 'Thiết bị nguồn/Điện thông minh hư hại',
-      supplierTag: sup
-    };
-  }
-
-  if (detail.includes('xe đẩy') || detail.includes('ngoại lực') || detail.includes('khách') || detail.includes('va quẹt') || detail.includes('bể') || detail.includes('trầy') || detail.includes('gãy') || detail.includes('nứt') || detail.includes('bung keo')) {
-    return {
-      cause: 'Tác động ngoại lực (Xe đẩy siêu thị, khách hàng)',
-      supplierTag: sup
-    };
-  }
-
-  return {
-    cause: 'Sự cố kết cấu & thiết bị khác',
-    supplierTag: sup
-  };
+      {/* Visual Content Body */}
+      <div className="p-3 flex-1 flex flex-col">
+        {children}
+      </div>
+    </div>
+  );
 };
 
 export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps> = ({
-  warrantyItems = [],
+  warrantyItems,
   onOpenWarrantyDrawer,
   onExportExcel
 }) => {
-  // Slicers / Interactive Filter States
+  // Page Tab state (mimicking Power BI Desktop bottom page tabs)
+  const [activeReportPage, setActiveReportPage] = useState<'SUMMARY' | 'DETAIL'>('SUMMARY');
+
+  // Slicer States
   const [selectedWeek, setSelectedWeek] = useState<string>('all');
-  const [selectedYear, setSelectedYear] = useState<string>('2026');
   const [selectedSupplier, setSelectedSupplier] = useState<string>('all');
   const [selectedProject, setSelectedProject] = useState<string>('all');
   const [selectedPosmType, setSelectedPosmType] = useState<string>('all');
   const [selectedStore, setSelectedStore] = useState<string>('all');
-  const [selectedCat, setSelectedCat] = useState<string>('all');
-  const [selectedCause, setSelectedCause] = useState<string>('all');
-  const [selectedTimelineDelay, setSelectedTimelineDelay] = useState<string>('all'); // '1-3', '4-7', '>7'
-  const [tableSearch, setTableSearch] = useState<string>('');
+  const [detailSearch, setDetailSearch] = useState<string>('');
 
-  // Auto-detect dynamic weeks in dataset (sorted newest first)
-  const availableWeeks = useMemo(() => {
-    const weekMap = new Map<string, { label: string; startMs: number; endMs: number; count: number }>();
-    
-    warrantyItems.forEach(item => {
-      const ms = parseDateToMs(item.sentDate);
-      if (!ms) return;
-      
-      const d = new Date(ms);
-      // Find start of week (Monday)
+  // Cross-filtering clicked state
+  const [crossFilter, setCrossFilter] = useState<{
+    type: 'supplier' | 'cause' | 'delay' | 'posm' | 'store' | 'project' | 'brand' | null;
+    value: string;
+  }>({ type: null, value: '' });
+
+  // 1. Detect dynamic Weekly date ranges
+  const detectedWeeks = useMemo(() => {
+    const dates = warrantyItems
+      .map(i => parseDateToMs(i.sentDate || i.createdAt))
+      .filter((t): t is number => t !== null && t > 0);
+
+    if (dates.length === 0) return [];
+
+    const minTs = Math.min(...dates);
+    const maxTs = Math.max(...dates);
+
+    const getMonday = (d: Date) => {
       const day = d.getDay();
-      const diffToMonday = d.getDate() - day + (day === 0 ? -6 : 1);
-      const monday = new Date(d.setDate(diffToMonday));
-      monday.setHours(0, 0, 0, 0);
-      
-      const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
-      sunday.setHours(23, 59, 59, 999);
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      return new Date(d.getFullYear(), d.getMonth(), diff);
+    };
 
-      const fMon = `${String(monday.getDate()).padStart(2, '0')}/${String(monday.getMonth() + 1).padStart(2, '0')}`;
-      const fSun = `${String(sunday.getDate()).padStart(2, '0')}/${String(sunday.getMonth() + 1).padStart(2, '0')}/${sunday.getFullYear()}`;
-      const key = `${monday.getTime()}_${sunday.getTime()}`;
-      const label = `Weekly (${fMon} - ${fSun})`;
+    const weeks: { id: string; label: string; startMs: number; endMs: number }[] = [];
+    const cur = getMonday(new Date(minTs));
+    const endLimit = new Date(maxTs + 7 * 86400000);
 
-      if (!weekMap.has(key)) {
-        weekMap.set(key, { label, startMs: monday.getTime(), endMs: sunday.getTime(), count: 0 });
+    while (cur.getTime() <= endLimit.getTime()) {
+      const mon = new Date(cur);
+      const sun = new Date(cur.getTime() + 6 * 86400000);
+      sun.setHours(23, 59, 59, 999);
+
+      const d1 = String(mon.getDate()).padStart(2, '0');
+      const m1 = String(mon.getMonth() + 1).padStart(2, '0');
+      const d2 = String(sun.getDate()).padStart(2, '0');
+      const m2 = String(sun.getMonth() + 1).padStart(2, '0');
+      const y2 = sun.getFullYear();
+
+      const id = `${mon.getTime()}_${sun.getTime()}`;
+      const label = `Weekly (${d1}/${m1} - ${d2}/${m2}/${y2})`;
+
+      const countInWeek = warrantyItems.filter(i => {
+        const ms = parseDateToMs(i.sentDate || i.createdAt);
+        return ms && ms >= mon.getTime() && ms <= sun.getTime();
+      }).length;
+
+      if (countInWeek > 0) {
+        weeks.push({ id, label, startMs: mon.getTime(), endMs: sun.getTime() });
       }
-      weekMap.get(key)!.count += 1;
-    });
 
-    return Array.from(weekMap.entries())
-      .map(([key, data]) => ({ key, ...data }))
-      .sort((a, b) => b.startMs - a.startMs);
+      cur.setDate(cur.getDate() + 7);
+    }
+
+    return weeks.reverse();
   }, [warrantyItems]);
 
-  // Filtered dataset applying all Power BI Slicers
+  // Slicer dropdown items
+  const uniqueSuppliers = useMemo(() => {
+    return Array.from(new Set(warrantyItems.map(i => (i.supplier || '').trim()).filter(Boolean))).sort();
+  }, [warrantyItems]);
+
+  const uniqueProjects = useMemo(() => {
+    return Array.from(new Set(warrantyItems.map(i => (i.projectCode || '').trim()).filter(Boolean))).sort();
+  }, [warrantyItems]);
+
+  const uniquePosmTypes = useMemo(() => {
+    return Array.from(new Set(warrantyItems.map(i => (i.posmType || '').trim()).filter(Boolean))).sort();
+  }, [warrantyItems]);
+
+  const uniqueStores = useMemo(() => {
+    return Array.from(new Set(warrantyItems.map(i => (i.storeName || '').trim()).filter(Boolean))).sort();
+  }, [warrantyItems]);
+
+  // Filtered dataset according to Slicers + Cross Filter
   const filteredData = useMemo(() => {
     return warrantyItems.filter(item => {
-      // 1. Year filter
-      if (selectedYear !== 'all') {
-        const dateStr = item.sentDate || item.installationDate || '';
-        const match = dateStr.match(/\b(202[0-9]|201[0-9])\b/);
-        if (match && match[1] !== selectedYear) return false;
-      }
-
-      // 2. Week filter
+      // 1. Week slicer
       if (selectedWeek !== 'all') {
-        const foundWeek = availableWeeks.find(w => w.key === selectedWeek);
+        const foundWeek = detectedWeeks.find(w => w.id === selectedWeek);
         if (foundWeek) {
-          const itemMs = parseDateToMs(item.sentDate);
-          if (!itemMs || itemMs < foundWeek.startMs || itemMs > foundWeek.endMs) {
-            return false;
-          }
+          const ms = parseDateToMs(item.sentDate || item.createdAt);
+          if (!ms || ms < foundWeek.startMs || ms > foundWeek.endMs) return false;
         }
       }
 
-      // 3. Supplier filter
-      if (selectedSupplier !== 'all') {
-        const sup = (item.supplier || '').trim().toLowerCase();
-        if (sup !== selectedSupplier.toLowerCase()) return false;
-      }
+      // 2. Supplier Slicer
+      if (selectedSupplier !== 'all' && (item.supplier || '').trim() !== selectedSupplier) return false;
 
-      // 4. Project filter
-      if (selectedProject !== 'all') {
-        const prj = (item.projectCode || '').trim().toLowerCase();
-        if (prj !== selectedProject.toLowerCase()) return false;
-      }
+      // 3. Project Slicer
+      if (selectedProject !== 'all' && (item.projectCode || '').trim() !== selectedProject) return false;
 
-      // 5. POSM Type filter
-      if (selectedPosmType !== 'all') {
-        const posm = (item.posmType || '').trim().toLowerCase();
-        if (posm !== selectedPosmType.toLowerCase()) return false;
-      }
+      // 4. POSM Slicer
+      if (selectedPosmType !== 'all' && (item.posmType || '').trim() !== selectedPosmType) return false;
 
-      // 6. Store filter
-      if (selectedStore !== 'all') {
-        const st = (item.storeName || item.storeCode || '').trim().toLowerCase();
-        if (st !== selectedStore.toLowerCase()) return false;
-      }
+      // 5. Store Slicer
+      if (selectedStore !== 'all' && (item.storeName || '').trim() !== selectedStore) return false;
 
-      // 7. Cat filter
-      if (selectedCat !== 'all') {
-        const cat = (item.category || '').trim().toLowerCase();
-        if (cat !== selectedCat.toLowerCase()) return false;
-      }
-
-      // 8. Cause filter
-      if (selectedCause !== 'all') {
-        const causeInfo = detectErrorCause(item);
-        if (causeInfo.cause !== selectedCause) return false;
-      }
-
-      // 9. Timeline delay filter
-      if (selectedTimelineDelay !== 'all') {
-        const sentMs = parseDateToMs(item.sentDate);
-        const expMs = parseDateToMs(item.expectedDate);
-        const compMs = parseDateToMs(item.completedDate);
-        const isDone = (item.progress || '').toLowerCase().includes('hoàn thành');
-        const effectiveDoneMs = isDone && compMs ? compMs : Date.now();
-
-        if (expMs && effectiveDoneMs > expMs) {
-          const delayDays = Math.ceil((effectiveDoneMs - expMs) / (1000 * 60 * 60 * 24));
-          if (selectedTimelineDelay === '1-3' && (delayDays < 1 || delayDays > 3)) return false;
-          if (selectedTimelineDelay === '4-7' && (delayDays < 4 || delayDays > 7)) return false;
-          if (selectedTimelineDelay === '>7' && delayDays <= 7) return false;
-        } else {
-          return false;
-        }
-      }
-
-      // 10. Table text search
-      if (tableSearch.trim()) {
-        const q = tableSearch.toLowerCase().trim();
-        const text = `${item.requestId} ${item.storeName} ${item.posmType} ${item.brand} ${item.category} ${item.projectCode} ${item.supplier} ${item.errorDetail} ${item.progress} ${item.note}`.toLowerCase();
-        if (!text.includes(q)) return false;
+      // 6. Cross-Filtering
+      if (crossFilter.type && crossFilter.value) {
+        if (crossFilter.type === 'supplier' && (item.supplier || '').trim() !== crossFilter.value) return false;
+        if (crossFilter.type === 'posm' && (item.posmType || '').trim() !== crossFilter.value) return false;
+        if (crossFilter.type === 'store' && (item.storeName || '').trim() !== crossFilter.value) return false;
+        if (crossFilter.type === 'project' && (item.projectCode || '').trim() !== crossFilter.value) return false;
+        if (crossFilter.type === 'brand' && (item.brand || '').trim() !== crossFilter.value) return false;
       }
 
       return true;
     });
   }, [
-    warrantyItems, selectedYear, selectedWeek, selectedSupplier, 
-    selectedProject, selectedPosmType, selectedStore, selectedCat, 
-    selectedCause, selectedTimelineDelay, tableSearch, availableWeeks
+    warrantyItems, selectedWeek, selectedSupplier, selectedProject, 
+    selectedPosmType, selectedStore, crossFilter, detectedWeeks
   ]);
 
-  // Summary Metrics Computation (Row 1 KPI Cards)
-  const metrics = useMemo(() => {
+  // KPI Calculations
+  const kpiData = useMemo(() => {
     const total = filteredData.length;
-    let onTimeCount = 0;
-    let delayedCount = 0;
-    let earlyFailCount = 0; // < 30 days from installation
+    if (total === 0) {
+      return {
+        total: 0,
+        onTimeCount: 0,
+        onTimePct: '0.0%',
+        overdueCount: 0,
+        overduePct: '0.0%',
+        earlyFailCount: 0,
+        earlyFailPct: '0.0%',
+        topSupplier: { name: '-', count: 0, pct: '0.0%' },
+        topProject: { name: '-', count: 0, pct: '0.0%' },
+        topStore: { name: '-', count: 0, pct: '0.0%' },
+        topBrand: { name: '-', count: 0, pct: '0.0%' },
+        topPosm: { name: '-', count: 0, pct: '0.0%' },
+        activeProjects: []
+      };
+    }
 
-    const supplierCount: Record<string, number> = {};
-    const projectCount: Record<string, number> = {};
-    const storeCount: Record<string, number> = {};
-    const catCount: Record<string, number> = {};
-    const posmCount: Record<string, number> = {};
-    const activeProjectsSet = new Set<string>();
+    let onTime = 0;
+    let overdue = 0;
+    let earlyFail = 0;
+
+    const supplierMap = new Map<string, number>();
+    const projectMap = new Map<string, number>();
+    const storeMap = new Map<string, number>();
+    const brandMap = new Map<string, number>();
+    const posmMap = new Map<string, number>();
+    const activeProjSet = new Set<string>();
 
     filteredData.forEach(item => {
-      const isDone = (item.progress || '').toLowerCase().includes('hoàn thành');
-      const sentMs = parseDateToMs(item.sentDate);
+      const isDone = (item.status || '').toLowerCase().includes('hoàn thành') || !!item.completedDate;
+      const sentMs = parseDateToMs(item.sentDate || item.createdAt);
+      const doneMs = parseDateToMs(item.completedDate);
+      const schedMs = parseDateToMs(item.scheduledDate);
       const installMs = parseDateToMs(item.installationDate);
-      const expMs = parseDateToMs(item.expectedDate);
-      const compMs = parseDateToMs(item.completedDate);
-      const effectiveDoneMs = isDone && compMs ? compMs : Date.now();
 
-      // On-time vs Delayed calculation
-      if (expMs) {
-        if (effectiveDoneMs <= expMs) {
-          onTimeCount += 1;
+      // Check Early Fail (<30 days from install to fault)
+      if (installMs && sentMs && sentMs >= installMs) {
+        const days = Math.round((sentMs - installMs) / 86400000);
+        if (days < 30) earlyFail++;
+      }
+
+      // Check On-time vs Overdue
+      if (isDone) {
+        if (doneMs && schedMs && doneMs > schedMs + 86400000) {
+          overdue++;
+        } else if (sentMs && doneMs && (doneMs - sentMs) > 7 * 86400000) {
+          overdue++;
         } else {
-          delayedCount += 1;
+          onTime++;
         }
       } else {
-        if (isDone) onTimeCount += 1;
-        else delayedCount += 1;
-      }
-
-      // Early defect (< 30 days from install)
-      if (installMs && sentMs && sentMs >= installMs) {
-        const daysToFail = (sentMs - installMs) / (1000 * 60 * 60 * 24);
-        if (daysToFail < 30) {
-          earlyFailCount += 1;
+        const now = Date.now();
+        if (sentMs && (now - sentMs) > 7 * 86400000) {
+          overdue++;
+        } else {
+          onTime++;
+        }
+        if (item.projectCode && item.projectCode.trim()) {
+          activeProjSet.add(item.projectCode.trim());
         }
       }
 
-      // Counts for Top Callouts
-      if (item.supplier?.trim()) {
-        const s = item.supplier.trim();
-        supplierCount[s] = (supplierCount[s] || 0) + 1;
-      }
-      if (item.projectCode?.trim()) {
-        const p = item.projectCode.trim();
-        projectCount[p] = (projectCount[p] || 0) + 1;
-      }
-      if (item.storeName?.trim()) {
-        const st = item.storeName.trim();
-        storeCount[st] = (storeCount[st] || 0) + 1;
-      }
-      if (item.category?.trim()) {
-        const c = item.category.trim();
-        catCount[c] = (catCount[c] || 0) + 1;
-      }
-      if (item.posmType?.trim()) {
-        const posm = item.posmType.trim();
-        posmCount[posm] = (posmCount[posm] || 0) + 1;
-      }
+      // Counts for Tops
+      const sup = (item.supplier || 'Chưa gán').trim();
+      supplierMap.set(sup, (supplierMap.get(sup) || 0) + 1);
 
-      // Active in-progress tracking
-      if (!isDone && item.projectCode?.trim()) {
-        activeProjectsSet.add(item.projectCode.trim());
-      }
+      const prj = (item.projectCode || 'Chưa gán').trim();
+      projectMap.set(prj, (projectMap.get(prj) || 0) + 1);
+
+      const st = (item.storeName || 'Chưa gán').trim();
+      storeMap.set(st, (storeMap.get(st) || 0) + 1);
+
+      const br = (item.brand || 'Chưa gán').trim();
+      brandMap.set(br, (brandMap.get(br) || 0) + 1);
+
+      const po = (item.posmType || 'Chưa gán').trim();
+      posmMap.set(po, (posmMap.get(po) || 0) + 1);
     });
 
-    const getTop = (map: Record<string, number>) => {
-      const entries = Object.entries(map).sort((a, b) => b[1] - a[1]);
-      if (entries.length === 0) return { name: '-', count: 0, pct: 0 };
+    const getTop = (map: Map<string, number>) => {
+      let topName = '-';
+      let maxVal = 0;
+      map.forEach((val, key) => {
+        if (val > maxVal) {
+          maxVal = val;
+          topName = key;
+        }
+      });
       return {
-        name: entries[0][0],
-        count: entries[0][1],
-        pct: total > 0 ? (entries[0][1] / total) * 100 : 0
+        name: topName,
+        count: maxVal,
+        pct: `${((maxVal / total) * 100).toFixed(1)}%`
       };
     };
 
     return {
       total,
-      onTimeCount,
-      onTimePct: total > 0 ? (onTimeCount / total) * 100 : 0,
-      delayedCount,
-      delayedPct: total > 0 ? (delayedCount / total) * 100 : 0,
-      earlyFailCount,
-      earlyFailPct: total > 0 ? (earlyFailCount / total) * 100 : 0,
-      topSupplier: getTop(supplierCount),
-      topProject: getTop(projectCount),
-      topStore: getTop(storeCount),
-      topCat: getTop(catCount),
-      topPosm: getTop(posmCount),
-      activeProjects: Array.from(activeProjectsSet)
+      onTimeCount: onTime,
+      onTimePct: `${((onTime / total) * 100).toFixed(1)}%`,
+      overdueCount: overdue,
+      overduePct: `${((overdue / total) * 100).toFixed(1)}%`,
+      earlyFailCount: earlyFail,
+      earlyFailPct: `${((earlyFail / total) * 100).toFixed(1)}%`,
+      topSupplier: getTop(supplierMap),
+      topProject: getTop(projectMap),
+      topStore: getTop(storeMap),
+      topBrand: getTop(brandMap),
+      topPosm: getTop(posmMap),
+      activeProjects: Array.from(activeProjSet)
     };
   }, [filteredData]);
 
-  // Section 1: By Supplier Breakdown
-  const supplierBreakdown = useMemo(() => {
-    const map: Record<string, {
+  // Section 1: Đánh Giá Nhà Thầu Breakdown
+  const supplierMatrix = useMemo(() => {
+    const map = new Map<string, {
       supplier: string;
       total: number;
       earlyFail: number;
       recurrent: number;
-      delayed: number;
-      completed: number;
-    }> = {};
+      overdue: number;
+      onTime: number;
+    }>();
+
+    // Track recurrent by store + posm
+    const storePosmCounts = new Map<string, number>();
+    filteredData.forEach(item => {
+      const key = `${(item.storeName || '').trim()}__${(item.posmType || '').trim()}`;
+      storePosmCounts.set(key, (storePosmCounts.get(key) || 0) + 1);
+    });
 
     filteredData.forEach(item => {
-      const sup = item.supplier?.trim() || 'Chưa gán thầu';
-      if (!map[sup]) {
-        map[sup] = { supplier: sup, total: 0, earlyFail: 0, recurrent: 0, delayed: 0, completed: 0 };
+      const sup = (item.supplier || 'Chưa gán').trim();
+      if (!map.has(sup)) {
+        map.set(sup, { supplier: sup, total: 0, earlyFail: 0, recurrent: 0, overdue: 0, onTime: 0 });
       }
-      map[sup].total += 1;
+      const entry = map.get(sup)!;
+      entry.total++;
 
-      const isDone = (item.progress || '').toLowerCase().includes('hoàn thành');
-      if (isDone) map[sup].completed += 1;
-
+      const sentMs = parseDateToMs(item.sentDate || item.createdAt);
       const installMs = parseDateToMs(item.installationDate);
-      const sentMs = parseDateToMs(item.sentDate);
-      if (installMs && sentMs && sentMs >= installMs) {
-        const days = (sentMs - installMs) / (1000 * 60 * 60 * 24);
-        if (days < 30) map[sup].earlyFail += 1;
+      const doneMs = parseDateToMs(item.completedDate);
+      const schedMs = parseDateToMs(item.scheduledDate);
+      const isDone = (item.status || '').toLowerCase().includes('hoàn thành') || !!item.completedDate;
+
+      if (installMs && sentMs && sentMs >= installMs && (sentMs - installMs) < 30 * 86400000) {
+        entry.earlyFail++;
       }
 
-      if (item.precedingRequestId?.trim()) {
-        map[sup].recurrent += 1;
+      const key = `${(item.storeName || '').trim()}__${(item.posmType || '').trim()}`;
+      if ((storePosmCounts.get(key) || 0) > 1) {
+        entry.recurrent++;
       }
 
-      const expMs = parseDateToMs(item.expectedDate);
-      const compMs = parseDateToMs(item.completedDate);
-      const effDoneMs = isDone && compMs ? compMs : Date.now();
-      if (expMs && effDoneMs > expMs) {
-        map[sup].delayed += 1;
+      if (isDone) {
+        if (doneMs && schedMs && doneMs > schedMs + 86400000) {
+          entry.overdue++;
+        } else if (sentMs && doneMs && (doneMs - sentMs) > 7 * 86400000) {
+          entry.overdue++;
+        } else {
+          entry.onTime++;
+        }
+      } else {
+        const now = Date.now();
+        if (sentMs && (now - sentMs) > 7 * 86400000) {
+          entry.overdue++;
+        } else {
+          entry.onTime++;
+        }
       }
     });
 
-    return Object.values(map).map(row => ({
-      ...row,
-      progressPct: row.total > 0 ? (row.completed / row.total) * 100 : 0
-    })).sort((a, b) => b.total - a.total);
+    return Array.from(map.values()).sort((a, b) => b.total - a.total);
   }, [filteredData]);
 
-  // Section 2: By Cause Breakdown
+  // Section 2: Nguyên Nhân Hư Hỏng Breakdown (3 root categories matching Excel)
   const causeBreakdown = useMemo(() => {
-    const map: Record<string, { cause: string; count: number; topSupplier: string }> = {};
+    let fuseCount = 0;
+    let powerCount = 0;
+    let externalCount = 0;
+
+    const fuseSuppliers = new Set<string>();
+    const powerSuppliers = new Set<string>();
+    const extSuppliers = new Set<string>();
 
     filteredData.forEach(item => {
-      const { cause, supplierTag } = detectErrorCause(item);
-      if (!map[cause]) {
-        map[cause] = { cause, count: 0, topSupplier: supplierTag };
-      }
-      map[cause].count += 1;
-    });
+      const err = (item.errorDetail || item.reason || item.notes || '').toLowerCase();
+      const sup = (item.supplier || '').trim();
 
-    const total = filteredData.length;
-    return Object.values(map).map(c => ({
-      ...c,
-      pct: total > 0 ? (c.count / total) * 100 : 0
-    })).sort((a, b) => b.count - a.count);
-  }, [filteredData]);
-
-  // Section 3: By Timeline Delay Breakdown
-  const timelineDelayBreakdown = useMemo(() => {
-    let delay1to3 = 0;
-    let delay4to7 = 0;
-    let delayOver7 = 0;
-
-    filteredData.forEach(item => {
-      const isDone = (item.progress || '').toLowerCase().includes('hoàn thành');
-      const expMs = parseDateToMs(item.expectedDate);
-      const compMs = parseDateToMs(item.completedDate);
-      const effDoneMs = isDone && compMs ? compMs : Date.now();
-
-      if (expMs && effDoneMs > expMs) {
-        const days = Math.ceil((effDoneMs - expMs) / (1000 * 60 * 60 * 24));
-        if (days >= 1 && days <= 3) delay1to3 += 1;
-        else if (days >= 4 && days <= 7) delay4to7 += 1;
-        else if (days > 7) delayOver7 += 1;
+      if (err.includes('cầu chì') || err.includes('đèn led') || err.includes('led') || err.includes('đèn') || err.includes('tắt đèn')) {
+        fuseCount++;
+        if (sup) fuseSuppliers.add(sup);
+      } else if (err.includes('nguồn') || err.includes('điện') || err.includes('adapter') || err.includes('chập')) {
+        powerCount++;
+        if (sup) powerSuppliers.add(sup);
+      } else if (err.includes('xe đẩy') || err.includes('ngoại lực') || err.includes('khách') || err.includes('va đập') || err.includes('gãy') || err.includes('vỡ') || err.includes('móp')) {
+        externalCount++;
+        if (sup) extSuppliers.add(sup);
       }
     });
 
-    const total = filteredData.length;
+    const total = filteredData.length || 1;
+
     return [
       {
-        key: '1-3',
-        label: '1 – 3 ngày (Trễ nhẹ)',
-        count: delay1to3,
-        pct: total > 0 ? (delay1to3 / total) * 100 : 0,
-        color: 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 border-amber-200 dark:border-amber-800'
+        id: 'fuse',
+        title: 'Tắt, hỏng hệ thống cầu chì/Đèn LED',
+        count: fuseCount,
+        pct: ((fuseCount / total) * 100).toFixed(1),
+        suppliers: Array.from(fuseSuppliers)
       },
       {
-        key: '4-7',
-        label: '4 – 7 ngày (Cảnh báo tiến độ)',
-        count: delay4to7,
-        pct: total > 0 ? (delay4to7 / total) * 100 : 0,
-        color: 'text-orange-600 bg-orange-50 dark:bg-orange-950/60 border-orange-200 dark:border-orange-800'
+        id: 'power',
+        title: 'Thiết bị nguồn/Điện thông minh hư hại',
+        count: powerCount,
+        pct: ((powerCount / total) * 100).toFixed(1),
+        suppliers: Array.from(powerSuppliers)
       },
       {
-        key: '>7',
-        label: '> 7 ngày (Quá hạn nghiêm trọng)',
-        count: delayOver7,
-        pct: total > 0 ? (delayOver7 / total) * 100 : 0,
-        color: 'text-rose-600 bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800'
+        id: 'external',
+        title: 'Tác động ngoại lực (Xe đẩy siêu thị, khách hàng)',
+        count: externalCount,
+        pct: ((externalCount / total) * 100).toFixed(1),
+        suppliers: Array.from(extSuppliers)
       }
     ];
   }, [filteredData]);
 
-  // Section 4-7: Category Distributions
-  const posmBreakdown = useMemo(() => {
-    const map: Record<string, number> = {};
-    filteredData.forEach(i => {
-      const p = i.posmType?.trim() || 'Chưa xác định';
-      map[p] = (map[p] || 0) + 1;
+  // Section 3: Cảnh Báo Trễ Hạn Breakdown (3 standard operational brackets)
+  const delayTiers = useMemo(() => {
+    let t1 = 0; // 1-3 days
+    let t2 = 0; // 4-7 days
+    let t3 = 0; // >7 days
+
+    filteredData.forEach(item => {
+      const isDone = (item.status || '').toLowerCase().includes('hoàn thành') || !!item.completedDate;
+      const sentMs = parseDateToMs(item.sentDate || item.createdAt);
+      const schedMs = parseDateToMs(item.scheduledDate);
+      const doneMs = parseDateToMs(item.completedDate);
+      
+      let delayDays = 0;
+      if (isDone && doneMs && schedMs && doneMs > schedMs) {
+        delayDays = Math.round((doneMs - schedMs) / 86400000);
+      } else if (!isDone && sentMs) {
+        const diff = Math.round((Date.now() - sentMs) / 86400000);
+        if (diff > 3) delayDays = diff - 3;
+      }
+
+      if (delayDays >= 1 && delayDays <= 3) t1++;
+      else if (delayDays >= 4 && delayDays <= 7) t2++;
+      else if (delayDays > 7) t3++;
     });
-    return Object.entries(map).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+
+    const total = filteredData.length || 1;
+
+    return [
+      {
+        id: 'tier1',
+        label: '1 - 3 ngày (Trễ nhẹ)',
+        count: t1,
+        pct: ((t1 / total) * 100).toFixed(1),
+        color: '#D9B300'
+      },
+      {
+        id: 'tier2',
+        label: '4 - 7 ngày (Cảnh báo tiến độ)',
+        count: t2,
+        pct: ((t2 / total) * 100).toFixed(1),
+        color: '#E66C37'
+      },
+      {
+        id: 'tier3',
+        label: '> 7 ngày (Quá hạn nghiêm trọng)',
+        count: t3,
+        pct: ((t3 / total) * 100).toFixed(1),
+        color: '#D64550'
+      }
+    ];
   }, [filteredData]);
 
-  const storeBreakdown = useMemo(() => {
-    const map: Record<string, number> = {};
-    filteredData.forEach(i => {
-      const s = i.storeName?.trim() || 'Chưa xác định';
-      map[s] = (map[s] || 0) + 1;
-    });
-    return Object.entries(map).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 10);
+  // Sections 4-7: Category Distributions
+  const categoryDistributions = useMemo(() => {
+    const getBreakdown = (extractor: (i: WarrantyItem) => string) => {
+      const map = new Map<string, number>();
+      filteredData.forEach(item => {
+        const val = extractor(item).trim() || 'Chưa gán';
+        map.set(val, (map.get(val) || 0) + 1);
+      });
+      const total = filteredData.length || 1;
+      return Array.from(map.entries())
+        .map(([name, count]) => ({
+          name,
+          count,
+          pct: ((count / total) * 100).toFixed(1)
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5);
+    };
+
+    return {
+      posm: getBreakdown(i => i.posmType || ''),
+      store: getBreakdown(i => i.storeName || ''),
+      project: getBreakdown(i => i.projectCode || ''),
+      brand: getBreakdown(i => i.brand || '')
+    };
   }, [filteredData]);
 
-  const projectBreakdown = useMemo(() => {
-    const map: Record<string, number> = {};
-    filteredData.forEach(i => {
-      const p = i.projectCode?.trim() || 'Chưa xác định';
-      map[p] = (map[p] || 0) + 1;
+  // Detail Matrix Rows (Filtered by search text)
+  const detailTableRows = useMemo(() => {
+    return filteredData.filter(item => {
+      if (!detailSearch.trim()) return true;
+      const s = detailSearch.toLowerCase().trim();
+      return (
+        (item.requestId || '').toLowerCase().includes(s) ||
+        (item.projectCode || '').toLowerCase().includes(s) ||
+        (item.storeName || '').toLowerCase().includes(s) ||
+        (item.supplier || '').toLowerCase().includes(s) ||
+        (item.brand || '').toLowerCase().includes(s) ||
+        (item.posmType || '').toLowerCase().includes(s)
+      );
     });
-    return Object.entries(map).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
-  }, [filteredData]);
+  }, [filteredData, detailSearch]);
 
-  const catBreakdown = useMemo(() => {
-    const map: Record<string, number> = {};
-    filteredData.forEach(i => {
-      const c = i.category?.trim() || 'Chưa xác định';
-      map[c] = (map[c] || 0) + 1;
-    });
-    return Object.entries(map).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
-  }, [filteredData]);
-
-  // Reset all filters
   const handleResetFilters = () => {
     setSelectedWeek('all');
-    setSelectedYear('2026');
     setSelectedSupplier('all');
     setSelectedProject('all');
     setSelectedPosmType('all');
     setSelectedStore('all');
-    setSelectedCat('all');
-    setSelectedCause('all');
-    setSelectedTimelineDelay('all');
-    setTableSearch('');
-    toast.success('Đã đặt lại toàn bộ bộ lọc về trạng thái ban đầu');
+    setCrossFilter({ type: null, value: '' });
+    setDetailSearch('');
+    toast.success('Đã làm mới tất cả các bộ lọc slicers');
   };
 
-  const isAnyFilterActive = selectedWeek !== 'all' || selectedYear !== '2026' || selectedSupplier !== 'all' || 
+  const isFilterActive = selectedWeek !== 'all' || selectedSupplier !== 'all' || 
     selectedProject !== 'all' || selectedPosmType !== 'all' || selectedStore !== 'all' || 
-    selectedCat !== 'all' || selectedCause !== 'all' || selectedTimelineDelay !== 'all' || tableSearch !== '';
+    crossFilter.type !== null;
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-200 pb-12 font-sans select-none">
-      {/* POWER BI HEADER & INTERACTIVE SLICER TOOLBAR */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 shadow-2xs space-y-3.5">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 rounded-xl border border-amber-200 dark:border-amber-800 shrink-0">
-              <BarChart3 className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base font-extrabold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                  Báo Cáo Phân Tích &amp; Tổng Hợp Bảo Hành POSM
-                </h2>
-                <Badge className="bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-300 border-amber-300 dark:border-amber-700 text-[10px] font-bold">
-                  Power BI Canvas
-                </Badge>
-              </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Bảng điều khiển tương tác trực quan chuẩn Weekly Report • <strong className="text-slate-700 dark:text-slate-200">{filteredData.length} Ca Phù Hợp</strong>
-              </p>
-            </div>
+    <div className="min-h-screen bg-[#F0F2F5] dark:bg-[#181818] text-[#252423] dark:text-[#F3F2F1] flex flex-col font-sans select-text pb-14">
+      
+      {/* POWER BI DESKTOP TOP COMMAND BAR */}
+      <div className="bg-[#FFFFFF] dark:bg-[#202020] border-b border-[#D2D0CE] dark:border-[#383838] px-4 py-2 flex flex-wrap items-center justify-between gap-2 shadow-[0_1px_2px_rgba(0,0,0,0.05)] sticky top-0 z-20">
+        <div className="flex items-center gap-3">
+          <div className="w-7 h-7 bg-[#F2C811] text-[#252423] font-black text-xs flex items-center justify-center rounded-[2px] shadow-sm tracking-tighter">
+            PBI
           </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            {isAnyFilterActive && (
-              <button
-                onClick={handleResetFilters}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 rounded-xl border border-rose-200 dark:border-rose-800 transition-colors cursor-pointer"
-                title="Bỏ toàn bộ lọc và xem toàn hệ thống"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Đặt Lại Bộ Lọc</span>
-              </button>
-            )}
-
-            <button
-              onClick={() => onExportExcel(selectedProject !== 'all' ? selectedProject : undefined)}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-2xs transition-colors cursor-pointer border border-emerald-500"
-              title="Xuất file báo cáo Excel theo đúng mẫu Weekly Report"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Xuất Báo Cáo Excel</span>
-            </button>
+          <div>
+            <h1 className="text-sm font-bold text-[#252423] dark:text-[#FFFFFF] leading-tight flex items-center gap-2">
+              <span>Báo Cáo Phân Tích Sự Cố Bảo Hành POSM</span>
+              <span className="text-[10px] font-normal px-1.5 py-0.2 bg-[#F3F2F1] dark:bg-[#323130] text-[#605E5C] dark:text-[#C8C6C4] border border-[#EDEBE9] dark:border-[#383838] rounded-[2px]">
+                Power BI Canvas
+              </span>
+            </h1>
+            <p className="text-[11px] text-[#605E5C] dark:text-[#A19F9D]">
+              Đồng bộ cấu trúc dữ liệu 1:1 theo template Weekly_Report.xlsx
+            </p>
           </div>
         </div>
 
-        {/* SLICERS BAR (BỘ LỌC TƯƠNG TÁC POWER BI) */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 pt-1">
-          {/* Week Slicer */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1">
-              <Calendar className="w-3 h-3 text-sky-500" />
-              <span>Tuần Báo Cáo:</span>
-            </label>
+        {/* Global Toolbar Actions */}
+        <div className="flex items-center gap-2">
+          {isFilterActive && (
+            <button
+              onClick={handleResetFilters}
+              className="px-2.5 py-1 text-xs font-semibold bg-[#F3F2F1] hover:bg-[#EDEBE9] dark:bg-[#2D2D2D] dark:hover:bg-[#383838] text-[#252423] dark:text-[#FFFFFF] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-[#605E5C]" />
+              <span>Xóa bộ lọc</span>
+            </button>
+          )}
+
+          <button
+            onClick={() => onExportExcel()}
+            className="px-3 py-1 text-xs font-bold bg-[#107C41] hover:bg-[#0E6C38] text-white rounded-[2px] flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+            title="Xuất báo cáo Excel 3-Sheet đầy đủ theo chuẩn Weekly_Report"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            <span>Xuất Excel (3 Sheet)</span>
+          </button>
+        </div>
+      </div>
+
+      {/* POWER BI SLICERS / FILTER PANE BAR */}
+      <div className="bg-[#FFFFFF] dark:bg-[#242424] border-b border-[#D2D0CE] dark:border-[#383838] px-4 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+        <div className="flex items-center gap-2 flex-wrap text-xs">
+          <div className="flex items-center gap-1.5 text-[#605E5C] dark:text-[#A19F9D] font-semibold uppercase text-[11px] pr-2 border-r border-[#EDEBE9] dark:border-[#383838]">
+            <Filter className="w-3.5 h-3.5 text-[#118DFF]" />
+            <span>Slicers:</span>
+          </div>
+
+          {/* 1. Week Slicer */}
+          <div className="flex items-center gap-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#3B3A39] rounded-[2px] px-2 py-1">
+            <Calendar className="w-3.5 h-3.5 text-[#605E5C]" />
+            <span className="text-[11px] font-medium text-[#605E5C] dark:text-[#A19F9D]">Tuần:</span>
             <select
               value={selectedWeek}
               onChange={(e) => setSelectedWeek(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-sky-500/20 cursor-pointer font-medium"
+              className="bg-transparent text-xs font-semibold text-[#252423] dark:text-[#F3F2F1] focus:outline-none cursor-pointer"
             >
-              <option value="all">📅 Tất Cả Các Tuần (Lũy Kế)</option>
-              {availableWeeks.map(w => (
-                <option key={w.key} value={w.key}>
-                  {w.label} ({w.count} ca)
-                </option>
+              <option value="all">Tất cả các tuần ({warrantyItems.length} ca)</option>
+              {detectedWeeks.map(w => (
+                <option key={w.id} value={w.id}>{w.label}</option>
               ))}
             </select>
           </div>
 
-          {/* Year Slicer */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1">
-              <Calendar className="w-3 h-3 text-sky-500" />
-              <span>Năm:</span>
-            </label>
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-sky-500/20 cursor-pointer font-medium"
-            >
-              <option value="all">Tất cả Năm</option>
-              <option value="2026">Năm 2026</option>
-              <option value="2025">Năm 2025</option>
-            </select>
-          </div>
-
-          {/* Supplier Slicer */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1">
-              <Building2 className="w-3 h-3 text-indigo-500" />
-              <span>Nhà Thầu:</span>
-            </label>
+          {/* 2. Supplier Slicer */}
+          <div className="flex items-center gap-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#3B3A39] rounded-[2px] px-2 py-1">
+            <Building2 className="w-3.5 h-3.5 text-[#605E5C]" />
+            <span className="text-[11px] font-medium text-[#605E5C] dark:text-[#A19F9D]">Nhà thầu:</span>
             <select
               value={selectedSupplier}
               onChange={(e) => setSelectedSupplier(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-sky-500/20 cursor-pointer font-medium"
+              className="bg-transparent text-xs font-semibold text-[#252423] dark:text-[#F3F2F1] focus:outline-none cursor-pointer"
             >
-              <option value="all">Tất cả Nhà Thầu</option>
-              {supplierBreakdown.map(s => (
-                <option key={s.supplier} value={s.supplier}>
-                  {s.supplier} ({s.total} ca)
-                </option>
+              <option value="all">Tất cả ({uniqueSuppliers.length})</option>
+              {uniqueSuppliers.map(s => (
+                <option key={s} value={s}>{s}</option>
               ))}
             </select>
           </div>
 
-          {/* Project Code Slicer */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1">
-              <Tag className="w-3 h-3 text-amber-500" />
-              <span>Mã Dự Án:</span>
-            </label>
+          {/* 3. Project Slicer */}
+          <div className="flex items-center gap-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#3B3A39] rounded-[2px] px-2 py-1">
+            <Layers className="w-3.5 h-3.5 text-[#605E5C]" />
+            <span className="text-[11px] font-medium text-[#605E5C] dark:text-[#A19F9D]">Dự án:</span>
             <select
               value={selectedProject}
               onChange={(e) => setSelectedProject(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-sky-500/20 cursor-pointer font-medium"
+              className="bg-transparent text-xs font-semibold text-[#252423] dark:text-[#F3F2F1] focus:outline-none cursor-pointer"
             >
-              <option value="all">Tất cả Dự Án</option>
-              {projectBreakdown.map(p => (
-                <option key={p.name} value={p.name}>
-                  {p.name} ({p.count} ca)
-                </option>
+              <option value="all">Tất cả ({uniqueProjects.length})</option>
+              {uniqueProjects.map(p => (
+                <option key={p} value={p}>{p}</option>
               ))}
             </select>
           </div>
 
-          {/* POSM Type Slicer */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1">
-              <Layers className="w-3 h-3 text-purple-500" />
-              <span>Loại POSM:</span>
-            </label>
+          {/* 4. POSM Type Slicer */}
+          <div className="flex items-center gap-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#3B3A39] rounded-[2px] px-2 py-1">
+            <Tag className="w-3.5 h-3.5 text-[#605E5C]" />
+            <span className="text-[11px] font-medium text-[#605E5C] dark:text-[#A19F9D]">Loại POSM:</span>
             <select
               value={selectedPosmType}
               onChange={(e) => setSelectedPosmType(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-sky-500/20 cursor-pointer font-medium"
+              className="bg-transparent text-xs font-semibold text-[#252423] dark:text-[#F3F2F1] focus:outline-none cursor-pointer"
             >
-              <option value="all">Tất cả Loại POSM</option>
-              {posmBreakdown.map(p => (
-                <option key={p.name} value={p.name}>
-                  {p.name} ({p.count} ca)
-                </option>
+              <option value="all">Tất cả ({uniquePosmTypes.length})</option>
+              {uniquePosmTypes.map(p => (
+                <option key={p} value={p}>{p}</option>
               ))}
             </select>
           </div>
 
-          {/* Store Slicer */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1">
-              <Store className="w-3 h-3 text-emerald-500" />
-              <span>Siêu Thị:</span>
-            </label>
+          {/* 5. Store Slicer */}
+          <div className="flex items-center gap-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#3B3A39] rounded-[2px] px-2 py-1">
+            <Store className="w-3.5 h-3.5 text-[#605E5C]" />
+            <span className="text-[11px] font-medium text-[#605E5C] dark:text-[#A19F9D]">Siêu thị:</span>
             <select
               value={selectedStore}
               onChange={(e) => setSelectedStore(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-sky-500/20 cursor-pointer font-medium"
+              className="bg-transparent text-xs font-semibold text-[#252423] dark:text-[#F3F2F1] focus:outline-none cursor-pointer max-w-[140px] truncate"
             >
-              <option value="all">Tất cả Siêu Thị</option>
-              {storeBreakdown.map(s => (
-                <option key={s.name} value={s.name}>
-                  {s.name} ({s.count} ca)
-                </option>
+              <option value="all">Tất cả ({uniqueStores.length})</option>
+              {uniqueStores.map(s => (
+                <option key={s} value={s}>{s}</option>
               ))}
             </select>
           </div>
+
+          {/* Active Cross Filter Indicator */}
+          {crossFilter.type && (
+            <div className="flex items-center gap-1 bg-[#118DFF]/10 text-[#118DFF] border border-[#118DFF]/30 px-2 py-0.5 rounded-[2px] text-xs font-semibold">
+              <span>Đang lọc: {crossFilter.value}</span>
+              <X 
+                className="w-3 h-3 cursor-pointer hover:text-[#0B66C3]" 
+                onClick={() => setCrossFilter({ type: null, value: '' })}
+              />
+            </div>
+          )}
+
+          <div className="ml-auto text-xs text-[#605E5C] dark:text-[#A19F9D] font-mono">
+            Hiển thị <span className="font-bold text-[#252423] dark:text-[#FFFFFF]">{filteredData.length}</span> / {warrantyItems.length} ca
+          </div>
         </div>
       </div>
 
-      {/* HÀNG 1: 9 THẺ CHỈ SỐ ĐO LƯỜNG THEN CHỐT (POWER BI SUMMARY TILES) */}
-      <div className="space-y-2.5">
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-9 gap-2.5">
-          {/* Card 1: Tổng Ca BH */}
-          <div 
-            onClick={() => handleResetFilters()}
-            className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-sky-400 transition-all cursor-pointer group"
-          >
-            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block truncate">
-              TỔNG CA BẢO HÀNH
-            </span>
-            <div className="text-xl font-extrabold text-slate-900 dark:text-slate-100 mt-1">
-              {metrics.total} <span className="text-xs font-normal text-slate-400">ca</span>
-            </div>
-            <span className="text-[10px] text-sky-600 dark:text-sky-400 mt-0.5 block font-medium">
-              Toàn bộ hệ thống
-            </span>
-          </div>
+      {/* POWER BI REPORT CANVAS AREA */}
+      <div className="p-4 space-y-4 max-w-[1700px] mx-auto w-full">
 
-          {/* Card 2: % Đúng Hạn */}
-          <div 
-            onClick={() => setSelectedTimelineDelay('all')}
-            className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-emerald-400 transition-all cursor-pointer group"
-          >
-            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block truncate">
-              % XỬ LÝ ĐÚNG HẠN
-            </span>
-            <div className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">
-              {metrics.onTimePct.toFixed(1)}%
-            </div>
-            <span className="text-[10px] text-emerald-700/80 dark:text-emerald-300/80 mt-0.5 block font-mono font-bold">
-              ⚡ {metrics.onTimeCount}/{metrics.total} ca
-            </span>
-          </div>
-
-          {/* Card 3: % Trễ Hạn */}
-          <div 
-            onClick={() => setSelectedTimelineDelay('>7')}
-            className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-rose-400 transition-all cursor-pointer group"
-          >
-            <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider block truncate">
-              % XỬ LÝ TRỄ HẠN
-            </span>
-            <div className="text-xl font-extrabold text-rose-600 dark:text-rose-400 mt-1">
-              {metrics.delayedPct.toFixed(1)}%
-            </div>
-            <span className="text-[10px] text-rose-700/80 dark:text-rose-300/80 mt-0.5 block font-mono font-bold">
-              ⚠️ {metrics.delayedCount}/{metrics.total} ca
-            </span>
-          </div>
-
-          {/* Card 4: % Hỏng Sớm */}
-          <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-2xs">
-            <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider block truncate" title="% HỎNG SỚM (<30 NGÀY TỪ NGÀY LẮP ĐẶT)">
-              % HỎNG SỚM (&lt;30d)
-            </span>
-            <div className="text-xl font-extrabold text-amber-600 dark:text-amber-400 mt-1">
-              {metrics.earlyFailPct.toFixed(1)}%
-            </div>
-            <span className="text-[10px] text-amber-700/80 dark:text-amber-300/80 mt-0.5 block font-mono font-bold">
-              ⚠️ {metrics.earlyFailCount}/{metrics.total} ca
-            </span>
-          </div>
-
-          {/* Card 5: Top Nhà Thầu */}
-          <div 
-            onClick={() => metrics.topSupplier.name !== '-' && setSelectedSupplier(metrics.topSupplier.name)}
-            className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-indigo-400 transition-all cursor-pointer group"
-          >
-            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block truncate">
-              TOP NHÀ THẦU
-            </span>
-            <div className="text-sm font-extrabold text-slate-900 dark:text-slate-100 mt-1 truncate">
-              {metrics.topSupplier.name}
-            </div>
-            <span className="text-[10px] text-indigo-600 dark:text-indigo-400 mt-0.5 block font-mono font-semibold">
-              {metrics.topSupplier.count} ca ({metrics.topSupplier.pct.toFixed(1)}%)
-            </span>
-          </div>
-
-          {/* Card 6: Top Dự Án */}
-          <div 
-            onClick={() => metrics.topProject.name !== '-' && setSelectedProject(metrics.topProject.name)}
-            className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-amber-400 transition-all cursor-pointer group"
-          >
-            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block truncate">
-              TOP DỰ ÁN SỰ CỐ
-            </span>
-            <div className="text-sm font-extrabold text-slate-900 dark:text-slate-100 mt-1 truncate">
-              {metrics.topProject.name}
-            </div>
-            <span className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5 block font-mono font-semibold">
-              {metrics.topProject.count} ca ({metrics.topProject.pct.toFixed(1)}%)
-            </span>
-          </div>
-
-          {/* Card 7: Top Siêu Thị */}
-          <div 
-            onClick={() => metrics.topStore.name !== '-' && setSelectedStore(metrics.topStore.name)}
-            className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-emerald-400 transition-all cursor-pointer group"
-          >
-            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block truncate">
-              TOP SIÊU THỊ
-            </span>
-            <div className="text-sm font-extrabold text-slate-900 dark:text-slate-100 mt-1 truncate">
-              {metrics.topStore.name}
-            </div>
-            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5 block font-mono font-semibold">
-              {metrics.topStore.count} ca ({metrics.topStore.pct.toFixed(1)}%)
-            </span>
-          </div>
-
-          {/* Card 8: Top Ngành Hàng */}
-          <div 
-            onClick={() => metrics.topCat.name !== '-' && setSelectedCat(metrics.topCat.name)}
-            className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-purple-400 transition-all cursor-pointer group"
-          >
-            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block truncate">
-              TOP NGÀNH HÀNG
-            </span>
-            <div className="text-sm font-extrabold text-slate-900 dark:text-slate-100 mt-1 truncate">
-              {metrics.topCat.name}
-            </div>
-            <span className="text-[10px] text-purple-600 dark:text-purple-400 mt-0.5 block font-mono font-semibold">
-              {metrics.topCat.count} ca ({metrics.topCat.pct.toFixed(1)}%)
-            </span>
-          </div>
-
-          {/* Card 9: Top Loại POSM */}
-          <div 
-            onClick={() => metrics.topPosm.name !== '-' && setSelectedPosmType(metrics.topPosm.name)}
-            className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-sky-400 transition-all cursor-pointer group"
-          >
-            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block truncate">
-              TOP LOẠI POSM
-            </span>
-            <div className="text-sm font-extrabold text-slate-900 dark:text-slate-100 mt-1 truncate">
-              {metrics.topPosm.name}
-            </div>
-            <span className="text-[10px] text-sky-600 dark:text-sky-400 mt-0.5 block font-mono font-semibold">
-              {metrics.topPosm.count} ca ({metrics.topPosm.pct.toFixed(1)}%)
-            </span>
-          </div>
-        </div>
-
-        {/* DÒNG THÔNG TIN PHỤ: CÁC DỰ ÁN ĐANG CÓ CA ĐANG XỬ LÝ */}
-        {metrics.activeProjects.length > 0 && (
-          <div className="px-3.5 py-2 bg-amber-50/70 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-800/60 rounded-xl flex items-center justify-between gap-2 text-xs flex-wrap">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-amber-600" />
-                <span>⏳ Đang xử lý các ca thuộc dự án:</span>
-              </span>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {metrics.activeProjects.map(p => (
-                  <button
-                    key={p}
-                    onClick={() => setSelectedProject(p)}
-                    className="px-2 py-0.5 bg-white dark:bg-slate-900 hover:bg-amber-100 text-amber-900 dark:text-amber-200 font-mono font-bold text-[11px] rounded-md border border-amber-300 dark:border-amber-700 cursor-pointer shadow-2xs"
-                  >
-                    {p}
-                  </button>
-                ))}
+        {/* TAB 1: WEEKLY SUMMARY CANVAS */}
+        {activeReportPage === 'SUMMARY' && (
+          <div className="space-y-4 animate-in fade-in duration-150">
+            
+            {/* ROW 1: 9 KPI METRIC CARDS (POWER BI MULTI-ROW CARD VISUALS) */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-2.5">
+              
+              {/* Card 1: Tổng Ca */}
+              <div className="bg-white dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] border-t-[3px] border-t-[#118DFF] p-2.5 rounded-[2px] shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-[#605E5C] dark:text-[#A19F9D] truncate">
+                  Tổng Ca Bảo Hành
+                </div>
+                <div className="text-2xl font-bold font-sans text-[#252423] dark:text-[#FFFFFF] mt-1">
+                  {kpiData.total}
+                </div>
+                <div className="text-[10px] text-[#8A8886] mt-0.5">Toàn bộ hồ sơ</div>
               </div>
+
+              {/* Card 2: % Đúng Hạn */}
+              <div className="bg-white dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] border-t-[3px] border-t-[#107C41] p-2.5 rounded-[2px] shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-[#605E5C] dark:text-[#A19F9D] truncate">
+                  % Xử Lý Đúng Hạn
+                </div>
+                <div className="text-2xl font-bold font-sans text-[#107C41] dark:text-[#27AE60] mt-1">
+                  {kpiData.onTimePct}
+                </div>
+                <div className="text-[10px] text-[#605E5C] font-mono mt-0.5">
+                  ⚡ {kpiData.onTimeCount}/{kpiData.total} ca
+                </div>
+              </div>
+
+              {/* Card 3: % Trễ Hạn */}
+              <div className="bg-white dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] border-t-[3px] border-t-[#D64550] p-2.5 rounded-[2px] shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-[#605E5C] dark:text-[#A19F9D] truncate">
+                  % Xử Lý Trễ Hạn
+                </div>
+                <div className="text-2xl font-bold font-sans text-[#D64550] mt-1">
+                  {kpiData.overduePct}
+                </div>
+                <div className="text-[10px] text-[#605E5C] font-mono mt-0.5">
+                  ⚠️ {kpiData.overdueCount}/{kpiData.total} ca
+                </div>
+              </div>
+
+              {/* Card 4: % Hỏng Sớm */}
+              <div className="bg-white dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] border-t-[3px] border-t-[#D9B300] p-2.5 rounded-[2px] shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-[#605E5C] dark:text-[#A19F9D] truncate" title="Hỏng sớm < 30 ngày từ ngày lắp đặt">
+                  % Hỏng Sớm (&lt;30d)
+                </div>
+                <div className="text-2xl font-bold font-sans text-[#D9B300] dark:text-[#F2C811] mt-1">
+                  {kpiData.earlyFailPct}
+                </div>
+                <div className="text-[10px] text-[#605E5C] font-mono mt-0.5">
+                  ⚠️ {kpiData.earlyFailCount}/{kpiData.total} ca
+                </div>
+              </div>
+
+              {/* Card 5: Top Nhà Thầu */}
+              <div className="bg-white dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] border-t-[3px] border-t-[#0078D4] p-2.5 rounded-[2px] shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-[#605E5C] dark:text-[#A19F9D] truncate">
+                  Top Nhà Thầu Sự Cố
+                </div>
+                <div className="text-lg font-bold font-sans text-[#252423] dark:text-[#FFFFFF] mt-1 truncate" title={kpiData.topSupplier.name}>
+                  {kpiData.topSupplier.name}
+                </div>
+                <div className="text-[10px] text-[#605E5C] font-mono mt-0.5">
+                  {kpiData.topSupplier.count} ca ({kpiData.topSupplier.pct})
+                </div>
+              </div>
+
+              {/* Card 6: Top Dự Án */}
+              <div className="bg-white dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] border-t-[3px] border-t-[#5C2D91] p-2.5 rounded-[2px] shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-[#605E5C] dark:text-[#A19F9D] truncate">
+                  Top Dự Án Sự Cố
+                </div>
+                <div className="text-lg font-bold font-sans text-[#252423] dark:text-[#FFFFFF] mt-1 font-mono truncate" title={kpiData.topProject.name}>
+                  {kpiData.topProject.name}
+                </div>
+                <div className="text-[10px] text-[#605E5C] font-mono mt-0.5">
+                  {kpiData.topProject.count} ca ({kpiData.topProject.pct})
+                </div>
+              </div>
+
+              {/* Card 7: Top Siêu Thị */}
+              <div className="bg-white dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] border-t-[3px] border-t-[#008272] p-2.5 rounded-[2px] shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-[#605E5C] dark:text-[#A19F9D] truncate">
+                  Top Siêu Thị Sự Cố
+                </div>
+                <div className="text-lg font-bold font-sans text-[#252423] dark:text-[#FFFFFF] mt-1 truncate" title={kpiData.topStore.name}>
+                  {kpiData.topStore.name}
+                </div>
+                <div className="text-[10px] text-[#605E5C] font-mono mt-0.5">
+                  {kpiData.topStore.count} ca ({kpiData.topStore.pct})
+                </div>
+              </div>
+
+              {/* Card 8: Top Ngành Hàng */}
+              <div className="bg-white dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] border-t-[3px] border-t-[#B4009E] p-2.5 rounded-[2px] shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-[#605E5C] dark:text-[#A19F9D] truncate">
+                  Top Ngành Hàng
+                </div>
+                <div className="text-lg font-bold font-sans text-[#252423] dark:text-[#FFFFFF] mt-1 truncate" title={kpiData.topBrand.name}>
+                  {kpiData.topBrand.name}
+                </div>
+                <div className="text-[10px] text-[#605E5C] font-mono mt-0.5">
+                  {kpiData.topBrand.count} ca ({kpiData.topBrand.pct})
+                </div>
+              </div>
+
+              {/* Card 9: Top POSM */}
+              <div className="bg-white dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] border-t-[3px] border-t-[#E66C37] p-2.5 rounded-[2px] shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-[#605E5C] dark:text-[#A19F9D] truncate">
+                  Top Loại POSM
+                </div>
+                <div className="text-lg font-bold font-sans text-[#252423] dark:text-[#FFFFFF] mt-1 truncate" title={kpiData.topPosm.name}>
+                  {kpiData.topPosm.name}
+                </div>
+                <div className="text-[10px] text-[#605E5C] font-mono mt-0.5">
+                  {kpiData.topPosm.count} ca ({kpiData.topPosm.pct})
+                </div>
+              </div>
+
             </div>
-            <span className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">
-              Bấm vào mã dự án để lọc nhanh
-            </span>
+
+            {/* Sub-bar: Active In-Progress Projects */}
+            {kpiData.activeProjects.length > 0 && (
+              <div className="bg-[#FFFFFF] dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] px-3 py-1.5 rounded-[2px] flex items-center gap-2 text-xs">
+                <span className="font-bold text-[#D64550] flex items-center gap-1 shrink-0">
+                  <Clock className="w-3.5 h-3.5" />
+                  ⏳ Đang xử lý:
+                </span>
+                <span className="text-[#605E5C] dark:text-[#A19F9D]">
+                  Thuộc các mã dự án:
+                </span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {kpiData.activeProjects.map(prj => (
+                    <span 
+                      key={prj}
+                      onClick={() => setSelectedProject(prj)}
+                      className="px-1.5 py-0.2 bg-[#F3F2F1] dark:bg-[#323130] hover:bg-[#EDEBE9] text-[#252423] dark:text-[#FFFFFF] font-mono font-bold border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] cursor-pointer text-[11px]"
+                      title="Bấm để lọc theo dự án này"
+                    >
+                      {prj}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ROW 2: 3 CORE OPERATIONAL TABLES / CHARTS */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+              
+              {/* Visual 1: Đánh Giá Nhà Thầu (Power BI Table with Progress Data Bars) */}
+              <PowerBIVisual
+                title="1. ĐÁNH GIÁ NHÀ THẦU"
+                subtitle="Thống kê hiệu suất & tỷ lệ đạt tiến độ"
+                accentColor="#118DFF"
+                filterActive={crossFilter.type === 'supplier'}
+              >
+                <div className="overflow-x-auto flex-1">
+                  <table className="w-full text-left text-xs border-collapse font-sans">
+                    <thead>
+                      <tr className="border-b border-[#D2D0CE] dark:border-[#383838] text-[#605E5C] dark:text-[#A19F9D] font-bold text-[11px] bg-[#F8F9FA] dark:bg-[#2A2A2A]">
+                        <th className="py-1.5 px-2">Nhà Thầu</th>
+                        <th className="py-1.5 px-1 text-center">Total Case</th>
+                        <th className="py-1.5 px-1 text-center" title="Số ca hỏng sớm < 30 ngày từ ngày nghiệm thu lắp đặt">Hỏng Sớm (&lt;30d)</th>
+                        <th className="py-1.5 px-1 text-center" title="Số ca tái diễn trên cùng 1 POSM">Tái Diễn</th>
+                        <th className="py-1.5 px-1 text-center">Trễ Hạn</th>
+                        <th className="py-1.5 px-2 text-right">% Đạt Tiến Độ</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#EDEBE9] dark:divide-[#323130]">
+                      {supplierMatrix.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-4 text-center text-[#A19F9D] italic">Không có dữ liệu</td>
+                        </tr>
+                      ) : (
+                        supplierMatrix.map(row => {
+                          const rate = row.total > 0 ? Math.round((row.onTime / row.total) * 100) : 0;
+                          const isSelected = crossFilter.type === 'supplier' && crossFilter.value === row.supplier;
+                          return (
+                            <tr
+                              key={row.supplier}
+                              onClick={() => {
+                                setCrossFilter(prev => 
+                                  prev.type === 'supplier' && prev.value === row.supplier
+                                    ? { type: null, value: '' }
+                                    : { type: 'supplier', value: row.supplier }
+                                );
+                              }}
+                              className={`cursor-pointer transition-colors ${
+                                isSelected 
+                                  ? 'bg-[#118DFF]/15 font-semibold' 
+                                  : 'hover:bg-[#F3F2F1] dark:hover:bg-[#2A2A2A]'
+                              }`}
+                            >
+                              <td className="py-1.5 px-2 font-bold text-[#252423] dark:text-[#FFFFFF]">
+                                {row.supplier}
+                              </td>
+                              <td className="py-1.5 px-1 text-center font-mono font-bold">
+                                {row.total}
+                              </td>
+                              <td className="py-1.5 px-1 text-center font-mono text-[#D9B300] font-semibold">
+                                {row.earlyFail > 0 ? row.earlyFail : '-'}
+                              </td>
+                              <td className="py-1.5 px-1 text-center font-mono text-[#E66C37] font-semibold">
+                                {row.recurrent > 0 ? row.recurrent : '-'}
+                              </td>
+                              <td className="py-1.5 px-1 text-center font-mono text-[#D64550] font-bold">
+                                {row.overdue > 0 ? row.overdue : '-'}
+                              </td>
+                              <td className="py-1.5 px-2 text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  <div className="w-16 h-2 bg-[#EDEBE9] dark:bg-[#383838] rounded-[1px] overflow-hidden">
+                                    <div 
+                                      className="h-full bg-[#107C41] transition-all"
+                                      style={{ width: `${rate}%` }}
+                                    />
+                                  </div>
+                                  <span className="font-mono text-[11px] font-bold w-9 text-right">
+                                    {rate}%
+                                  </span>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </PowerBIVisual>
+
+              {/* Visual 2: Phân Loại Nguyên Nhân Hư Hỏng */}
+              <PowerBIVisual
+                title="2. NGUYÊN NHÂN HƯ HỎNG"
+                subtitle="Nhóm lỗi chính theo ghi nhận thực tế"
+                accentColor="#E66C37"
+              >
+                <div className="space-y-3 flex-1 flex flex-col justify-around">
+                  {causeBreakdown.map((c, idx) => (
+                    <div 
+                      key={c.id}
+                      className="p-2.5 border border-[#EDEBE9] dark:border-[#383838] bg-[#F8F9FA] dark:bg-[#2A2A2A] rounded-[2px] space-y-1.5"
+                    >
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-[#252423] dark:text-[#FFFFFF] flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-[1px]" style={{ backgroundColor: idx === 0 ? '#118DFF' : idx === 1 ? '#E66C37' : '#D64550' }} />
+                          {c.title}
+                        </span>
+                        <span className="font-mono font-bold text-[#252423] dark:text-[#FFFFFF]">
+                          {c.count} ca ({c.pct}%)
+                        </span>
+                      </div>
+
+                      {/* Power BI Bar */}
+                      <div className="w-full h-1.5 bg-[#EDEBE9] dark:bg-[#383838] rounded-[1px] overflow-hidden">
+                        <div 
+                          className="h-full transition-all"
+                          style={{ 
+                            width: `${c.pct}%`, 
+                            backgroundColor: idx === 0 ? '#118DFF' : idx === 1 ? '#E66C37' : '#D64550' 
+                          }}
+                        />
+                      </div>
+
+                      {c.suppliers.length > 0 && (
+                        <div className="text-[10px] text-[#605E5C] dark:text-[#A19F9D] flex items-center gap-1 truncate">
+                          <span>Thầu liên quan:</span>
+                          <span className="font-mono text-[#252423] dark:text-[#F3F2F1]">
+                            {c.suppliers.join(', ')}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </PowerBIVisual>
+
+              {/* Visual 3: Cảnh Báo Trễ Hạn */}
+              <PowerBIVisual
+                title="3. THỜI GIAN TRỄ HẠN"
+                subtitle="Phân tầng ca chậm tiến độ theo mức độ"
+                accentColor="#D64550"
+              >
+                <div className="space-y-3 flex-1 flex flex-col justify-around">
+                  {delayTiers.map(t => (
+                    <div 
+                      key={t.id}
+                      className="p-3 border border-[#EDEBE9] dark:border-[#383838] bg-[#F8F9FA] dark:bg-[#2A2A2A] rounded-[2px] flex items-center justify-between"
+                    >
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-bold text-[#252423] dark:text-[#FFFFFF] block">
+                          {t.label}
+                        </span>
+                        <span className="text-[11px] text-[#605E5C] dark:text-[#A19F9D] font-mono">
+                          Chiếm {t.pct}% trên tổng số ca
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xl font-bold font-mono" style={{ color: t.color }}>
+                          {t.count}
+                        </div>
+                        <div className="text-[10px] text-[#8A8886]">ca</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </PowerBIVisual>
+
+            </div>
+
+            {/* ROW 3: 4 CATEGORY MATRICES (THEO TỪNG HẠNG MỤC) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              
+              {/* 4. Theo Loại POSM */}
+              <PowerBIVisual 
+                title="4. THEO LOẠI POSM" 
+                subtitle="Top phát sinh hư hỏng"
+                accentColor="#5C2D91"
+                filterActive={crossFilter.type === 'posm'}
+              >
+                <div className="space-y-2 flex-1">
+                  {categoryDistributions.posm.map(item => (
+                    <div 
+                      key={item.name}
+                      onClick={() => setCrossFilter(prev => prev.type === 'posm' && prev.value === item.name ? { type: null, value: '' } : { type: 'posm', value: item.name })}
+                      className="space-y-1 cursor-pointer hover:bg-[#F3F2F1] dark:hover:bg-[#2A2A2A] p-1 rounded-[2px] transition-colors"
+                    >
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-[#252423] dark:text-[#F3F2F1] truncate max-w-[140px]" title={item.name}>
+                          {item.name}
+                        </span>
+                        <span className="font-mono text-[#605E5C] dark:text-[#A19F9D]">
+                          {item.count} ca ({item.pct}%)
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 bg-[#EDEBE9] dark:bg-[#383838] rounded-[1px] overflow-hidden">
+                        <div className="h-full bg-[#5C2D91]" style={{ width: `${item.pct}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </PowerBIVisual>
+
+              {/* 5. Theo Siêu Thị */}
+              <PowerBIVisual 
+                title="5. THEO SIÊU THỊ" 
+                subtitle="Top vị trí ghi nhận lỗi"
+                accentColor="#008272"
+                filterActive={crossFilter.type === 'store'}
+              >
+                <div className="space-y-2 flex-1">
+                  {categoryDistributions.store.map(item => (
+                    <div 
+                      key={item.name}
+                      onClick={() => setCrossFilter(prev => prev.type === 'store' && prev.value === item.name ? { type: null, value: '' } : { type: 'store', value: item.name })}
+                      className="space-y-1 cursor-pointer hover:bg-[#F3F2F1] dark:hover:bg-[#2A2A2A] p-1 rounded-[2px] transition-colors"
+                    >
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-[#252423] dark:text-[#F3F2F1] truncate max-w-[140px]" title={item.name}>
+                          {item.name}
+                        </span>
+                        <span className="font-mono text-[#605E5C] dark:text-[#A19F9D]">
+                          {item.count} ca ({item.pct}%)
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 bg-[#EDEBE9] dark:bg-[#383838] rounded-[1px] overflow-hidden">
+                        <div className="h-full bg-[#008272]" style={{ width: `${item.pct}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </PowerBIVisual>
+
+              {/* 6. Theo Mã Dự Án */}
+              <PowerBIVisual 
+                title="6. THEO MÃ DỰ ÁN" 
+                subtitle="Top mã dự án phát sinh ca"
+                accentColor="#118DFF"
+                filterActive={crossFilter.type === 'project'}
+              >
+                <div className="space-y-2 flex-1">
+                  {categoryDistributions.project.map(item => (
+                    <div 
+                      key={item.name}
+                      onClick={() => setCrossFilter(prev => prev.type === 'project' && prev.value === item.name ? { type: null, value: '' } : { type: 'project', value: item.name })}
+                      className="space-y-1 cursor-pointer hover:bg-[#F3F2F1] dark:hover:bg-[#2A2A2A] p-1 rounded-[2px] transition-colors"
+                    >
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-mono font-bold text-[#118DFF] truncate max-w-[140px]" title={item.name}>
+                          {item.name}
+                        </span>
+                        <span className="font-mono text-[#605E5C] dark:text-[#A19F9D]">
+                          {item.count} ca ({item.pct}%)
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 bg-[#EDEBE9] dark:bg-[#383838] rounded-[1px] overflow-hidden">
+                        <div className="h-full bg-[#118DFF]" style={{ width: `${item.pct}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </PowerBIVisual>
+
+              {/* 7. Theo Ngành Hàng */}
+              <PowerBIVisual 
+                title="7. THEO NGÀNH HÀNG" 
+                subtitle="Tỷ trọng sự cố theo Brand/Cat"
+                accentColor="#B4009E"
+                filterActive={crossFilter.type === 'brand'}
+              >
+                <div className="space-y-2 flex-1">
+                  {categoryDistributions.brand.map(item => (
+                    <div 
+                      key={item.name}
+                      onClick={() => setCrossFilter(prev => prev.type === 'brand' && prev.value === item.name ? { type: null, value: '' } : { type: 'brand', value: item.name })}
+                      className="space-y-1 cursor-pointer hover:bg-[#F3F2F1] dark:hover:bg-[#2A2A2A] p-1 rounded-[2px] transition-colors"
+                    >
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-[#252423] dark:text-[#F3F2F1] truncate max-w-[140px]" title={item.name}>
+                          {item.name}
+                        </span>
+                        <span className="font-mono text-[#605E5C] dark:text-[#A19F9D]">
+                          {item.count} ca ({item.pct}%)
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 bg-[#EDEBE9] dark:bg-[#383838] rounded-[1px] overflow-hidden">
+                        <div className="h-full bg-[#B4009E]" style={{ width: `${item.pct}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </PowerBIVisual>
+
+            </div>
+
+            {/* ROW 4: 17-COLUMN OPERATIONAL MATRIX DRILL-DOWN TABLE */}
+            <PowerBIVisual
+              title="8. CHI TIẾT CÁC CASE BẢO HÀNH ĐÃ CÓ ACTION"
+              subtitle="Khớp 1:1 theo 17 cột nghiệp vụ bảng Weekly_Report.xlsx (Bấm vào từng dòng để mở Drawer)"
+              accentColor="#252423"
+            >
+              {/* Search & Actions toolbar */}
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div className="relative flex-1 max-w-md">
+                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[#8A8886]" />
+                  <input
+                    type="text"
+                    value={detailSearch}
+                    onChange={(e) => setDetailSearch(e.target.value)}
+                    placeholder="Tìm theo Mã Request, Dự án, Siêu thị, Thầu..."
+                    className="w-full pl-8 pr-3 py-1 text-xs border border-[#D2D0CE] dark:border-[#383838] bg-[#FFFFFF] dark:bg-[#1F1F1F] rounded-[2px] focus:outline-none focus:border-[#118DFF]"
+                  />
+                  {detailSearch && (
+                    <X 
+                      className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8A8886] cursor-pointer hover:text-[#252423]" 
+                      onClick={() => setDetailSearch('')} 
+                    />
+                  )}
+                </div>
+
+                <div className="text-xs text-[#605E5C] dark:text-[#A19F9D] font-mono">
+                  {detailTableRows.length} dòng dữ liệu
+                </div>
+              </div>
+
+              {/* Matrix Table */}
+              <div className="overflow-x-auto border border-[#D2D0CE] dark:border-[#383838] rounded-[2px]">
+                <table className="w-full text-left text-xs border-collapse font-sans min-w-[1400px]">
+                  <thead>
+                    <tr className="border-b border-[#D2D0CE] dark:border-[#383838] bg-[#F3F2F1] dark:bg-[#2A2A2A] text-[#252423] dark:text-[#F3F2F1] font-bold text-[11px]">
+                      <th className="py-2 px-2.5 text-center w-10">STT</th>
+                      <th className="py-2 px-2.5">Mã Request</th>
+                      <th className="py-2 px-2.5">Mã Dự Án</th>
+                      <th className="py-2 px-2.5">Ngành Hàng</th>
+                      <th className="py-2 px-2.5">Brand</th>
+                      <th className="py-2 px-2.5">Loại POSM</th>
+                      <th className="py-2 px-2.5">Mã Store</th>
+                      <th className="py-2 px-2.5">Tên Siêu Thị</th>
+                      <th className="py-2 px-2.5">Tỉnh Thành</th>
+                      <th className="py-2 px-2.5">Nhà Thầu</th>
+                      <th className="py-2 px-2.5">Ngày Báo Lỗi</th>
+                      <th className="py-2 px-2.5">Ngày Lắp Đặt</th>
+                      <th className="py-2 px-2.5 text-center">Tuổi Thọ</th>
+                      <th className="py-2 px-2.5">Tình Trạng Hư Hỏng</th>
+                      <th className="py-2 px-2.5">Ngày Hẹn Xử Lý</th>
+                      <th className="py-2 px-2.5">Ngày Hoàn Thành</th>
+                      <th className="py-2 px-2.5 text-center">Trạng Thái</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#EDEBE9] dark:divide-[#323130]">
+                    {detailTableRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={17} className="py-6 text-center text-[#8A8886] italic">
+                          Không tìm thấy ca bảo hành nào phù hợp với bộ lọc hiện tại.
+                        </td>
+                      </tr>
+                    ) : (
+                      detailTableRows.map((item, idx) => {
+                        const sentMs = parseDateToMs(item.sentDate || item.createdAt);
+                        const installMs = parseDateToMs(item.installationDate);
+                        let ageDays: number | null = null;
+                        if (installMs && sentMs && sentMs >= installMs) {
+                          ageDays = Math.round((sentMs - installMs) / 86400000);
+                        }
+
+                        const isDone = (item.status || '').toLowerCase().includes('hoàn thành') || !!item.completedDate;
+
+                        return (
+                          <tr
+                            key={item.id || idx}
+                            onClick={() => onOpenWarrantyDrawer(item)}
+                            className="hover:bg-[#F3F2F1] dark:hover:bg-[#2A2A2A] cursor-pointer transition-colors text-xs font-normal"
+                          >
+                            <td className="py-2 px-2.5 text-center font-mono text-[#8A8886]">{idx + 1}</td>
+                            <td className="py-2 px-2.5 font-mono font-bold text-[#118DFF]">{item.requestId || item.id}</td>
+                            <td className="py-2 px-2.5 font-mono text-[#252423] dark:text-[#FFFFFF]">{item.projectCode || '-'}</td>
+                            <td className="py-2 px-2.5 text-[#605E5C] dark:text-[#A19F9D]">{item.category || item.brand || '-'}</td>
+                            <td className="py-2 px-2.5 font-medium text-[#252423] dark:text-[#FFFFFF]">{item.brand || '-'}</td>
+                            <td className="py-2 px-2.5 text-[#252423] dark:text-[#FFFFFF]">{item.posmType || '-'}</td>
+                            <td className="py-2 px-2.5 font-mono text-[#605E5C] dark:text-[#A19F9D]">{item.storeCode || '-'}</td>
+                            <td className="py-2 px-2.5 font-semibold text-[#252423] dark:text-[#FFFFFF] max-w-[200px] truncate" title={item.storeName}>
+                              {item.storeName || '-'}
+                            </td>
+                            <td className="py-2 px-2.5 text-[#605E5C] dark:text-[#A19F9D]">{item.province || '-'}</td>
+                            <td className="py-2 px-2.5 font-semibold text-[#252423] dark:text-[#FFFFFF]">{item.supplier || '-'}</td>
+                            <td className="py-2 px-2.5 font-mono">{formatDateDisplay(item.sentDate || item.createdAt)}</td>
+                            <td className="py-2 px-2.5 font-mono">{formatDateDisplay(item.installationDate)}</td>
+                            <td className="py-2 px-2.5 text-center font-mono">
+                              {ageDays !== null ? (
+                                <span className={ageDays < 30 ? 'font-bold text-[#D9B300]' : 'text-[#605E5C]'}>
+                                  {ageDays} ngày
+                                </span>
+                              ) : '-'}
+                            </td>
+                            <td className="py-2 px-2.5 max-w-[220px] truncate text-[#605E5C] dark:text-[#A19F9D]" title={item.errorDetail || item.reason || item.notes}>
+                              {item.errorDetail || item.reason || item.notes || '-'}
+                            </td>
+                            <td className="py-2 px-2.5 font-mono">{formatDateDisplay(item.scheduledDate)}</td>
+                            <td className="py-2 px-2.5 font-mono">{formatDateDisplay(item.completedDate)}</td>
+                            <td className="py-2 px-2.5 text-center">
+                              <span className={`inline-block px-2 py-0.5 text-[10px] font-bold rounded-[2px] ${
+                                isDone 
+                                  ? 'bg-[#107C41]/10 text-[#107C41] border border-[#107C41]/30' 
+                                  : 'bg-[#118DFF]/10 text-[#118DFF] border border-[#118DFF]/30'
+                              }`}>
+                                {isDone ? 'Hoàn thành' : 'Đang xử lý'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </PowerBIVisual>
+
           </div>
         )}
+
       </div>
 
-      {/* HÀNG 2: 3 BẢNG PHÂN TÍCH TRỌNG TÂM (BY SUPPLIER • BY CAUSE • BY TIMELINE) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* 1. THEO NHÀ THẦU (BY SUPPLIER) - 5 cols */}
-        <div className="lg:col-span-5 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 shadow-2xs space-y-3 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
-              <h3 className="font-extrabold text-xs uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                <Building2 className="w-4 h-4 text-indigo-600" />
-                <span>1. THEO NHÀ THẦU (BY SUPPLIER)</span>
-              </h3>
-              <span className="text-[10px] text-slate-400">Click dòng để lọc</span>
-            </div>
-
-            <div className="overflow-x-auto mt-2">
-              <table className="w-full text-[11px] text-left">
-                <thead>
-                  <tr className="text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
-                    <th className="py-2 px-2 font-bold">Nhà Thầu</th>
-                    <th className="py-2 px-1 text-center font-bold">Tổng Ca</th>
-                    <th className="py-2 px-1 text-center font-bold text-amber-600" title="Số ca hỏng sớm <30 ngày">Hỏng Sớm</th>
-                    <th className="py-2 px-1 text-center font-bold text-purple-600" title="Số ca tái diễn trên cùng 1 POSM">Tái Diễn</th>
-                    <th className="py-2 px-1 text-center font-bold text-rose-600">Trễ Hạn</th>
-                    <th className="py-2 px-2 text-right font-bold text-emerald-600">% Tiến Độ</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
-                  {supplierBreakdown.map(s => {
-                    const isSelected = selectedSupplier.toLowerCase() === s.supplier.toLowerCase();
-                    return (
-                      <tr 
-                        key={s.supplier}
-                        onClick={() => setSelectedSupplier(isSelected ? 'all' : s.supplier)}
-                        className={`hover:bg-indigo-50/60 dark:hover:bg-indigo-950/40 cursor-pointer transition-colors ${
-                          isSelected ? 'bg-indigo-100/70 dark:bg-indigo-950/80 font-bold' : ''
-                        }`}
-                      >
-                        <td className="py-2 px-2 font-bold text-slate-900 dark:text-slate-100">
-                          {s.supplier}
-                        </td>
-                        <td className="py-2 px-1 text-center font-mono font-bold">
-                          {s.total}
-                        </td>
-                        <td className="py-2 px-1 text-center font-mono text-amber-600 font-bold">
-                          {s.earlyFail > 0 ? s.earlyFail : '-'}
-                        </td>
-                        <td className="py-2 px-1 text-center font-mono text-purple-600 font-bold">
-                          {s.recurrent > 0 ? s.recurrent : '-'}
-                        </td>
-                        <td className="py-2 px-1 text-center font-mono text-rose-600 font-bold">
-                          {s.delayed > 0 ? s.delayed : '-'}
-                        </td>
-                        <td className="py-2 px-2 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <div className="w-12 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                              <div 
-                                className="h-full bg-emerald-500 rounded-full" 
-                                style={{ width: `${Math.min(100, Math.max(0, s.progressPct))}%` }} 
-                              />
-                            </div>
-                            <span className="font-mono text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
-                              {s.progressPct.toFixed(0)}%
-                            </span>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+      {/* POWER BI DESKTOP BOTTOM PAGE NAVIGATION TABS BAR */}
+      <div className="fixed bottom-0 left-0 right-0 bg-[#FFFFFF] dark:bg-[#202020] border-t border-[#D2D0CE] dark:border-[#383838] px-4 py-1.5 flex items-center justify-between text-xs z-30 shadow-[0_-1px_3px_rgba(0,0,0,0.06)]">
+        
+        {/* Page Tabs */}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setActiveReportPage('SUMMARY')}
+            className={`px-3 py-1 rounded-[2px] font-semibold text-xs transition-colors flex items-center gap-1.5 ${
+              activeReportPage === 'SUMMARY'
+                ? 'bg-[#F2C811] text-[#252423] shadow-xs'
+                : 'text-[#605E5C] dark:text-[#C8C6C4] hover:bg-[#F3F2F1] dark:hover:bg-[#2A2A2A]'
+            }`}
+          >
+            <span>📄 1. Báo Cáo Tuần (Weekly Summary)</span>
+          </button>
+          
+          <button
+            onClick={() => setActiveReportPage('SUMMARY')}
+            className="px-3 py-1 rounded-[2px] font-medium text-xs text-[#8A8886] hover:bg-[#F3F2F1] dark:hover:bg-[#2A2A2A] transition-colors"
+            title="Trang 2: Chi tiết các ca xử lý"
+          >
+            <span>📄 2. Dữ Liệu Chi Tiết</span>
+          </button>
         </div>
 
-        {/* 2. THEO NGUYÊN NHÂN LỖI (BY CAUSE) - 4 cols */}
-        <div className="lg:col-span-4 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 shadow-2xs space-y-3 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
-              <h3 className="font-extrabold text-xs uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                <ShieldAlert className="w-4 h-4 text-rose-600" />
-                <span>2. THEO NGUYÊN NHÂN LỖI (BY CAUSE)</span>
-              </h3>
-              <span className="text-[10px] text-slate-400">Click để lọc</span>
-            </div>
-
-            <div className="overflow-x-auto mt-2">
-              <table className="w-full text-[11px] text-left">
-                <thead>
-                  <tr className="text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
-                    <th className="py-2 px-2 font-bold">Nguyên Nhân Lỗi</th>
-                    <th className="py-2 px-2 text-center font-bold">Số Ca</th>
-                    <th className="py-2 px-2 text-right font-bold">% Tỷ Lệ</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
-                  {causeBreakdown.map(c => {
-                    const isSelected = selectedCause === c.cause;
-                    return (
-                      <tr
-                        key={c.cause}
-                        onClick={() => setSelectedCause(isSelected ? 'all' : c.cause)}
-                        className={`hover:bg-rose-50/60 dark:hover:bg-rose-950/40 cursor-pointer transition-colors ${
-                          isSelected ? 'bg-rose-100/70 dark:bg-rose-950/80 font-bold' : ''
-                        }`}
-                      >
-                        <td className="py-2 px-2 text-slate-800 dark:text-slate-200">
-                          <span className="block font-semibold">{c.cause}</span>
-                          <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-mono">({c.topSupplier}&gt;&gt;)</span>
-                        </td>
-                        <td className="py-2 px-2 text-center font-mono font-bold">
-                          {c.count}
-                        </td>
-                        <td className="py-2 px-2 text-right font-mono font-bold text-slate-700 dark:text-slate-300">
-                          {c.pct.toFixed(1)}%
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+        {/* Zoom & Canvas controls */}
+        <div className="flex items-center gap-3 text-[#605E5C] dark:text-[#A19F9D] text-[11px] font-mono">
+          <span>Trang 1 / 1</span>
+          <span className="text-[#D2D0CE] dark:text-[#383838]">|</span>
+          <span>100% Fit to page</span>
         </div>
 
-        {/* 3. THEO THỜI GIAN TRỄ HẠN (BY TIMELINE) - 3 cols */}
-        <div className="lg:col-span-3 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 shadow-2xs space-y-3 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
-              <h3 className="font-extrabold text-xs uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                <Clock className="w-4 h-4 text-amber-600" />
-                <span>3. THEO THỜI GIAN TRỄ HẠN</span>
-              </h3>
-              <span className="text-[10px] text-slate-400">Click để lọc</span>
-            </div>
-
-            <div className="space-y-2 mt-3">
-              {timelineDelayBreakdown.map(t => {
-                const isSelected = selectedTimelineDelay === t.key;
-                return (
-                  <div
-                    key={t.key}
-                    onClick={() => setSelectedTimelineDelay(isSelected ? 'all' : t.key)}
-                    className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${t.color} ${
-                      isSelected ? 'ring-2 ring-slate-900 dark:ring-slate-100 font-bold' : ''
-                    }`}
-                  >
-                    <div>
-                      <span className="text-xs font-bold block">{t.label}</span>
-                      <span className="text-[10px] opacity-80">{t.pct.toFixed(1)}% trên tổng số ca</span>
-                    </div>
-                    <span className="text-lg font-black font-mono">
-                      {t.count} ca
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
       </div>
 
-      {/* HÀNG 3: THỐNG KÊ CHI TIẾT THEO TỪNG HẠNG MỤC (POSM • STORE • PROJECT • CAT) */}
-      <div className="space-y-2.5">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-400 flex items-center gap-2">
-            <Layers className="w-3.5 h-3.5 text-sky-500" />
-            <span>THỐNG KÊ CHI TIẾT THEO TỪNG HẠNG MỤC</span>
-          </h3>
-          <span className="text-[10px] text-slate-400">Bấm vào bất kỳ dòng nào để lọc toàn bộ báo cáo</span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-          {/* 4. THEO LOẠI POSM */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-3.5 shadow-2xs">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2 mb-2">
-              <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200">4. THEO LOẠI POSM</span>
-              <span className="text-[10px] text-slate-400 font-mono">Số Ca Lỗi</span>
-            </div>
-            <div className="space-y-1.5 max-h-48 overflow-y-auto">
-              {posmBreakdown.map(p => {
-                const isSelected = selectedPosmType === p.name;
-                return (
-                  <div
-                    key={p.name}
-                    onClick={() => setSelectedPosmType(isSelected ? 'all' : p.name)}
-                    className={`flex items-center justify-between p-1.5 rounded-lg text-xs hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors ${
-                      isSelected ? 'bg-purple-100 text-purple-900 dark:bg-purple-950 dark:text-purple-200 font-bold' : 'text-slate-700 dark:text-slate-300'
-                    }`}
-                  >
-                    <span className="truncate pr-2">{p.name}</span>
-                    <span className="font-mono font-bold text-slate-900 dark:text-slate-100">{p.count}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 5. THEO SIÊU THỊ */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-3.5 shadow-2xs">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2 mb-2">
-              <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200">5. THEO SIÊU THỊ</span>
-              <span className="text-[10px] text-slate-400 font-mono">Số Ca Lỗi</span>
-            </div>
-            <div className="space-y-1.5 max-h-48 overflow-y-auto">
-              {storeBreakdown.map(s => {
-                const isSelected = selectedStore === s.name;
-                return (
-                  <div
-                    key={s.name}
-                    onClick={() => setSelectedStore(isSelected ? 'all' : s.name)}
-                    className={`flex items-center justify-between p-1.5 rounded-lg text-xs hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors ${
-                      isSelected ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200 font-bold' : 'text-slate-700 dark:text-slate-300'
-                    }`}
-                  >
-                    <span className="truncate pr-2">{s.name}</span>
-                    <span className="font-mono font-bold text-slate-900 dark:text-slate-100">{s.count}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 6. THEO MÃ DỰ ÁN */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-3.5 shadow-2xs">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2 mb-2">
-              <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200">6. THEO MÃ DỰ ÁN</span>
-              <span className="text-[10px] text-slate-400 font-mono">Số Ca Lỗi</span>
-            </div>
-            <div className="space-y-1.5 max-h-48 overflow-y-auto">
-              {projectBreakdown.map(p => {
-                const isSelected = selectedProject === p.name;
-                return (
-                  <div
-                    key={p.name}
-                    onClick={() => setSelectedProject(isSelected ? 'all' : p.name)}
-                    className={`flex items-center justify-between p-1.5 rounded-lg text-xs hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors ${
-                      isSelected ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200 font-bold' : 'text-slate-700 dark:text-slate-300'
-                    }`}
-                  >
-                    <span className="truncate pr-2 font-mono">{p.name}</span>
-                    <span className="font-mono font-bold text-slate-900 dark:text-slate-100">{p.count}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 7. THEO NGÀNH HÀNG */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-3.5 shadow-2xs">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2 mb-2">
-              <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200">7. THEO NGÀNH HÀNG</span>
-              <span className="text-[10px] text-slate-400 font-mono">Số Ca Lỗi</span>
-            </div>
-            <div className="space-y-1.5 max-h-48 overflow-y-auto">
-              {catBreakdown.map(c => {
-                const isSelected = selectedCat === c.name;
-                return (
-                  <div
-                    key={c.name}
-                    onClick={() => setSelectedCat(isSelected ? 'all' : c.name)}
-                    className={`flex items-center justify-between p-1.5 rounded-lg text-xs hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors ${
-                      isSelected ? 'bg-purple-100 text-purple-900 dark:bg-purple-950 dark:text-purple-200 font-bold' : 'text-slate-700 dark:text-slate-300'
-                    }`}
-                  >
-                    <span className="truncate pr-2">{c.name}</span>
-                    <span className="font-mono font-bold text-slate-900 dark:text-slate-100">{c.count}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* HÀNG 4: BẢNG CHI TIẾT CÁC CA BẢO HÀNH ĐÃ CÓ HÀNH ĐỘNG XỬ LÝ */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-2xs overflow-hidden">
-        <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-800/40">
-          <div>
-            <h3 className="font-extrabold text-xs uppercase tracking-wider text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <Layers className="w-4 h-4 text-sky-600" />
-              <span>CHI TIẾT CÁC CASE BẢO HÀNH ĐÃ CÓ ACTION ({filteredData.length})</span>
-            </h3>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-              Bấm vào bất kỳ dòng nào để mở bảng chỉnh sửa chi tiết và cập nhật tiến độ
-            </p>
-          </div>
-
-          <div className="relative w-full sm:w-64">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Tìm kiếm ca, lỗi, siêu thị..."
-              value={tableSearch}
-              onChange={(e) => setTableSearch(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500/20"
-            />
-          </div>
-        </div>
-
-        <div className="overflow-x-auto max-h-[500px]">
-          <table className="w-full text-xs text-left">
-            <thead className="sticky top-0 bg-slate-100/90 dark:bg-slate-800/90 backdrop-blur-sm text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700 z-10">
-              <tr>
-                <th className="py-2.5 px-3 whitespace-nowrap">ID</th>
-                <th className="py-2.5 px-3 whitespace-nowrap">Store</th>
-                <th className="py-2.5 px-3 whitespace-nowrap">POSM</th>
-                <th className="py-2.5 px-2 whitespace-nowrap">Brand</th>
-                <th className="py-2.5 px-2 whitespace-nowrap">Cat</th>
-                <th className="py-2.5 px-3 whitespace-nowrap">Mã Dự Án</th>
-                <th className="py-2.5 px-3 whitespace-nowrap">Supplier</th>
-                <th className="py-2.5 px-2.5 whitespace-nowrap">Ngày Lắp Đặt</th>
-                <th className="py-2.5 px-2.5 whitespace-nowrap">Ngày Gửi BH</th>
-                <th className="py-2.5 px-3 whitespace-nowrap">Loại Lỗi</th>
-                <th className="py-2.5 px-3 whitespace-nowrap min-w-[180px]">Chi Tiết Lỗi</th>
-                <th className="py-2.5 px-2.5 whitespace-nowrap">Hẹn Xử Lý</th>
-                <th className="py-2.5 px-2.5 whitespace-nowrap">Hoàn Thành</th>
-                <th className="py-2.5 px-3 whitespace-nowrap">Status</th>
-                <th className="py-2.5 px-3 whitespace-nowrap">Ghi Chú Tiến Độ</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-normal">
-              {filteredData.map(item => {
-                const { cause } = detectErrorCause(item);
-                const isDone = (item.progress || '').toLowerCase().includes('hoàn thành');
-                const sentMs = parseDateToMs(item.sentDate);
-                const expMs = parseDateToMs(item.expectedDate);
-                const compMs = parseDateToMs(item.completedDate);
-                const installMs = parseDateToMs(item.installationDate);
-                const effDoneMs = isDone && compMs ? compMs : Date.now();
-
-                let noteBadge = 'Đang xử lý';
-                let noteColor = 'text-slate-600 bg-slate-100 dark:bg-slate-800';
-
-                if (installMs && sentMs && sentMs >= installMs && (sentMs - installMs) / (1000 * 60 * 60 * 24) < 30) {
-                  noteBadge = 'Hỏng sớm (<30d)';
-                  noteColor = 'text-amber-700 bg-amber-100 dark:bg-amber-950 dark:text-amber-300';
-                } else if (expMs) {
-                  if (effDoneMs <= expMs) {
-                    noteBadge = 'Đúng hạn';
-                    noteColor = 'text-emerald-700 bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300';
-                  } else {
-                    const d = Math.ceil((effDoneMs - expMs) / (1000 * 60 * 60 * 24));
-                    noteBadge = `Trễ hạn ${d} ngày`;
-                    noteColor = 'text-rose-700 bg-rose-100 dark:bg-rose-950 dark:text-rose-300';
-                  }
-                }
-
-                return (
-                  <tr
-                    key={item.id || item.requestId}
-                    onClick={() => onOpenWarrantyDrawer(item)}
-                    className="hover:bg-sky-50/60 dark:hover:bg-sky-950/40 cursor-pointer transition-colors group"
-                  >
-                    <td className="py-2.5 px-3 font-mono font-bold text-sky-600 dark:text-sky-400 whitespace-nowrap">
-                      {item.requestId}
-                    </td>
-                    <td className="py-2.5 px-3 font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap">
-                      {item.storeName || '-'}
-                    </td>
-                    <td className="py-2.5 px-3 text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                      {item.posmType || '-'}
-                    </td>
-                    <td className="py-2.5 px-2 text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                      {item.brand || '-'}
-                    </td>
-                    <td className="py-2.5 px-2 text-slate-600 dark:text-slate-400 whitespace-nowrap font-mono text-[11px]">
-                      {item.category || '-'}
-                    </td>
-                    <td className="py-2.5 px-3 font-mono text-[11px] text-amber-700 dark:text-amber-300 whitespace-nowrap">
-                      {item.projectCode || '-'}
-                    </td>
-                    <td className="py-2.5 px-3 font-semibold text-indigo-700 dark:text-indigo-300 whitespace-nowrap">
-                      {item.supplier || '-'}
-                    </td>
-                    <td className="py-2.5 px-2.5 text-slate-500 font-mono text-[11px] whitespace-nowrap">
-                      {formatDateDisplay(item.installationDate)}
-                    </td>
-                    <td className="py-2.5 px-2.5 text-slate-500 font-mono text-[11px] whitespace-nowrap">
-                      {formatDateDisplay(item.sentDate)}
-                    </td>
-                    <td className="py-2.5 px-3 text-slate-700 dark:text-slate-300 text-[11px] max-w-[150px] truncate" title={cause}>
-                      {cause}
-                    </td>
-                    <td className="py-2.5 px-3 text-slate-600 dark:text-slate-400 text-[11px] max-w-[220px] truncate" title={item.errorDetail}>
-                      {item.errorDetail || '-'}
-                    </td>
-                    <td className="py-2.5 px-2.5 text-slate-500 font-mono text-[11px] whitespace-nowrap">
-                      {formatDateDisplay(item.expectedDate)}
-                    </td>
-                    <td className="py-2.5 px-2.5 text-slate-500 font-mono text-[11px] whitespace-nowrap">
-                      {formatDateDisplay(item.completedDate)}
-                    </td>
-                    <td className="py-2.5 px-3 whitespace-nowrap">
-                      <Badge className={`text-[10px] font-semibold ${
-                        isDone ? 'bg-emerald-500 text-white' : 'bg-sky-600 text-white'
-                      }`}>
-                        {item.progress || 'Not Started'}
-                      </Badge>
-                    </td>
-                    <td className="py-2.5 px-3 whitespace-nowrap">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold font-mono ${noteColor}`}>
-                        {noteBadge}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
     </div>
   );
 };
