@@ -479,34 +479,6 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
           setThreads(mappedThreads);
           setSelectedThreadId(prev => prev || mappedThreads[0]?.threadId || '');
           setLastSyncedTime(new Date().toLocaleTimeString('vi-VN'));
-        } else {
-          // If Supabase is empty: Auto-migrate existing local threads (27 emails) to Supabase Cloud!
-          try {
-            const saved = localStorage.getItem('WARRANTY_GMAIL_SAVED_THREADS');
-            if (saved) {
-              const localThreads: WarrantyEmailThread[] = JSON.parse(saved);
-              const realLocalThreads = localThreads.filter(t => !t.threadId.startsWith('th-00'));
-              if (realLocalThreads.length > 0) {
-                const payload = realLocalThreads.map(t => ({
-                  thread_id: t.threadId,
-                  subject: t.subject,
-                  from_email: t.from,
-                  from_name: t.fromName,
-                  last_updated: t.rawTimestamp ? new Date(t.rawTimestamp).toISOString() : new Date().toISOString(),
-                  snippet: t.snippet,
-                  messages: t.messages,
-                  updated_at: new Date().toISOString()
-                }));
-                const { error: upsertErr } = await supabase.from('warranty_emails').upsert(payload, { onConflict: 'thread_id' });
-                if (!upsertErr) {
-                  toast.success(`Đã tự động đồng bộ ${realLocalThreads.length} email lên Supabase Cloud!`, { duration: 4000 });
-                  loadFromSupabase();
-                }
-              }
-            }
-          } catch (migErr) {
-            console.warn('Auto-push local threads to Supabase error:', migErr);
-          }
         }
       } catch (err) {
         console.warn('Supabase initial load error:', err);
@@ -530,239 +502,86 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
 
   // Auto-fetch live Gmail threads on Component Mount & Active Keyword change
   useEffect(() => {
-    const activeUrl = (appsScriptUrl || webAppUrl || DEFAULT_WARRANTY_GMAIL_APPS_SCRIPT_URL).trim();
-    if (activeUrl && activeKeyword) {
-      // First mount / keyword switch: Fetch up to 20 threads to build base dataset
-      fetchLiveGmailThreads(activeKeyword, true, 20);
-    }
-  }, [activeKeyword, appsScriptUrl, webAppUrl]);
+    fetchLiveGmailThreads(activeKeyword, true);
+  }, [activeKeyword]);
 
-  // Periodic background auto-sync every 60 seconds (Delta Scan: only top 5 newest threads to respond in < 1s)
+  // Periodic background auto-sync every 60 seconds from Supabase
   useEffect(() => {
-    const activeUrl = (appsScriptUrl || webAppUrl || DEFAULT_WARRANTY_GMAIL_APPS_SCRIPT_URL).trim();
-    if (!activeUrl || !activeKeyword) return;
     const interval = setInterval(() => {
-      // Only poll when the user is actively viewing this browser tab
       if (document.visibilityState === 'visible') {
-        fetchLiveGmailThreads(activeKeyword, true, 5);
+        fetchLiveGmailThreads(activeKeyword, true);
       }
     }, 60000);
     return () => clearInterval(interval);
-  }, [appsScriptUrl, activeKeyword, webAppUrl]);
+  }, [activeKeyword]);
 
-  // Fetch threads from live Apps Script with Smart Incremental / Delta Merge
-  const fetchLiveGmailThreads = async (queryToSearch: string, isSilent = false, customLimit?: number) => {
-    // Chặn gọi song song nếu đang quét dở (chống spam click)
+  // Fetch threads directly from Supabase Cloud
+  const fetchLiveGmailThreads = async (_queryToSearch?: string, isSilent = false) => {
     if (isFetchingRef.current) return;
-
-    const activeUrl = (appsScriptUrl || webAppUrl || DEFAULT_WARRANTY_GMAIL_APPS_SCRIPT_URL).trim();
-    if (!activeUrl) {
-      if (!isSilent) {
-        setIsRefreshing(true);
-        setTimeout(() => {
-          setIsRefreshing(false);
-          toast('Đang hiển thị dữ liệu mẫu. Hãy nhập URL Apps Script để tải trực tiếp từ Gmail thật.', {
-            icon: 'ℹ️'
-          });
-        }, 500);
-      }
-      return;
-    }
-
-    // Smart Delta Limit:
-    // When threads already exist in Dashboard, we only need to fetch the top 6-8 newest threads.
-    // Gmail sorts threads by latest update, so any incoming mail or reply is guaranteed to be in the top results!
-    const effectiveLimit = customLimit || (threads.length >= 10 ? 8 : 25);
 
     try {
       isFetchingRef.current = true;
       setIsRefreshing(true);
-      const targetUrl = `${activeUrl}${activeUrl.includes('?') ? '&' : '?'}action=gmail&q=${encodeURIComponent(queryToSearch)}&limit=${effectiveLimit}`;
-      const res = await fetch(targetUrl);
-      const json = await res.json();
 
-      if (json.status === 'success' && Array.isArray(json.data)) {
-        // Map raw threads into WarrantyEmailThread with smart sheet linking
-        const incoming: WarrantyEmailThread[] = json.data.map((item: any, idx: number) => {
+      const { data, error: supaErr } = await supabase
+        .from('warranty_emails')
+        .select('*')
+        .order('last_updated', { ascending: false });
+
+      if (supaErr) throw supaErr;
+
+      if (data && data.length > 0) {
+        const mappedThreads: WarrantyEmailThread[] = data.map((item: any) => {
           const fullSubject = item.subject || '';
           const reqMatch = fullSubject.match(/BH-\d+/i);
           const reqId = reqMatch ? reqMatch[0].toUpperCase() : '';
-
-          // Match 6-digit project code (e.g. 131220, 118420, 129594)
           const prjMatch = fullSubject.match(/\b\d{6}\b/);
           const prjCode = prjMatch ? prjMatch[0] : '';
 
-          // Look up matched warranty item from sheet strictly by requestId (BH-xxx) or projectCode
           const matchedSheetItem = warrantyItems.find(w => {
             if (reqId && (w.requestId || '').toUpperCase() === reqId) return true;
             if (prjCode && (w.projectCode || '').includes(prjCode)) return true;
             return false;
           });
 
-          const rawTime = item.lastUpdated ? new Date(item.lastUpdated).getTime() : Date.now();
+          const rawTime = item.last_updated ? new Date(item.last_updated).getTime() : Date.now();
+          const msgs = Array.isArray(item.messages) ? item.messages : [];
+          const attCount = msgs.reduce((acc: number, m: any) => acc + (Array.isArray(m.attachments) ? m.attachments.length : 0), 0);
 
           return {
-            threadId: item.threadId || `live-${idx}`,
+            threadId: item.thread_id,
             requestId: reqId || (matchedSheetItem ? matchedSheetItem.requestId : ''),
             storeName: matchedSheetItem?.storeName || '',
             storeCode: matchedSheetItem?.storeCode || '',
             projectCode: prjCode || matchedSheetItem?.projectCode || '',
-            subject: fullSubject || 'Không có tiêu đề',
-            from: item.from || '',
-            fromName: item.from ? item.from.split('<')[0].replace(/"/g, '').trim() : '',
-            lastUpdated: item.lastUpdated ? new Date(item.lastUpdated).toLocaleString('vi-VN') : '',
+            subject: item.subject || 'Không có tiêu đề',
+            from: item.from_email || '',
+            fromName: item.from_name || (item.from_email ? item.from_email.split('@')[0] : ''),
+            lastUpdated: item.last_updated ? new Date(item.last_updated).toLocaleString('vi-VN') : '',
             rawTimestamp: rawTime,
             snippet: item.snippet || '',
-            messagesCount: item.messageCount || 1,
-            hasAttachments: Boolean(item.hasAttachments),
-            attachmentsCount: Array.isArray(item.attachments) ? item.attachments.length : 0,
-            messages: (item.messages || []).map((m: any, mIdx: number) => ({
-              id: m.id || `m-${idx}-${mIdx}`,
-              from: m.from || '',
-              fromName: m.from ? m.from.split('<')[0].replace(/"/g, '').trim() : '',
-              to: m.to || '',
-              cc: m.cc || '',
-              date: m.date ? new Date(m.date).toLocaleString('vi-VN') : '',
-              snippet: m.snippet || '',
-              body: m.body || m.snippet || '',
-              htmlBody: m.htmlBody || '',
-              attachments: (m.attachments || []).map((att: any) => ({
-                name: att.name || 'Tệp đính kèm',
-                contentType: att.contentType || 'application/octet-stream',
-                size: formatFileSize(att.size || att.bytes),
-                url: att.url || att.dataUri || '',
-                dataUri: att.dataUri || '',
-                contentId: att.contentId || att.cid || '',
-                isImage: (att.contentType || '').startsWith('image/') || Boolean(att.isImage)
-              }))
-            }))
+            messagesCount: msgs.length || 1,
+            hasAttachments: attCount > 0,
+            attachmentsCount: attCount,
+            messages: msgs
           };
         });
 
-        // Smart merge with existing threads by threadId (detects new emails + replies to existing threads)
-        setThreads(prevThreads => {
-          // If incoming contains real threads from Gmail, purge initial mock sample threads
-          const isMockSample = (t: WarrantyEmailThread) => t.threadId.startsWith('th-00');
-          const realPrev = incoming.length > 0 ? prevThreads.filter(t => !isMockSample(t)) : prevThreads;
-          const prevMap = new Map(realPrev.map(t => [t.threadId, t]));
-
-          let newIncomingCount = 0;
-          let updatedRepliesCount = 0;
-          const newlyDiscoveredIds: string[] = [];
-
-          incoming.forEach(t => {
-            const prev = prevMap.get(t.threadId);
-            if (!prev) {
-              newIncomingCount++;
-              newlyDiscoveredIds.push(t.threadId);
-            } else if ((t.messagesCount || 1) > (prev.messagesCount || 1)) {
-              updatedRepliesCount++;
-              newlyDiscoveredIds.push(t.threadId);
-            }
-            prevMap.set(t.threadId, t);
-          });
-
-          // Sort strictly by timestamp descending (newest activity at the top)
-          const merged = Array.from(prevMap.values()).sort((a, b) => {
-            const timeA = typeof a.rawTimestamp === 'number' && !isNaN(a.rawTimestamp) ? a.rawTimestamp : 0;
-            const timeB = typeof b.rawTimestamp === 'number' && !isNaN(b.rawTimestamp) ? b.rawTimestamp : 0;
-            return timeB - timeA;
-          });
-
-          // Auto-mark newly discovered threads
-          if (newlyDiscoveredIds.length > 0) {
-            setNewThreadIds(prev => {
-              const next = new Set(prev);
-              newlyDiscoveredIds.forEach(id => next.add(id));
-              return next;
-            });
-            // Auto focus to newest incoming thread
-            if (merged[0]) {
-              setSelectedThreadId(merged[0].threadId);
-            }
-          }
-
-          // Save lightweight version to LocalStorage: preserves small image thumbnails (<45KB) for seamless F5 reload
-          try {
-            const lightweight = merged.map(t => ({
-              ...t,
-              rawTimestamp: t.rawTimestamp || (t.lastUpdated ? new Date(t.lastUpdated).getTime() : Date.now()),
-              messages: (t.messages || []).map(m => ({
-                id: m.id,
-                from: m.from,
-                fromName: m.fromName,
-                to: m.to,
-                cc: m.cc,
-                date: m.date,
-                snippet: m.snippet,
-                body: m.body,
-                htmlBody: (m.htmlBody && m.htmlBody.length < 35000) ? m.htmlBody : '',
-                attachments: (m.attachments || []).map(a => ({
-                  name: a.name,
-                  contentType: a.contentType,
-                  size: a.size,
-                  isImage: a.isImage,
-                  contentId: a.contentId,
-                  url: a.url && a.url.startsWith('http') ? a.url : '',
-                  // Keep small dataUri (< 45KB) so thumbnails survive F5 without exceeding 5MB quota
-                  dataUri: (a.dataUri && a.dataUri.length < 45000) ? a.dataUri : undefined
-                }))
-              }))
-            }));
-            localStorage.setItem('WARRANTY_GMAIL_SAVED_THREADS', JSON.stringify(lightweight));
-          } catch (e) {
-            console.warn('LocalStorage quota issue', e);
-          }
-
-          // Persist incoming threads to Supabase so ANY viewer on ANY device sees the live emails!
-          try {
-            const payload = incoming.map(t => ({
-              thread_id: t.threadId,
-              subject: t.subject,
-              from_email: t.from,
-              from_name: t.fromName,
-              last_updated: t.rawTimestamp ? new Date(t.rawTimestamp).toISOString() : new Date().toISOString(),
-              snippet: t.snippet,
-              messages: t.messages,
-              updated_at: new Date().toISOString()
-            }));
-
-            if (payload.length > 0) {
-              supabase.from('warranty_emails').upsert(payload, { onConflict: 'thread_id' }).then(({ error }) => {
-                if (error) console.warn('Supabase warranty_emails upsert warning:', error.message);
-              });
-            }
-          } catch (supErr) {
-            console.warn('Supabase sync error:', supErr);
-          }
-
-          // Thông báo vận hành chính xác: Phân biệt rõ Có mail mới / Có reply mới / Đã mới nhất
-          if (newIncomingCount > 0 && updatedRepliesCount > 0) {
-            toast.success(`🔔 Nhận ${newIncomingCount} email bảo hành mới & ${updatedRepliesCount} phản hồi mới!`, { duration: 4500 });
-          } else if (newIncomingCount > 0) {
-            toast.success(`🔔 Nhận ${newIncomingCount} email bảo hành mới từ Gmail!`, { duration: 4000 });
-          } else if (updatedRepliesCount > 0) {
-            toast.success(`🔔 Có ${updatedRepliesCount} ca bảo hành vừa nhận phản hồi mới!`, { duration: 4000 });
-          } else if (!isSilent) {
-            toast.success('✓ Hộp thư đã được đồng bộ mới nhất (Không có email mới)', {
-              icon: '🟢',
-              duration: 3500
-            });
-          }
-
-          return merged;
-        });
-
+        setThreads(mappedThreads);
+        if (mappedThreads[0] && !selectedThreadId) {
+          setSelectedThreadId(mappedThreads[0].threadId);
+        }
         setLastSyncedTime(new Date().toLocaleTimeString('vi-VN'));
+
+        if (!isSilent) {
+          toast.success(`✓ Đã đồng bộ ${mappedThreads.length} email từ Supabase Cloud!`, {
+            icon: '🟢',
+            duration: 3500
+          });
+        }
       } else {
-        // If apps script returns an error (e.g. using Sheet sync URL instead of Gmail sync URL), fallback to Supabase data
-        const { data: supaData } = await supabase.from('warranty_emails').select('*').order('last_updated', { ascending: false });
-        if (supaData && supaData.length > 0) {
-          if (!isSilent) {
-            toast.success(`Đã cập nhật ${supaData.length} email mới nhất từ Supabase Cloud!`, { icon: '☁️', duration: 3500 });
-          }
-        } else if (!isSilent) {
-          toast.error('Lỗi phản hồi từ Apps Script: ' + (json.message || 'Không có dữ liệu'));
+        if (!isSilent) {
+          toast('Hộp thư trên Supabase đang trống. Hãy chạy hàm autoSyncGmailToSupabase trên Apps Script để đẩy thư vào.', { icon: 'ℹ️' });
         }
       }
     } catch (err: any) {
