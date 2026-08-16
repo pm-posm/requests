@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import type { WarrantyItem } from '@/types/warranty';
 import toast from 'react-hot-toast';
 import DOMPurify from 'dompurify';
+import { supabase } from '@/lib/supabase';
 
 export interface WarrantyEmailAttachment {
   name: string;
@@ -424,6 +425,81 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
 
   const [lastSyncedTime, setLastSyncedTime] = useState<string>('');
 
+  // 1. Initial Load & Realtime Sync from Supabase (Persistent Cloud Database for all viewers)
+  useEffect(() => {
+    const loadFromSupabase = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('warranty_emails')
+          .select('*')
+          .order('last_updated', { ascending: false });
+
+        if (error) {
+          console.warn('Supabase warranty_emails select:', error.message);
+          return;
+        }
+
+        if (data && data.length > 0) {
+          const mappedThreads: WarrantyEmailThread[] = data.map((item: any) => {
+            const fullSubject = item.subject || '';
+            const reqMatch = fullSubject.match(/BH-\d+/i);
+            const reqId = reqMatch ? reqMatch[0].toUpperCase() : '';
+            const prjMatch = fullSubject.match(/\b\d{6}\b/);
+            const prjCode = prjMatch ? prjMatch[0] : '';
+
+            const matchedSheetItem = warrantyItems.find(w => {
+              if (reqId && (w.requestId || '').toUpperCase() === reqId) return true;
+              if (prjCode && (w.projectCode || '').includes(prjCode)) return true;
+              return false;
+            });
+
+            const rawTime = item.last_updated ? new Date(item.last_updated).getTime() : Date.now();
+            const msgs = Array.isArray(item.messages) ? item.messages : [];
+            const attCount = msgs.reduce((acc: number, m: any) => acc + (Array.isArray(m.attachments) ? m.attachments.length : 0), 0);
+
+            return {
+              threadId: item.thread_id,
+              requestId: reqId || (matchedSheetItem ? matchedSheetItem.requestId : ''),
+              storeName: matchedSheetItem?.storeName || '',
+              storeCode: matchedSheetItem?.storeCode || '',
+              projectCode: prjCode || matchedSheetItem?.projectCode || '',
+              subject: item.subject || 'Không có tiêu đề',
+              from: item.from_email || '',
+              fromName: item.from_name || (item.from_email ? item.from_email.split('@')[0] : ''),
+              lastUpdated: item.last_updated ? new Date(item.last_updated).toLocaleString('vi-VN') : '',
+              rawTimestamp: rawTime,
+              snippet: item.snippet || '',
+              messagesCount: msgs.length || 1,
+              hasAttachments: attCount > 0,
+              attachmentsCount: attCount,
+              messages: msgs
+            };
+          });
+
+          setThreads(mappedThreads);
+          setSelectedThreadId(prev => prev || mappedThreads[0]?.threadId || '');
+          setLastSyncedTime(new Date().toLocaleTimeString('vi-VN'));
+        }
+      } catch (err) {
+        console.warn('Supabase initial load error:', err);
+      }
+    };
+
+    loadFromSupabase();
+
+    // Supabase Realtime Channel Subscription
+    const channel = supabase
+      .channel('public:warranty_emails')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'warranty_emails' }, () => {
+        loadFromSupabase();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [warrantyItems]);
+
   // Auto-fetch live Gmail threads on Component Mount & Active Keyword change
   useEffect(() => {
     const activeUrl = (appsScriptUrl || webAppUrl || DEFAULT_WARRANTY_GMAIL_APPS_SCRIPT_URL).trim();
@@ -608,6 +684,28 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
             localStorage.setItem('WARRANTY_GMAIL_SAVED_THREADS', JSON.stringify(lightweight));
           } catch (e) {
             console.warn('LocalStorage quota issue', e);
+          }
+
+          // Persist incoming threads to Supabase so ANY viewer on ANY device sees the live emails!
+          try {
+            const payload = incoming.map(t => ({
+              thread_id: t.threadId,
+              subject: t.subject,
+              from_email: t.from,
+              from_name: t.fromName,
+              last_updated: t.rawTimestamp ? new Date(t.rawTimestamp).toISOString() : new Date().toISOString(),
+              snippet: t.snippet,
+              messages: t.messages,
+              updated_at: new Date().toISOString()
+            }));
+
+            if (payload.length > 0) {
+              supabase.from('warranty_emails').upsert(payload, { onConflict: 'thread_id' }).then(({ error }) => {
+                if (error) console.warn('Supabase warranty_emails upsert warning:', error.message);
+              });
+            }
+          } catch (supErr) {
+            console.warn('Supabase sync error:', supErr);
           }
 
           // Thông báo vận hành chính xác: Phân biệt rõ Có mail mới / Có reply mới / Đã mới nhất
