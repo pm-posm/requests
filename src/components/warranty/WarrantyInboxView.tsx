@@ -69,6 +69,25 @@ export const formatFileSize = (size: string | number | undefined): string => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
+// Utility: Format timestamp cleanly to dd/mm/yyyy HH:mm (e.g. 15/08/2026 14:35)
+export const formatEmailDate = (dateVal: string | Date | number | undefined): string => {
+  if (!dateVal) return '';
+  try {
+    const d = typeof dateVal === 'number' ? new Date(dateVal) : new Date(String(dateVal));
+    if (isNaN(d.getTime())) {
+      return String(dateVal);
+    }
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
+  } catch {
+    return String(dateVal);
+  }
+};
+
 // Sub-component: Clean & Ultra-Fast Email Body Viewer with Isolated CSS and Sanitization
 const EmailBodyViewer = React.memo<{ 
   body: string; 
@@ -491,13 +510,16 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
               subject: item.subject || 'Không có tiêu đề',
               from: item.from_email || '',
               fromName: item.from_name || (item.from_email ? item.from_email.split('@')[0] : ''),
-              lastUpdated: item.last_updated ? new Date(item.last_updated).toLocaleString('vi-VN') : '',
+              lastUpdated: formatEmailDate(item.last_updated),
               rawTimestamp: rawTime,
               snippet: item.snippet || '',
               messagesCount: msgs.length || 1,
               hasAttachments: attCount > 0,
               attachmentsCount: attCount,
-              messages: msgs
+              messages: msgs.map((m: any) => ({
+                ...m,
+                date: formatEmailDate(m.date)
+              }))
             };
           });
 
@@ -589,13 +611,16 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
             subject: item.subject || 'Không có tiêu đề',
             from: item.from_email || '',
             fromName: item.from_name || (item.from_email ? item.from_email.split('@')[0] : ''),
-            lastUpdated: item.last_updated ? new Date(item.last_updated).toLocaleString('vi-VN') : '',
+            lastUpdated: formatEmailDate(item.last_updated),
             rawTimestamp: rawTime,
             snippet: item.snippet || '',
             messagesCount: msgs.length || 1,
             hasAttachments: attCount > 0,
             attachmentsCount: attCount,
-            messages: msgs
+            messages: msgs.map((m: any) => ({
+              ...m,
+              date: formatEmailDate(m.date)
+            }))
           };
         });
 
@@ -1205,11 +1230,7 @@ function getAttachmentData(msgId, attIdx) {
                         </span>
                       </div>
                       <span className={`text-[10px] font-mono shrink-0 ${isNew ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-400'}`}>
-                        {thread.lastUpdated ? (
-                          thread.lastUpdated.includes(':') && thread.rawTimestamp && (Date.now() - thread.rawTimestamp < 86400000)
-                            ? thread.lastUpdated.split(' ')[0]
-                            : thread.lastUpdated.split(' ')[0]
-                        ) : ''}
+                        {formatEmailDate(thread.lastUpdated)}
                       </span>
                     </div>
 
@@ -1406,7 +1427,7 @@ function getAttachmentData(msgId, attIdx) {
                           </button>
                           <div className="flex items-center gap-1 text-slate-400">
                             <Clock className="w-3 h-3 text-slate-400" />
-                            <span>{msg.date}</span>
+                            <span>{formatEmailDate(msg.date)}</span>
                           </div>
                         </div>
                       </div>
