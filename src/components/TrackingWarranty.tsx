@@ -769,7 +769,13 @@ export default function TrackingWarranty() {
         if (!dateObj || dateObj.time > toMs) return false;
       }
 
-      // 3. Classification filters (VIS-Tech, Supplier, Store, Loại POSM, Nhãn)
+      // 3. Project Code filter (Multi-select)
+      if (filters.selectedProjects && filters.selectedProjects.length > 0) {
+        const itemPrj = (item.projectCode || '').trim();
+        if (!filters.selectedProjects.includes(itemPrj)) return false;
+      }
+
+      // 4. Classification filters (VIS-Tech, Supplier, Store, Loại POSM, Nhãn)
       if (filters.selectedVisTechs.length > 0) {
         if (!filters.selectedVisTechs.includes(item.visTech?.trim())) return false;
       }

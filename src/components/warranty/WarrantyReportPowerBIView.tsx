@@ -138,11 +138,13 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
   const [selectedStore, setSelectedStore] = useState<string>('all');
   const [selectedPosmType, setSelectedPosmType] = useState<string>('all');
   const [selectedBrand, setSelectedBrand] = useState<string>('all');
-  const [selectedProject, setSelectedProject] = useState<string>('all');
+  const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
 
   const [detailSearch, setDetailSearch] = useState<string>('');
   const [isDateSlicerOpen, setIsDateSlicerOpen] = useState<boolean>(false);
   const [isClassSlicerOpen, setIsClassSlicerOpen] = useState<boolean>(false);
+  const [isProjectSlicerOpen, setIsProjectSlicerOpen] = useState<boolean>(false);
+  const [projectSlicerSearch, setProjectSlicerSearch] = useState<string>('');
 
   // Cross-filtering clicked state
   const [crossFilter, setCrossFilter] = useState<{
@@ -206,8 +208,23 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
   }, [warrantyItems]);
 
   const uniqueProjects = useMemo(() => {
-    return Array.from(new Set(warrantyItems.map(i => (i.projectCode || '').trim()).filter(Boolean))).sort();
+    const map = new Map<string, number>();
+    warrantyItems.forEach(i => {
+      const prj = (i.projectCode || '').trim();
+      if (prj) {
+        map.set(prj, (map.get(prj) || 0) + 1);
+      }
+    });
+    return Array.from(map.entries())
+      .map(([code, count]) => ({ code, count }))
+      .sort((a, b) => b.count - a.count);
   }, [warrantyItems]);
+
+  const filteredProjects = useMemo(() => {
+    if (!projectSlicerSearch.trim()) return uniqueProjects;
+    const s = projectSlicerSearch.toLowerCase().trim();
+    return uniqueProjects.filter(p => p.code.toLowerCase().includes(s));
+  }, [uniqueProjects, projectSlicerSearch]);
 
   const uniquePosmTypes = useMemo(() => {
     return Array.from(new Set(warrantyItems.map(i => (i.posmType || '').trim()).filter(Boolean))).sort();
@@ -263,7 +280,7 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
       if (selectedStore !== 'all' && (item.storeName || '').trim() !== selectedStore) return false;
       if (selectedPosmType !== 'all' && (item.posmType || '').trim() !== selectedPosmType) return false;
       if (selectedBrand !== 'all' && (item.brand || '').trim() !== selectedBrand) return false;
-      if (selectedProject !== 'all' && (item.projectCode || '').trim() !== selectedProject) return false;
+      if (selectedProjects.length > 0 && !selectedProjects.includes((item.projectCode || '').trim())) return false;
 
       // 3. Cross-Filtering
       if (crossFilter.type && crossFilter.value) {
@@ -278,7 +295,7 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
     });
   }, [
     warrantyItems, selectedYear, selectedQuarter, selectedMonth, selectedWeek, dateFrom, dateTo,
-    selectedVisTech, selectedSupplier, selectedStore, selectedPosmType, selectedBrand, selectedProject,
+    selectedVisTech, selectedSupplier, selectedStore, selectedPosmType, selectedBrand, selectedProjects,
     crossFilter
   ]);
 
@@ -609,7 +626,7 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
     setSelectedStore('all');
     setSelectedPosmType('all');
     setSelectedBrand('all');
-    setSelectedProject('all');
+    setSelectedProjects([]);
     setCrossFilter({ type: null, value: '' });
     setDetailSearch('');
     toast.success('Đã làm mới tất cả các bộ lọc slicers');
@@ -617,7 +634,8 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
 
   const isDateFiltered = selectedYear !== 'all' || selectedQuarter !== 'all' || selectedMonth !== 'all' || selectedWeek !== 'all' || !!dateFrom || !!dateTo;
   const isClassFiltered = selectedVisTech !== 'all' || selectedSupplier !== 'all' || selectedStore !== 'all' || selectedPosmType !== 'all' || selectedBrand !== 'all';
-  const isFilterActive = isDateFiltered || isClassFiltered || selectedProject !== 'all' || crossFilter.type !== null;
+  const isProjectFiltered = selectedProjects.length > 0;
+  const isFilterActive = isDateFiltered || isClassFiltered || isProjectFiltered || crossFilter.type !== null;
 
   const getDateFilterLabel = () => {
     if (dateFrom && dateTo) return `${dateFrom} ➔ ${dateTo}`;
@@ -1007,20 +1025,150 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
             )}
           </div>
 
-          {/* 3. Project Slicer */}
-          <div className="flex items-center gap-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#3B3A39] rounded-[2px] px-2 py-1">
-            <Layers className="w-3.5 h-3.5 text-[#605E5C]" />
-            <span className="text-[11px] font-medium text-[#605E5C] dark:text-[#A19F9D]">Dự án:</span>
-            <select
-              value={selectedProject}
-              onChange={(e) => setSelectedProject(e.target.value)}
-              className="bg-transparent text-xs font-semibold text-[#252423] dark:text-[#F3F2F1] focus:outline-none cursor-pointer max-w-[170px] truncate"
+          {/* 3. DEDICATED PROJECT CODE SLICER POPOVER WITH SEARCH */}
+          <div className="relative">
+            <button
+              onClick={() => {
+                setIsProjectSlicerOpen(!isProjectSlicerOpen);
+                setIsDateSlicerOpen(false);
+                setIsClassSlicerOpen(false);
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[2px] border transition-colors cursor-pointer font-semibold ${
+                isProjectFiltered
+                  ? 'bg-[#B146C2]/10 text-[#B146C2] dark:text-[#E289F2] border-[#B146C2]'
+                  : 'bg-[#F8F9FA] dark:bg-[#2A2A2A] border-[#D2D0CE] dark:border-[#3B3A39] text-[#252423] dark:text-[#F3F2F1]'
+              }`}
             >
-              <option value="all">Tất cả ({uniqueProjects.length})</option>
-              {uniqueProjects.map(p => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
+              <Layers className="w-3.5 h-3.5 text-[#B146C2] dark:text-[#E289F2]" />
+              <span>
+                Dự án: {selectedProjects.length === 0
+                  ? 'Tất cả'
+                  : selectedProjects.length === 1
+                  ? selectedProjects[0]
+                  : `${selectedProjects.length} mã đã chọn`}
+              </span>
+              <ChevronDown className={`w-3 h-3 text-[#8A8886] transition-transform ${isProjectSlicerOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isProjectSlicerOpen && (
+              <div className="absolute left-0 mt-1.5 w-80 sm:w-96 bg-[#FFFFFF] dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] shadow-xl z-50 p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between border-b border-[#EDEBE9] dark:border-[#383838] pb-2">
+                  <span className="font-bold text-xs flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-[#B146C2]" />
+                    Bộ Lọc Mã Dự Án ({uniqueProjects.length})
+                  </span>
+                  {isProjectFiltered && (
+                    <button
+                      onClick={() => setSelectedProjects([])}
+                      className="text-[11px] text-[#D64550] hover:underline font-semibold"
+                    >
+                      Bỏ chọn tất cả
+                    </button>
+                  )}
+                </div>
+
+                {/* In-Popover Search */}
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[#8A8886]" />
+                  <input
+                    type="text"
+                    placeholder="Tìm kiếm mã dự án..."
+                    value={projectSlicerSearch}
+                    onChange={(e) => setProjectSlicerSearch(e.target.value)}
+                    className="w-full pl-8 pr-6 py-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] text-xs outline-none focus:border-[#B146C2]"
+                  />
+                  {projectSlicerSearch && (
+                    <button
+                      onClick={() => setProjectSlicerSearch('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[#8A8886] hover:text-[#252423] text-xs"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {/* Quick actions */}
+                <div className="flex items-center justify-between text-[11px] text-[#605E5C] dark:text-[#A19F9D]">
+                  <span>{filteredProjects.length} mã phù hợp</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const visibleCodes = filteredProjects.map(p => p.code);
+                        const merged = Array.from(new Set([...selectedProjects, ...visibleCodes]));
+                        setSelectedProjects(merged);
+                      }}
+                      className="text-[#118DFF] hover:underline font-semibold cursor-pointer"
+                    >
+                      Chọn tất cả ({filteredProjects.length})
+                    </button>
+                    <span>•</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedProjects([])}
+                      className="text-[#605E5C] hover:underline cursor-pointer"
+                    >
+                      Bỏ chọn
+                    </button>
+                  </div>
+                </div>
+
+                {/* Project Checklist */}
+                <div className="max-h-56 overflow-y-auto custom-scrollbar space-y-1 pr-1 border border-[#EDEBE9] dark:border-[#383838] p-1.5 rounded-[2px] bg-[#F8F9FA] dark:bg-[#2A2A2A]">
+                  {filteredProjects.length === 0 ? (
+                    <div className="text-center py-6 text-xs text-[#8A8886] italic">
+                      Không tìm thấy mã dự án nào khớp với "{projectSlicerSearch}"
+                    </div>
+                  ) : (
+                    filteredProjects.map(({ code, count }) => {
+                      const isChecked = selectedProjects.includes(code);
+                      return (
+                        <label
+                          key={code}
+                          onClick={() => {
+                            if (isChecked) {
+                              setSelectedProjects(selectedProjects.filter(c => c !== code));
+                            } else {
+                              setSelectedProjects([...selectedProjects, code]);
+                            }
+                          }}
+                          className={`flex items-center justify-between px-2 py-1 rounded-[2px] text-xs cursor-pointer select-none transition-colors ${
+                            isChecked
+                              ? 'bg-[#B146C2]/15 font-bold text-[#252423] dark:text-[#FFFFFF]'
+                              : 'hover:bg-[#EDEBE9] dark:hover:bg-[#323130] text-[#252423] dark:text-[#F3F2F1]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate pr-2">
+                            <div
+                              className={`w-3.5 h-3.5 rounded-[2px] border flex items-center justify-center shrink-0 ${
+                                isChecked
+                                  ? 'bg-[#B146C2] border-[#B146C2] text-white'
+                                  : 'border-[#D2D0CE] dark:border-[#605E5C] bg-white dark:bg-[#202020]'
+                              }`}
+                            >
+                              {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                            </div>
+                            <span className="truncate font-mono">{code}</span>
+                          </div>
+                          <span className="text-[10px] text-[#605E5C] dark:text-[#A19F9D] shrink-0 font-mono">
+                            {count} ca
+                          </span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    onClick={() => setIsProjectSlicerOpen(false)}
+                    className="px-3 py-1 bg-[#B146C2] text-white text-xs font-bold rounded-[2px]"
+                  >
+                    Áp dụng
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Active Cross Filter Indicator */}

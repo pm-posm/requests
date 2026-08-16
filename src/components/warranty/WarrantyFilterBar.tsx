@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Search, Filter, Calendar, ChevronDown, RotateCcw, X, SlidersHorizontal, Check, Building2, Store, Tag, UserCheck, Layers } from 'lucide-react';
+import { Search, Filter, Calendar, ChevronDown, RotateCcw, X, SlidersHorizontal, Check, Building2, Store, Tag, UserCheck, Layers, FolderKanban } from 'lucide-react';
 import type { WarrantyItem } from '@/types/warranty';
 
 export interface WarrantyFilterState {
@@ -11,6 +11,8 @@ export interface WarrantyFilterState {
   selectedWeek: string;
   dateFrom: string;
   dateTo: string;
+  // Project group
+  selectedProjects: string[];
   // Classification group
   selectedVisTechs: string[];
   selectedSuppliers: string[];
@@ -28,6 +30,7 @@ export const INITIAL_WARRANTY_FILTER_STATE: WarrantyFilterState = {
   selectedWeek: 'all',
   dateFrom: '',
   dateTo: '',
+  selectedProjects: [],
   selectedVisTechs: [],
   selectedSuppliers: [],
   selectedStores: [],
@@ -188,11 +191,14 @@ export const WarrantyFilterBar: React.FC<WarrantyFilterBarProps> = ({
 }) => {
   const [isDatePopoverOpen, setIsDatePopoverOpen] = useState(false);
   const [isFilterPopoverOpen, setIsFilterPopoverOpen] = useState(false);
+  const [isProjectPopoverOpen, setIsProjectPopoverOpen] = useState(false);
+  const [projectSearch, setProjectSearch] = useState('');
 
   const datePopoverRef = useRef<HTMLDivElement>(null);
   const filterPopoverRef = useRef<HTMLDivElement>(null);
+  const projectPopoverRef = useRef<HTMLDivElement>(null);
 
-  // Close popovers on click outside or ESC
+  // Close popovers on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (datePopoverRef.current && !datePopoverRef.current.contains(e.target as Node)) {
@@ -201,11 +207,15 @@ export const WarrantyFilterBar: React.FC<WarrantyFilterBarProps> = ({
       if (filterPopoverRef.current && !filterPopoverRef.current.contains(e.target as Node)) {
         setIsFilterPopoverOpen(false);
       }
+      if (projectPopoverRef.current && !projectPopoverRef.current.contains(e.target as Node)) {
+        setIsProjectPopoverOpen(false);
+      }
     };
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsDatePopoverOpen(false);
         setIsFilterPopoverOpen(false);
+        setIsProjectPopoverOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -248,6 +258,27 @@ export const WarrantyFilterBar: React.FC<WarrantyFilterBarProps> = ({
     };
   }, [warrantyItems]);
 
+  // Compute unique projects with counts
+  const uniqueProjects = useMemo(() => {
+    const map = new Map<string, number>();
+    warrantyItems.forEach(i => {
+      const prj = (i.projectCode || '').trim();
+      if (prj) {
+        map.set(prj, (map.get(prj) || 0) + 1);
+      }
+    });
+    return Array.from(map.entries())
+      .map(([code, count]) => ({ code, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [warrantyItems]);
+
+  // Filtered projects by search input
+  const filteredProjects = useMemo(() => {
+    if (!projectSearch.trim()) return uniqueProjects;
+    const s = projectSearch.toLowerCase().trim();
+    return uniqueProjects.filter(p => p.code.toLowerCase().includes(s));
+  }, [uniqueProjects, projectSearch]);
+
   // Date active check
   const isDateFiltered = filters.selectedYear !== 'all' ||
     filters.selectedQuarter !== 'all' ||
@@ -255,6 +286,9 @@ export const WarrantyFilterBar: React.FC<WarrantyFilterBarProps> = ({
     filters.selectedWeek !== 'all' ||
     !!filters.dateFrom ||
     !!filters.dateTo;
+
+  // Project active check
+  const isProjectFiltered = filters.selectedProjects.length > 0;
 
   // Dimension active count
   const totalActiveClassificationCount = 
@@ -264,7 +298,7 @@ export const WarrantyFilterBar: React.FC<WarrantyFilterBarProps> = ({
     filters.selectedPosmTypes.length +
     filters.selectedBrands.length;
 
-  const hasAnyActiveFilters = isDateFiltered || totalActiveClassificationCount > 0 || !!filters.searchTerm.trim();
+  const hasAnyActiveFilters = isDateFiltered || isProjectFiltered || totalActiveClassificationCount > 0 || !!filters.searchTerm.trim();
 
   // Label for Date trigger button
   const getDateFilterLabel = () => {
@@ -303,6 +337,27 @@ export const WarrantyFilterBar: React.FC<WarrantyFilterBarProps> = ({
     });
   };
 
+  const clearProjectFilters = () => {
+    onFilterChange({
+      ...filters,
+      selectedProjects: []
+    });
+  };
+
+  const toggleProject = (code: string) => {
+    if (filters.selectedProjects.includes(code)) {
+      onFilterChange({
+        ...filters,
+        selectedProjects: filters.selectedProjects.filter(c => c !== code)
+      });
+    } else {
+      onFilterChange({
+        ...filters,
+        selectedProjects: [...filters.selectedProjects, code]
+      });
+    }
+  };
+
   return (
     <div className="bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs">
       <div className="flex flex-col md:flex-row items-center gap-3">
@@ -333,6 +388,7 @@ export const WarrantyFilterBar: React.FC<WarrantyFilterBarProps> = ({
             onClick={() => {
               setIsDatePopoverOpen(!isDatePopoverOpen);
               setIsFilterPopoverOpen(false);
+              setIsProjectPopoverOpen(false);
             }}
             className={`w-full sm:w-auto flex items-center justify-between gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
               isDateFiltered
@@ -542,12 +598,168 @@ export const WarrantyFilterBar: React.FC<WarrantyFilterBarProps> = ({
           )}
         </div>
 
-        {/* 3. UNIFIED CLASSIFICATION FILTER POPOVER TRIGGER (VIS-Tech, Supplier, Store, Loại POSM, Nhãn) */}
+        {/* 3. DEDICATED PROJECT CODE FILTER POPOVER WITH IN-POPOVER SEARCH */}
+        <div className="relative shrink-0 w-full sm:w-auto" ref={projectPopoverRef}>
+          <button
+            onClick={() => {
+              setIsProjectPopoverOpen(!isProjectPopoverOpen);
+              setIsDatePopoverOpen(false);
+              setIsFilterPopoverOpen(false);
+            }}
+            className={`w-full sm:w-auto flex items-center justify-between gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+              isProjectFiltered
+                ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-200 shadow-2xs'
+                : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <FolderKanban className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              <span>
+                Dự án: {filters.selectedProjects.length === 0
+                  ? 'Tất cả'
+                  : filters.selectedProjects.length === 1
+                  ? `${filters.selectedProjects[0]}`
+                  : `${filters.selectedProjects.length} mã đã chọn`}
+              </span>
+            </div>
+            {filters.selectedProjects.length > 0 && (
+              <span className="w-5 h-5 rounded-full bg-amber-600 text-white text-[10px] font-bold flex items-center justify-center font-mono">
+                {filters.selectedProjects.length}
+              </span>
+            )}
+            <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isProjectPopoverOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {/* PROJECT POPOVER PANEL */}
+          {isProjectPopoverOpen && (
+            <div className="absolute right-0 md:right-auto md:left-0 mt-2 w-80 sm:w-96 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-40 p-4 space-y-3 animate-in fade-in zoom-in-95 duration-150">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2.5">
+                <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900 dark:text-slate-100">
+                  <FolderKanban className="w-4 h-4 text-amber-500" />
+                  <span>Bộ Lọc Mã Dự Án ({uniqueProjects.length})</span>
+                </div>
+                {isProjectFiltered && (
+                  <button
+                    onClick={clearProjectFilters}
+                    className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Bỏ chọn tất cả</span>
+                  </button>
+                )}
+              </div>
+
+              {/* In-Popover Search Box */}
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Tìm mã hoặc tên dự án..."
+                  value={projectSearch}
+                  onChange={(e) => setProjectSearch(e.target.value)}
+                  className="w-full pl-9 pr-7 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs outline-none focus:border-amber-500 transition-colors"
+                />
+                {projectSearch && (
+                  <button
+                    onClick={() => setProjectSearch('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {/* Fast Helpers */}
+              <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                <span>{filteredProjects.length} mã phù hợp</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allVisibleCodes = filteredProjects.map(p => p.code);
+                      const combined = Array.from(new Set([...filters.selectedProjects, ...allVisibleCodes]));
+                      onFilterChange({ ...filters, selectedProjects: combined });
+                    }}
+                    className="text-sky-600 dark:text-sky-400 hover:underline font-medium cursor-pointer"
+                  >
+                    Chọn kết quả ({filteredProjects.length})
+                  </button>
+                  <span>•</span>
+                  <button
+                    type="button"
+                    onClick={() => onFilterChange({ ...filters, selectedProjects: [] })}
+                    className="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:underline cursor-pointer"
+                  >
+                    Tất cả
+                  </button>
+                </div>
+              </div>
+
+              {/* Scrollable Project Checklist */}
+              <div className="max-h-56 overflow-y-auto custom-scrollbar space-y-1 pr-1 border border-slate-100 dark:border-slate-800/80 rounded-xl p-1.5 bg-slate-50/50 dark:bg-slate-950/50">
+                {filteredProjects.length === 0 ? (
+                  <div className="text-center py-6 text-xs text-slate-400 italic">
+                    Không tìm thấy mã dự án nào khớp với "{projectSearch}"
+                  </div>
+                ) : (
+                  filteredProjects.map(({ code, count }) => {
+                    const isChecked = filters.selectedProjects.includes(code);
+                    return (
+                      <label
+                        key={code}
+                        onClick={() => toggleProject(code)}
+                        className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-colors select-none ${
+                          isChecked
+                            ? 'bg-amber-100/70 dark:bg-amber-950/70 text-amber-900 dark:text-amber-200 font-bold'
+                            : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 truncate pr-2">
+                          <div
+                            className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${
+                              isChecked
+                                ? 'bg-amber-600 border-amber-600 text-white'
+                                : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900'
+                            }`}
+                          >
+                            {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                          </div>
+                          <span className="truncate font-mono">{code}</span>
+                        </div>
+                        <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono shrink-0 ${
+                          isChecked
+                            ? 'bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-200 font-bold'
+                            : 'bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                        }`}>
+                          {count} ca
+                        </span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Popover Footer */}
+              <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-end">
+                <button
+                  onClick={() => setIsProjectPopoverOpen(false)}
+                  className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+                >
+                  Xong &amp; Áp Dụng
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 4. UNIFIED CLASSIFICATION FILTER POPOVER TRIGGER (VIS-Tech, Supplier, Store, Loại POSM, Nhãn) */}
         <div className="relative shrink-0 w-full sm:w-auto" ref={filterPopoverRef}>
           <button
             onClick={() => {
               setIsFilterPopoverOpen(!isFilterPopoverOpen);
               setIsDatePopoverOpen(false);
+              setIsProjectPopoverOpen(false);
             }}
             className={`w-full sm:w-auto flex items-center justify-between gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
               totalActiveClassificationCount > 0
@@ -641,7 +853,7 @@ export const WarrantyFilterBar: React.FC<WarrantyFilterBarProps> = ({
               <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-end sticky bottom-0 bg-white dark:bg-slate-900 z-10">
                 <button
                   onClick={() => setIsFilterPopoverOpen(false)}
-                  className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+                  className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:white text-white dark:text-slate-900 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
                 >
                   Xong &amp; Áp Dụng
                 </button>
@@ -650,7 +862,7 @@ export const WarrantyFilterBar: React.FC<WarrantyFilterBarProps> = ({
           )}
         </div>
 
-        {/* 4. ACTIONS: CLEAR ALL FILTERS */}
+        {/* 5. ACTIONS: CLEAR ALL FILTERS */}
         {hasAnyActiveFilters && (
           <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
             <button
