@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import type { RawRequestRecord } from '@/services/sheetSyncService';
 import type { WarrantyItem } from '@/types/warranty';
 import { WEEKLY_REPORT_TEMPLATE_BASE64 } from './weeklyReportTemplate';
@@ -47,32 +47,13 @@ const formatDateStr = (str?: string): string => {
   return `${dd}/${mm}/${yyyy}`;
 };
 
-// Helper to set cell value cleanly
-const setCellValue = (ws: XLSX.WorkSheet, cellAddr: string, val: any, numFmt?: string) => {
-  if (val === null || val === undefined) {
-    delete ws[cellAddr];
-    return;
-  }
-  if (!ws[cellAddr]) {
-    ws[cellAddr] = {};
-  }
-  ws[cellAddr].v = val;
-  if (typeof val === 'number') {
-    ws[cellAddr].t = 'n';
-    if (numFmt) ws[cellAddr].z = numFmt;
-  } else if (typeof val === 'boolean') {
-    ws[cellAddr].t = 'b';
-  } else {
-    ws[cellAddr].t = 's';
-  }
-};
-
 /**
- * Service xuất Báo Cáo Bảo Hành trực tiếp từ File Template gốc Weekly_Report.xlsx
- * - Sheet 1: Weekly (Giữ 100% định dạng, màu sắc, font chữ, merged cells và banner của file template gốc)
- * - Sheet 2: Raw Data (Dữ liệu thô 100% ca bảo hành với 21 cột chi tiết)
+ * Service xuất Báo Cáo Bảo Hành trực tiếp bằng ExcelJS
+ * - Giữ nguyên 100% màu sắc, viền khung (borders), font chữ, background fills, merged cells của template gốc Weekly_Report.xlsx
+ * - Tab 1: Weekly (Template gốc kèm dữ liệu thực tế)
+ * - Tab 2: Raw Data (Toàn bộ 21 cột chi tiết)
  */
-export const exportAnalystExecutiveReport = (
+export const exportAnalystExecutiveReport = async (
   _requests: RawRequestRecord[],
   warrantyItems: WarrantyItem[],
   filenamePrefix = 'Weekly_Report',
@@ -229,53 +210,58 @@ export const exportAnalystExecutiveReport = (
   }
 
   // =========================================================================
-  // 2. LOAD ORIGINAL TEMPLATE WORKBOOK & INJECT DATA
+  // 2. LOAD TEMPLATE WORKBOOK VIA EXCELJS (PRESERVING 100% STYLES)
   // =========================================================================
-  let wb: XLSX.WorkBook;
-  try {
-    wb = XLSX.read(WEEKLY_REPORT_TEMPLATE_BASE64, { type: 'base64', cellStyles: true });
-  } catch (err) {
-    wb = XLSX.utils.book_new();
-    wb.Sheets['Weekly'] = XLSX.utils.aoa_to_sheet([]);
-    wb.SheetNames = ['Weekly'];
+  const wb = new ExcelJS.Workbook();
+  
+  // Convert base64 to buffer for ExcelJS
+  const binaryString = atob(WEEKLY_REPORT_TEMPLATE_BASE64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
   }
+  await wb.xlsx.load(bytes.buffer);
 
-  const ws = wb.Sheets['Weekly'];
+  const ws = wb.getWorksheet('Weekly') || wb.worksheets[0];
 
-  // Row 1: Header title
-  setCellValue(ws, 'A1', dateRangeLabel);
+  // 1. Title Header
+  ws.getCell('A1').value = dateRangeLabel;
 
-  // Row 5: KPI values
-  setCellValue(ws, 'A5', totalCount);
-  setCellValue(ws, 'B5', totalCount > 0 ? onTimeCount / totalCount : 0, '0.0%');
-  setCellValue(ws, 'D5', totalCount > 0 ? overdueCount / totalCount : 0, '0.0%');
-  setCellValue(ws, 'F5', totalCount > 0 ? earlyFailCount / totalCount : 0, '0.0%');
-  setCellValue(ws, 'H5', topSupplier.name);
-  setCellValue(ws, 'J5', topProject.name);
-  setCellValue(ws, 'L5', topStore.name);
-  setCellValue(ws, 'N5', topCat.name);
-  setCellValue(ws, 'P5', topPosm.name);
+  // 2. Row 5: KPI Values
+  ws.getCell('A5').value = totalCount;
+  ws.getCell('B5').value = totalCount > 0 ? onTimeCount / totalCount : 0;
+  ws.getCell('B5').numFmt = '0.0%';
+  ws.getCell('D5').value = totalCount > 0 ? overdueCount / totalCount : 0;
+  ws.getCell('D5').numFmt = '0.0%';
+  ws.getCell('F5').value = totalCount > 0 ? earlyFailCount / totalCount : 0;
+  ws.getCell('F5').numFmt = '0.0%';
+  ws.getCell('H5').value = topSupplier.name;
+  ws.getCell('J5').value = topProject.name;
+  ws.getCell('L5').value = topStore.name;
+  ws.getCell('N5').value = topCat.name;
+  ws.getCell('P5').value = topPosm.name;
 
-  // Row 6: KPI subtitles
-  setCellValue(ws, 'B6', `⚡ ${onTimeCount}/${totalCount} ca`);
-  setCellValue(ws, 'D6', `⚠️ ${overdueCount}/${totalCount} ca`);
-  setCellValue(ws, 'F6', `⚠️ ${earlyFailCount}/${totalCount} ca`);
-  setCellValue(ws, 'H6', `${topSupplier.count} ca (${topSupplier.pct})`);
-  setCellValue(ws, 'J6', `${topProject.count} ca (${topProject.pct})`);
-  setCellValue(ws, 'L6', `${topStore.count} ca (${topStore.pct})`);
-  setCellValue(ws, 'N6', `${topCat.count} ca (${topCat.pct})`);
-  setCellValue(ws, 'P6', `${topPosm.count} ca (${topPosm.pct})`);
+  // 3. Row 6: KPI Subtitles
+  ws.getCell('B6').value = `⚡ ${onTimeCount}/${totalCount} ca`;
+  ws.getCell('D6').value = `⚠️ ${overdueCount}/${totalCount} ca`;
+  ws.getCell('F6').value = `⚠️ ${earlyFailCount}/${totalCount} ca`;
+  ws.getCell('H6').value = `${topSupplier.count} ca (${topSupplier.pct})`;
+  ws.getCell('J6').value = `${topProject.count} ca (${topProject.pct})`;
+  ws.getCell('L6').value = `${topStore.count} ca (${topStore.pct})`;
+  ws.getCell('N6').value = `${topCat.count} ca (${topCat.pct})`;
+  ws.getCell('P6').value = `${topPosm.count} ca (${topPosm.pct})`;
 
-  // Row 7: In-progress note
+  // 4. Row 7: Active in-progress note
   const activePrjStr = Array.from(activeProjectsSet).join(', ') || 'Không có ca tồn đọng';
-  setCellValue(ws, 'A7', `⏳ Đang xử lí ${inProgressCount} ca thuộc dự án:`);
-  setCellValue(ws, 'D7', activePrjStr);
+  ws.getCell('A7').value = `⏳ Đang xử lí ${inProgressCount} ca thuộc dự án:`;
+  ws.getCell('D7').value = activePrjStr;
 
-  // Rows 12-16: 3 Evaluation tables (BY SUPPLIER, BY CAUSE, BY TIMELINE)
-  // Clear rows 12-17
+  // 5. Rows 12-16: 3 Evaluation Tables (BY SUPPLIER, BY CAUSE, BY TIMELINE)
+  // Clear rows 12 to 17
   for (let r = 12; r <= 17; r++) {
     ['A', 'B', 'C', 'D', 'E', 'F', 'H', 'J', 'K', 'M', 'O', 'P', 'Q'].forEach(col => {
-      setCellValue(ws, `${col}${r}`, null);
+      ws.getCell(`${col}${r}`).value = null;
     });
   }
 
@@ -283,21 +269,23 @@ export const exportAnalystExecutiveReport = (
   const sortedSuppliers = Array.from(supplierMap.entries()).sort((a, b) => b[1].total - a[1].total);
   sortedSuppliers.forEach(([sup, d], idx) => {
     const r = 12 + idx;
-    setCellValue(ws, `A${r}`, sup);
-    setCellValue(ws, `B${r}`, d.total);
-    setCellValue(ws, `C${r}`, d.early);
-    setCellValue(ws, `D${r}`, d.repeat);
-    setCellValue(ws, `E${r}`, d.overdue);
-    setCellValue(ws, `F${r}`, d.total > 0 ? (d.total - d.overdue) / d.total : 1, '0.0%');
+    ws.getCell(`A${r}`).value = sup;
+    ws.getCell(`B${r}`).value = d.total;
+    ws.getCell(`C${r}`).value = d.early;
+    ws.getCell(`D${r}`).value = d.repeat;
+    ws.getCell(`E${r}`).value = d.overdue;
+    ws.getCell(`F${r}`).value = d.total > 0 ? (d.total - d.overdue) / d.total : 1;
+    ws.getCell(`F${r}`).numFmt = '0.0%';
   });
 
   // Populate Bảng 2: BY CAUSE
   const sortedCauses = Array.from(causeMap.entries()).sort((a, b) => b[1].count - a[1].count);
   sortedCauses.slice(0, 6).forEach(([cause, d], idx) => {
     const r = 12 + idx;
-    setCellValue(ws, `H${r}`, cause);
-    setCellValue(ws, `J${r}`, `${d.count}\n(${d.topSupplier}>>)`);
-    setCellValue(ws, `K${r}`, totalCount > 0 ? d.count / totalCount : 0, '0.0%');
+    ws.getCell(`H${r}`).value = cause;
+    ws.getCell(`J${r}`).value = `${d.count}\n(${d.topSupplier}>>)`;
+    ws.getCell(`K${r}`).value = totalCount > 0 ? d.count / totalCount : 0;
+    ws.getCell(`K${r}`).numFmt = '0.0%';
   });
 
   // Populate Bảng 3: BY TIMELINE
@@ -308,16 +296,17 @@ export const exportAnalystExecutiveReport = (
   ];
   timelineData.forEach((t, idx) => {
     const r = 12 + idx;
-    setCellValue(ws, `M${r}`, t.label);
-    setCellValue(ws, `O${r}`, t.count);
-    setCellValue(ws, `P${r}`, totalCount > 0 ? t.count / totalCount : 0, '0.0%');
-    setCellValue(ws, `Q${r}`, t.badge);
+    ws.getCell(`M${r}`).value = t.label;
+    ws.getCell(`O${r}`).value = t.count;
+    ws.getCell(`P${r}`).value = totalCount > 0 ? t.count / totalCount : 0;
+    ws.getCell(`P${r}`).numFmt = '0.0%';
+    ws.getCell(`Q${r}`).value = t.badge;
   });
 
-  // Rows 21-25: 4 Breakdown tables (BY POSM, BY STORE, BY PROJECT, BY CAT)
+  // 6. Rows 21-25: 4 Breakdown Tables (BY POSM, BY STORE, BY PROJECT, BY CAT)
   for (let r = 21; r <= 27; r++) {
     ['A', 'B', 'D', 'E', 'G', 'H', 'J', 'K'].forEach(col => {
-      setCellValue(ws, `${col}${r}`, null);
+      ws.getCell(`${col}${r}`).value = null;
     });
   }
 
@@ -330,35 +319,39 @@ export const exportAnalystExecutiveReport = (
   for (let i = 0; i < maxBreakdown && i < 6; i++) {
     const r = 21 + i;
     if (sortedPosm[i]) {
-      setCellValue(ws, `A${r}`, sortedPosm[i][0]);
-      setCellValue(ws, `B${r}`, sortedPosm[i][1]);
+      ws.getCell(`A${r}`).value = sortedPosm[i][0];
+      ws.getCell(`B${r}`).value = sortedPosm[i][1];
     }
     if (sortedStore[i]) {
-      setCellValue(ws, `D${r}`, sortedStore[i][0]);
-      setCellValue(ws, `E${r}`, sortedStore[i][1]);
+      ws.getCell(`D${r}`).value = sortedStore[i][0];
+      ws.getCell(`E${r}`).value = sortedStore[i][1];
     }
     if (sortedProject[i]) {
-      setCellValue(ws, `G${r}`, sortedProject[i][0]);
-      setCellValue(ws, `H${r}`, sortedProject[i][1]);
+      ws.getCell(`G${r}`).value = sortedProject[i][0];
+      ws.getCell(`H${r}`).value = sortedProject[i][1];
     }
     if (sortedCat[i]) {
-      setCellValue(ws, `J${r}`, sortedCat[i][0]);
-      setCellValue(ws, `K${r}`, sortedCat[i][1]);
+      ws.getCell(`J${r}`).value = sortedCat[i][0];
+      ws.getCell(`K${r}`).value = sortedCat[i][1];
     }
   }
 
-  // Row 29+: Clear existing detail rows from row 31 upwards to 1000
+  // 7. Rows 31+: Detail Action Table
+  // Clear any existing dummy rows from row 31 to 1000
   for (let r = 31; r <= 1000; r++) {
     ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q'].forEach(col => {
-      setCellValue(ws, `${col}${r}`, null);
+      ws.getCell(`${col}${r}`).value = null;
     });
   }
 
-  // Ensure merges list has merges for new detail rows
-  if (!ws['!merges']) ws['!merges'] = [];
-  const existingMerges = ws['!merges'];
+  // Inject all active items with styling
+  const thinBorder: Partial<ExcelJS.Borders> = {
+    top: { style: 'thin', color: { argb: 'FFD2D0CE' } },
+    bottom: { style: 'thin', color: { argb: 'FFD2D0CE' } },
+    left: { style: 'thin', color: { argb: 'FFD2D0CE' } },
+    right: { style: 'thin', color: { argb: 'FFD2D0CE' } }
+  };
 
-  // Inject all active items into Row 31+
   activeItems.forEach((item, idx) => {
     const r = 31 + idx;
     const pLower = (item.progress || '').toLowerCase();
@@ -383,34 +376,47 @@ export const exportAnalystExecutiveReport = (
       noteText = 'Hỏng sớm';
     }
 
-    setCellValue(ws, `A${r}`, item.requestId || `BH-${item.rowId || idx + 1}`);
-    setCellValue(ws, `B${r}`, item.storeName || 'Chưa xác định');
-    setCellValue(ws, `C${r}`, item.posmType || 'Chưa xác định');
-    setCellValue(ws, `D${r}`, item.brand || 'Chưa xác định');
-    setCellValue(ws, `E${r}`, item.category || item.brand || 'Chưa xác định');
-    setCellValue(ws, `F${r}`, item.projectCode || 'Chưa xác định');
-    setCellValue(ws, `G${r}`, item.supplier || 'Chưa xác định');
-    setCellValue(ws, `H${r}`, formatDateStr(item.installationDate));
-    setCellValue(ws, `I${r}`, formatDateStr(item.sentDate || item.createdAt));
-    setCellValue(ws, `J${r}`, item.errorType || item.errorDetail || 'Chưa xác định');
-    setCellValue(ws, `L${r}`, item.errorDetail || 'Chưa xác định');
-    setCellValue(ws, `N${r}`, formatDateStr(item.expectedDate || item.requestDeadline));
-    setCellValue(ws, `O${r}`, formatDateStr(item.completedDate));
-    setCellValue(ws, `P${r}`, item.progress || 'Not started');
-    setCellValue(ws, `Q${r}`, noteText);
+    ws.getCell(`A${r}`).value = item.requestId || `BH-${item.rowId || idx + 1}`;
+    ws.getCell(`B${r}`).value = item.storeName || 'Chưa xác định';
+    ws.getCell(`C${r}`).value = item.posmType || 'Chưa xác định';
+    ws.getCell(`D${r}`).value = item.brand || 'Chưa xác định';
+    ws.getCell(`E${r}`).value = item.category || item.brand || 'Chưa xác định';
+    ws.getCell(`F${r}`).value = item.projectCode || 'Chưa xác định';
+    ws.getCell(`G${r}`).value = item.supplier || 'Chưa xác định';
+    ws.getCell(`H${r}`).value = formatDateStr(item.installationDate);
+    ws.getCell(`I${r}`).value = formatDateStr(item.sentDate || item.createdAt);
+    ws.getCell(`J${r}`).value = item.errorType || item.errorDetail || 'Chưa xác định';
+    ws.getCell(`L${r}`).value = item.errorDetail || 'Chưa xác định';
+    ws.getCell(`N${r}`).value = formatDateStr(item.expectedDate || item.requestDeadline);
+    ws.getCell(`O${r}`).value = formatDateStr(item.completedDate);
+    ws.getCell(`P${r}`).value = item.progress || 'Not started';
+    ws.getCell(`Q${r}`).value = noteText;
 
-    // Merge J:K and L:M for each detail row
-    const rowIdx0 = r - 1;
-    existingMerges.push({ s: { r: rowIdx0, c: 9 }, e: { r: rowIdx0, c: 10 } }); // J:K
-    existingMerges.push({ s: { r: rowIdx0, c: 11 }, e: { r: rowIdx0, c: 12 } }); // L:M
+    // Apply borders & font styling
+    ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'L', 'N', 'O', 'P', 'Q'].forEach(c => {
+      const cell = ws.getCell(`${c}${r}`);
+      cell.border = thinBorder;
+      cell.font = { name: 'Calibri', size: 11, color: { argb: 'FF252423' } };
+      cell.alignment = { vertical: 'middle', wrapText: true };
+    });
+
+    // Merge J:K and L:M for row
+    try {
+      ws.mergeCells(`J${r}:K${r}`);
+      ws.mergeCells(`L${r}:M${r}`);
+    } catch {
+      // Ignore if already merged
+    }
   });
 
-  const lastRow = Math.max(32 + activeItems.length, 40);
-  ws['!ref'] = `A1:Q${lastRow}`;
+  // =========================================================================
+  // 3. BUILD SHEET 2: "Raw Data" (FULL 21 COLUMNS WITH CLEAN STYLING)
+  // =========================================================================
+  const existingRaw = wb.getWorksheet('Raw Data');
+  if (existingRaw) wb.removeWorksheet(existingRaw.id);
 
-  // =========================================================================
-  // 3. BUILD SHEET 2: "Raw Data" (100% OPERATIONAL RAW DATA - 21 COLUMNS)
-  // =========================================================================
+  const rawWs = wb.addWorksheet('Raw Data');
+
   const rawHeader = [
     'STT / Row ID',
     'Mã Request (ID)',
@@ -435,15 +441,34 @@ export const exportAnalystExecutiveReport = (
     'Ghi Chú Vận Hành'
   ];
 
-  const rawRows: any[][] = [
-    ['DANH SÁCH CHI TIẾT 100% CA BẢO HÀNH POSM (RAW DATA)'],
-    [`Dự án: ${isFilteredByProject ? cleanProjectCode : 'Tất cả dự án'} | Tổng số: ${totalCount} ca | Xuất ngày: ${new Date().toLocaleString('vi-VN')}`],
-    [],
-    rawHeader
-  ];
+  // Header banner
+  rawWs.addRow(['DANH SÁCH CHI TIẾT 100% CA BẢO HÀNH POSM (RAW DATA)']);
+  rawWs.mergeCells('A1:U1');
+  const titleCell = rawWs.getCell('A1');
+  titleCell.font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FFFFFFFF' } };
+  titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E79' } };
+  titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+  rawWs.getRow(1).height = 30;
 
+  rawWs.addRow([`Dự án: ${isFilteredByProject ? cleanProjectCode : 'Tất cả dự án'} | Tổng số: ${totalCount} ca | Xuất ngày: ${new Date().toLocaleString('vi-VN')}`]);
+  rawWs.mergeCells('A2:U2');
+  rawWs.getCell('A2').font = { name: 'Calibri', size: 10, italic: true, color: { argb: 'FF605E5C' } };
+
+  rawWs.addRow([]);
+
+  // Table header
+  const headerRow = rawWs.addRow(rawHeader);
+  headerRow.height = 25;
+  headerRow.eachCell(cell => {
+    cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E79' } };
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    cell.border = thinBorder;
+  });
+
+  // Table rows
   activeItems.forEach((item, idx) => {
-    rawRows.push([
+    const row = rawWs.addRow([
       item.rowId || idx + 1,
       item.requestId || `BH-${item.rowId || idx + 1}`,
       item.projectCode || '-',
@@ -466,26 +491,37 @@ export const exportAnalystExecutiveReport = (
       item.precedingRequestId || '-',
       item.note || '-'
     ]);
+
+    row.eachCell((cell, colNumber) => {
+      cell.border = thinBorder;
+      cell.font = { name: 'Calibri', size: 10 };
+      cell.alignment = { vertical: 'middle', wrapText: colNumber === 13 || colNumber === 21 };
+      if (idx % 2 === 1) {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } };
+      }
+    });
   });
 
-  const wsRaw = XLSX.utils.aoa_to_sheet(rawRows);
-  wsRaw['!cols'] = [
-    { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 28 }, { wch: 14 },
-    { wch: 18 }, { wch: 18 }, { wch: 20 }, { wch: 16 }, { wch: 16 },
-    { wch: 20 }, { wch: 24 }, { wch: 40 }, { wch: 15 }, { wch: 15 },
-    { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 20 },
-    { wch: 30 }
+  // Column widths for Raw Data
+  rawWs.columns = [
+    { width: 12 }, { width: 16 }, { width: 14 }, { width: 28 }, { width: 14 },
+    { width: 18 }, { width: 18 }, { width: 20 }, { width: 16 }, { width: 16 },
+    { width: 20 }, { width: 24 }, { width: 42 }, { width: 16 }, { width: 16 },
+    { width: 16 }, { width: 16 }, { width: 16 }, { width: 20 }, { width: 20 },
+    { width: 30 }
   ];
 
-  // Remove existing Raw Data sheet if any and append fresh one
-  const rawSheetName = 'Raw Data';
-  const existingRawIdx = wb.SheetNames.indexOf(rawSheetName);
-  if (existingRawIdx >= 0) {
-    wb.SheetNames.splice(existingRawIdx, 1);
-    delete wb.Sheets[rawSheetName];
-  }
-  XLSX.utils.book_append_sheet(wb, wsRaw, rawSheetName);
-
-  // Trigger download in browser
-  XLSX.writeFile(wb, `${finalFilename}_${dateStr}.xlsx`);
+  // =========================================================================
+  // 4. GENERATE BINARY & TRIGGER BROWSER DOWNLOAD
+  // =========================================================================
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  });
+  const url = window.URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `${finalFilename}_${dateStr}.xlsx`;
+  anchor.click();
+  window.URL.revokeObjectURL(url);
 };
