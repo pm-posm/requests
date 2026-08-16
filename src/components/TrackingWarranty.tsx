@@ -1222,27 +1222,28 @@ export default function TrackingWarranty() {
 
   return (
     <div className="space-y-6 pb-12">
-      {/* HEADER SECTION - UNIFIED WITH INSTALLATION HEADER DESIGN */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs">
-        <div className="flex items-center gap-3.5">
-          <div className="p-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl border border-slate-200 dark:border-slate-700">
-            <ShieldCheck className="w-5 h-5 text-sky-600 dark:text-sky-400" />
+      {/* HEADER SECTION - UNIFIED WITH MODERN CLEAN DESIGN */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3.5 bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0">
+            <ShieldCheck className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
-                Điều Hành &amp; Phân Tích Bảo Hành POSM
+              <h1 className="text-base sm:text-lg font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
+                Bảo Hành &amp; Đổi Trả POSM
               </h1>
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-900/60">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                 Live Sync Active
               </span>
-              <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded text-xs flex items-center gap-1.5">
-                <span>Sync: {new Date().toLocaleTimeString('vi-VN')}</span>
-              </span>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Google Sheet BAOHANH_MODEL • <strong className="text-slate-800 dark:text-slate-200 font-semibold">{filteredItems.length} Ca Yêu Cầu Bảo Hành</strong>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              {activeModuleTab === 'INBOX' 
+                ? 'Hộp Thư & Luồng Email Trao Đổi • Supabase Cloud Realtime' 
+                : activeModuleTab === 'ANALYST'
+                  ? `Báo Cáo Phân Tích Sự Cố & Tiến Độ • ${warrantyItems.length} Ca Bảo Hành`
+                  : `Danh Sách Quản Lý Ca Bảo Hành • ${filteredItems.length}/${warrantyItems.length} Ca`}
             </p>
           </div>
         </div>
@@ -1254,73 +1255,76 @@ export default function TrackingWarranty() {
               onClick={() => setActiveModuleTab('DATA_LIST')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 activeModuleTab === 'DATA_LIST'
-                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs font-bold'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
               <Table className="w-3.5 h-3.5" />
-              <span>Danh Sách Bảo Hành</span>
+              <span>Danh Sách Ca</span>
             </button>
 
             <button
               onClick={() => setActiveModuleTab('ANALYST')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 activeModuleTab === 'ANALYST'
-                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs font-bold'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
               <BarChart3 className="w-3.5 h-3.5" />
-              <span>Báo Cáo Tiến Độ &amp; Phân Tích</span>
+              <span>Báo Cáo Phân Tích</span>
             </button>
 
             <button
               onClick={() => setActiveModuleTab('INBOX')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 activeModuleTab === 'INBOX'
-                  ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-2xs'
+                  ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-2xs font-bold'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
               <Mail className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-              <span>Hộp Thư Bảo Hành</span>
+              <span>Hộp Thư Gmail</span>
               <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-mono">
                 Live
               </span>
             </button>
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              onClick={() => handleExportExcel()}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl shadow-xs transition-all cursor-pointer border border-emerald-400/40"
-              title="Xuất file báo cáo Excel 3-Tab BI (.xlsx) theo bộ lọc hiện tại"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Xuất Excel ({filteredItems.length})</span>
-            </button>
+          {/* Right Action buttons for Sheet-driven tabs */}
+          {activeModuleTab !== 'INBOX' && (
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={() => handleExportExcel()}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl shadow-xs transition-all cursor-pointer border border-emerald-400/40"
+                title="Xuất file báo cáo Excel (.xlsx)"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Xuất Excel</span>
+              </button>
 
-            <button
-              onClick={() => fetchSheetData(sheetUrl)}
-              disabled={isRefreshing}
-              className="p-1.5 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-800 rounded-xl transition-colors cursor-pointer"
-              title="Đồng bộ dữ liệu từ Sheet"
-            >
-              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            </button>
+              <button
+                onClick={() => fetchSheetData(sheetUrl)}
+                disabled={isRefreshing}
+                className="p-1.5 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-800 rounded-xl transition-colors cursor-pointer shadow-2xs"
+                title="Đồng bộ dữ liệu từ Sheet"
+              >
+                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              </button>
 
-            <button
-              onClick={() => {
-                setTempUrlInput(sheetUrl);
-                setTempWebAppInput(webAppUrl);
-                setIsUrlModalOpen(true);
-              }}
-              className="p-1.5 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-800 rounded-xl transition-colors cursor-pointer"
-              title="Cấu hình Google Sheet URL & Web App API"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-          </div>
+              <button
+                onClick={() => {
+                  setTempUrlInput(sheetUrl);
+                  setTempWebAppInput(webAppUrl);
+                  setIsUrlModalOpen(true);
+                }}
+                className="p-1.5 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-800 rounded-xl transition-colors cursor-pointer shadow-2xs"
+                title="Cấu hình Google Sheet URL"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

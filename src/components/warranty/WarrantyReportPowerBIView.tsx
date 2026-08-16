@@ -651,50 +651,8 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
   };
 
   return (
-    <div className="min-h-screen bg-[#F0F2F5] dark:bg-[#181818] text-[#252423] dark:text-[#F3F2F1] flex flex-col font-sans select-text pb-14">
+    <div className="bg-[#F0F2F5] dark:bg-[#181818] text-[#252423] dark:text-[#F3F2F1] flex flex-col font-sans select-text pb-14 rounded-2xl overflow-hidden border border-slate-200/80 dark:border-slate-800 shadow-2xs">
       
-      {/* POWER BI DESKTOP TOP COMMAND BAR */}
-      <div className="bg-[#FFFFFF] dark:bg-[#202020] border-b border-[#D2D0CE] dark:border-[#383838] px-4 py-2 flex flex-wrap items-center justify-between gap-2 shadow-[0_1px_2px_rgba(0,0,0,0.05)] sticky top-0 z-20">
-        <div className="flex items-center gap-3">
-          <div className="w-7 h-7 bg-[#F2C811] text-[#252423] font-black text-xs flex items-center justify-center rounded-[2px] shadow-sm tracking-tighter">
-            PBI
-          </div>
-          <div>
-            <h1 className="text-sm font-bold text-[#252423] dark:text-[#FFFFFF] leading-tight flex items-center gap-2">
-              <span>Báo Cáo Phân Tích Sự Cố Bảo Hành POSM</span>
-              <span className="text-[10px] font-normal px-1.5 py-0.2 bg-[#F3F2F1] dark:bg-[#323130] text-[#605E5C] dark:text-[#C8C6C4] border border-[#EDEBE9] dark:border-[#383838] rounded-[2px]">
-                Power BI Canvas
-              </span>
-            </h1>
-            <p className="text-[11px] text-[#605E5C] dark:text-[#A19F9D]">
-              Đồng bộ cấu trúc dữ liệu 1:1 theo template Weekly_Report.xlsx
-            </p>
-          </div>
-        </div>
-
-        {/* Global Toolbar Actions */}
-        <div className="flex items-center gap-2">
-          {isFilterActive && (
-            <button
-              onClick={handleResetFilters}
-              className="px-2.5 py-1 text-xs font-semibold bg-[#F3F2F1] hover:bg-[#EDEBE9] dark:bg-[#2D2D2D] dark:hover:bg-[#383838] text-[#252423] dark:text-[#FFFFFF] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <RotateCcw className="w-3.5 h-3.5 text-[#605E5C]" />
-              <span>Xóa bộ lọc</span>
-            </button>
-          )}
-
-          <button
-            onClick={() => onExportExcel()}
-            className="px-3 py-1 text-xs font-bold bg-[#107C41] hover:bg-[#0E6C38] text-white rounded-[2px] flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
-            title="Xuất báo cáo Excel 3-Sheet đầy đủ theo chuẩn Weekly_Report"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span>Xuất Excel (3 Sheet)</span>
-          </button>
-        </div>
-      </div>
-
       {/* POWER BI SLICERS / FILTER PANE BAR (UNIFIED 2-GROUPS: DATE + CLASSIFICATION) */}
       <div className="bg-[#FFFFFF] dark:bg-[#242424] border-b border-[#D2D0CE] dark:border-[#383838] px-4 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
         <div className="flex items-center gap-2.5 flex-wrap text-xs">

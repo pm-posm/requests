@@ -988,49 +988,35 @@ function doGet(e) {
   };
 
   return (
-    <div className="space-y-4">
-      {/* 1. TOP CONTROL BAR */}
-      <div className="bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-        {/* Left: Title & Live Badge */}
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-xl border border-indigo-200/60 dark:border-indigo-900/60">
-            <Inbox className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
-                Hộp Thư &amp; Luồng Trao Đổi Bảo Hành
-              </h2>
-              <Badge className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 text-[10px] font-semibold flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>Live Realtime</span>
-              </Badge>
-              {lastSyncedTime && (
-                <span className="text-[10px] text-slate-400 font-mono">
-                  (Cập nhật lúc {lastSyncedTime})
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Đọc email theo luồng <strong className="font-semibold text-slate-700 dark:text-slate-300">[BH-xxx]</strong> trực tiếp từ Gmail qua Apps Script.
-            </p>
-          </div>
+    <div className="space-y-3">
+      {/* 1. COMPACT TOOLBAR BAR */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+        {/* Left: Quick Realtime Info */}
+        <div className="flex items-center gap-2 text-xs">
+          <Badge className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 text-[10px] font-semibold flex items-center gap-1.5 py-0.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>Live Realtime ({threads.length} luồng thư)</span>
+          </Badge>
+          {lastSyncedTime && (
+            <span className="text-[11px] text-slate-400 font-mono hidden sm:inline">
+              • Cập nhật {lastSyncedTime}
+            </span>
+          )}
         </div>
 
         {/* Right Actions */}
-        <div className="flex items-center gap-2 self-stretch sm:self-auto flex-wrap">
-          
+        <div className="flex items-center gap-2 flex-wrap">
           {/* KEYWORD POPOVER TRIGGER */}
           <div className="relative" ref={keywordPopoverRef}>
             <button
               onClick={() => setIsKeywordPopoverOpen(!isKeywordPopoverOpen)}
-              className="flex items-center gap-2 px-3.5 py-2 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-semibold transition-all cursor-pointer border border-indigo-200 dark:border-indigo-800 shadow-2xs"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-semibold transition-all cursor-pointer border border-indigo-200 dark:border-indigo-800 shadow-2xs"
             >
               <Tag className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
               <span>
                 Từ khóa: <strong className="font-mono">{selectedKeywords.length === 1 ? selectedKeywords[0] : `${selectedKeywords.length} đang chọn`}</strong>
               </span>
-              <ChevronRight className={`w-3.5 h-3.5 text-indigo-500 transition-transform ${isKeywordPopoverOpen ? 'rotate-90' : ''}`} />
+              <ChevronRight className={`w-3 h-3 text-indigo-500 transition-transform ${isKeywordPopoverOpen ? 'rotate-90' : ''}`} />
             </button>
 
             {/* KEYWORD POPOVER PANEL */}
@@ -1143,17 +1129,17 @@ function doGet(e) {
           <button
             onClick={() => fetchLiveGmailThreads(buildCombinedQuery(selectedKeywords))}
             disabled={isRefreshing}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-semibold transition-colors cursor-pointer border border-indigo-200/80 dark:border-indigo-800 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-xs disabled:opacity-60 disabled:cursor-not-allowed"
             title="Quét kiểm tra email bảo hành mới từ Gmail"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-indigo-600 dark:text-indigo-400' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span>{isRefreshing ? 'Đang quét...' : 'Quét Gmail'}</span>
           </button>
 
           {/* COMPACT CONFIG ENDPOINT BUTTON */}
           <button
             onClick={() => setShowConfigModal(true)}
-            className="p-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl transition-colors cursor-pointer border border-slate-200 dark:border-slate-700"
+            className="p-1.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl transition-colors cursor-pointer border border-slate-200 dark:border-slate-700 shadow-2xs"
             title="Cấu hình Google Apps Script Web App Endpoint & Mã Code.gs"
           >
             <Settings className="w-4 h-4" />
