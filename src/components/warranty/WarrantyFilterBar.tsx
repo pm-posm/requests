@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Search, Filter, Calendar, ChevronDown, RotateCcw, X, SlidersHorizontal, Check, Building2, Store, Tag, UserCheck, Layers, FolderKanban } from 'lucide-react';
+import { Search, Filter, Calendar, ChevronDown, RotateCcw, X, SlidersHorizontal, Check, Building2, Store, Tag, UserCheck, Layers, FolderKanban, RefreshCw, Settings } from 'lucide-react';
 import type { WarrantyItem } from '@/types/warranty';
 
 export interface WarrantyFilterState {
@@ -184,13 +184,19 @@ interface WarrantyFilterBarProps {
   filters: WarrantyFilterState;
   onFilterChange: (newFilters: WarrantyFilterState) => void;
   onResetFilters: () => void;
+  onRefreshSheet?: () => void;
+  isRefreshing?: boolean;
+  onOpenSettings?: () => void;
 }
 
 export const WarrantyFilterBar: React.FC<WarrantyFilterBarProps> = ({
   warrantyItems,
   filters,
   onFilterChange,
-  onResetFilters
+  onResetFilters,
+  onRefreshSheet,
+  isRefreshing = false,
+  onOpenSettings
 }) => {
   const [isDatePopoverOpen, setIsDatePopoverOpen] = useState(false);
   const [isFilterPopoverOpen, setIsFilterPopoverOpen] = useState(false);
@@ -884,6 +890,30 @@ export const WarrantyFilterBar: React.FC<WarrantyFilterBarProps> = ({
             </button>
           </div>
         )}
+
+        {/* 6. SHEET ACTION BUTTONS: REFRESH & SETTINGS */}
+        <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto ml-auto">
+          {onRefreshSheet && (
+            <button
+              onClick={onRefreshSheet}
+              disabled={isRefreshing}
+              className="p-2 bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800 rounded-xl transition-colors cursor-pointer shadow-2xs"
+              title="Đồng bộ dữ liệu từ Google Sheet"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            </button>
+          )}
+
+          {onOpenSettings && (
+            <button
+              onClick={onOpenSettings}
+              className="p-2 bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800 rounded-xl transition-colors cursor-pointer shadow-2xs"
+              title="Cấu hình Google Sheet URL & Web App API"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+          )}
+        </div>
 
       </div>
     </div>

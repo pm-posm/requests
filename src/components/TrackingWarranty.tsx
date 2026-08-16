@@ -1290,41 +1290,6 @@ export default function TrackingWarranty() {
               </span>
             </button>
           </div>
-
-          {/* Right Action buttons for Sheet-driven tabs */}
-          {activeModuleTab !== 'INBOX' && (
-            <div className="flex items-center gap-1.5 shrink-0">
-              <button
-                onClick={() => handleExportExcel()}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl shadow-xs transition-all cursor-pointer border border-emerald-400/40"
-                title="Xuất file báo cáo Excel (.xlsx)"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Xuất Excel</span>
-              </button>
-
-              <button
-                onClick={() => fetchSheetData(sheetUrl)}
-                disabled={isRefreshing}
-                className="p-1.5 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-800 rounded-xl transition-colors cursor-pointer shadow-2xs"
-                title="Đồng bộ dữ liệu từ Sheet"
-              >
-                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-              </button>
-
-              <button
-                onClick={() => {
-                  setTempUrlInput(sheetUrl);
-                  setTempWebAppInput(webAppUrl);
-                  setIsUrlModalOpen(true);
-                }}
-                className="p-1.5 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-800 rounded-xl transition-colors cursor-pointer shadow-2xs"
-                title="Cấu hình Google Sheet URL"
-              >
-                <Settings className="w-4 h-4" />
-              </button>
-            </div>
-          )}
         </div>
       </div>
 
@@ -1355,6 +1320,13 @@ export default function TrackingWarranty() {
             filters={filters}
             onFilterChange={setFilters}
             onResetFilters={() => setFilters(INITIAL_WARRANTY_FILTER_STATE)}
+            onRefreshSheet={() => fetchSheetData(sheetUrl)}
+            isRefreshing={isRefreshing}
+            onOpenSettings={() => {
+              setTempUrlInput(sheetUrl);
+              setTempWebAppInput(webAppUrl);
+              setIsUrlModalOpen(true);
+            }}
           />
 
           <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">

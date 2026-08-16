@@ -1140,8 +1140,29 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
             </div>
           )}
 
-          <div className="ml-auto text-xs text-[#605E5C] dark:text-[#A19F9D] font-mono">
-            Hiển thị <span className="font-bold text-[#252423] dark:text-[#FFFFFF]">{filteredData.length}</span> / {warrantyItems.length} ca
+          <div className="ml-auto flex items-center gap-2">
+            {isFilterActive && (
+              <button
+                onClick={handleResetFilters}
+                className="px-2.5 py-1 text-xs font-semibold bg-[#F3F2F1] hover:bg-[#EDEBE9] dark:bg-[#2D2D2D] dark:hover:bg-[#383838] text-[#252423] dark:text-[#FFFFFF] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-[#605E5C]" />
+                <span>Xóa bộ lọc</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => onExportExcel()}
+              className="px-3 py-1 text-xs font-bold bg-[#107C41] hover:bg-[#0E6C38] text-white rounded-[2px] flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+              title="Xuất báo cáo Excel 3-Sheet đầy đủ theo chuẩn Weekly_Report"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Xuất Excel ({filteredData.length})</span>
+            </button>
+
+            <div className="text-xs text-[#605E5C] dark:text-[#A19F9D] font-mono pl-2 border-l border-[#EDEBE9] dark:border-[#383838]">
+              Hiển thị <span className="font-bold text-[#252423] dark:text-[#FFFFFF]">{filteredData.length}</span> / {warrantyItems.length} ca
+            </div>
           </div>
         </div>
       </div>
