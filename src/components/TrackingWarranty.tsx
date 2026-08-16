@@ -15,6 +15,7 @@ import { useDashboardStore } from '@/stores/useDashboardStore';
 import { exportAnalystExecutiveReport } from '@/services/excelReportService';
 import { WarrantyInboxView } from './warranty/WarrantyInboxView';
 import { WarrantyReportPowerBIView } from './warranty/WarrantyReportPowerBIView';
+import { WarrantyFilterBar, INITIAL_WARRANTY_FILTER_STATE, type WarrantyFilterState } from './warranty/WarrantyFilterBar';
 
 // Official Public Google Sheet CSV URL for BaoHanh_Model
 const DEFAULT_WARRANTY_SHEET_CSV = 'https://docs.google.com/spreadsheets/d/119LpiU1XheXgOxKWxw17E_u4vgRTBPhc-4FADDS8B1Q/export?format=csv&gid=2053849390';
@@ -156,14 +157,8 @@ export default function TrackingWarranty() {
   const [error, setError] = useState<string | null>(null);
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
-  // Filter states
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedProgress, setSelectedProgress] = useState('all');
-  const [selectedSupplier, setSelectedSupplier] = useState('all');
-  const [selectedVisTech, setSelectedVisTech] = useState('all');
-  const [selectedBrand, setSelectedBrand] = useState('all');
-  const [selectedYear, setSelectedYear] = useState('2026');
-  const [selectedProject, setSelectedProject] = useState('all');
+  // Unified 2-Group Filter state (Date group + Classification group)
+  const [filters, setFilters] = useState<WarrantyFilterState>(INITIAL_WARRANTY_FILTER_STATE);
 
   // Drawer selected item & Edit Form State
   const [selectedItem, setSelectedItem] = useState<WarrantyItem | null>(null);
@@ -682,24 +677,57 @@ export default function TrackingWarranty() {
       .sort((a, b) => b.count - a.count);
   }, [warrantyItems]);
 
-  // Filtered dataset
+  // Helper for parsing date components from warranty items
+  const parseItemDate = (item: WarrantyItem) => {
+    const raw = item.sentDate || item.installationDate || item.raiseMailTime || '';
+    if (!raw) return null;
+    const trimmed = raw.trim();
+    let d: Date | null = null;
+
+    if (trimmed.includes('/')) {
+      const parts = trimmed.split('/');
+      if (parts.length === 3) {
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const year = parseInt(parts[2], 10);
+        d = new Date(year, month, day);
+      }
+    } else if (trimmed.includes('-')) {
+      const parts = trimmed.split('-');
+      if (parts.length === 3) {
+        if (parts[0].length === 4) {
+          d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+        } else {
+          d = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+        }
+      }
+    }
+
+    if (!d || isNaN(d.getTime())) return null;
+
+    const year = d.getFullYear();
+    const month = d.getMonth() + 1;
+    const quarter = Math.ceil(month / 3);
+
+    // ISO week
+    const target = new Date(d.valueOf());
+    const dayNr = (d.getDay() + 6) % 7;
+    target.setDate(target.getDate() - dayNr + 3);
+    const firstThursday = target.valueOf();
+    target.setMonth(0, 1);
+    if (target.getDay() !== 4) {
+      target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+    }
+    const week = 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000);
+
+    return { year, month, quarter, week, time: d.getTime() };
+  };
+
+  // Filtered dataset using unified 2-Group filter state
   const filteredItems = useMemo(() => {
     return warrantyItems.filter(item => {
-      // Project Filter
-      if (selectedProject !== 'all') {
-        const itemPrj = (item.projectCode || '').trim().toLowerCase();
-        const targetPrj = selectedProject.trim().toLowerCase();
-        if (itemPrj !== targetPrj && !itemPrj.includes(targetPrj)) return false;
-      }
-
-      // Year Filter
-      if (selectedYear !== 'all') {
-        const itemYearMatch = (item.sentDate || item.installationDate || '').match(/\b(202[0-9]|201[0-9])\b/);
-        if (itemYearMatch && itemYearMatch[1] !== selectedYear) return false;
-      }
-
-      // Search
-      const term = searchTerm.toLowerCase().trim();
+      // 1. Search text filter
+      const term = filters.searchTerm.toLowerCase().trim();
       if (term) {
         const matchSearch = 
           item.requestId.toLowerCase().includes(term) ||
@@ -713,43 +741,54 @@ export default function TrackingWarranty() {
           item.errorDetail.toLowerCase().includes(term) ||
           (item.mailTitle && item.mailTitle.toLowerCase().includes(term)) ||
           item.visTech.toLowerCase().includes(term) ||
-          item.srName.toLowerCase().includes(term);
+          item.srName.toLowerCase().includes(term) ||
+          (item.errorType && item.errorType.toLowerCase().includes(term));
         if (!matchSearch) return false;
       }
 
-      // Progress Filter
-      if (selectedProgress !== 'all') {
-        const pLower = item.progress.toLowerCase();
-        if (selectedProgress === 'completed') {
-          if (pLower !== 'hoàn thành') return false;
-        } else if (selectedProgress === 'not_started') {
-          if (pLower !== 'not started') return false;
-        } else if (selectedProgress === 'cancelled') {
-          if (pLower !== 'cancel' && pLower !== 'cancelled') return false;
-        } else if (selectedProgress === 'in_progress') {
-          if (pLower === 'hoàn thành' || pLower === 'not started' || pLower === 'cancel' || pLower === 'cancelled') return false;
-        }
+      // 2. Date filters (Năm, Quý, Tháng, Tuần, Khoảng ngày Từ -> Đến)
+      const dateObj = parseItemDate(item);
+      if (filters.selectedYear !== 'all') {
+        if (!dateObj || String(dateObj.year) !== filters.selectedYear) return false;
+      }
+      if (filters.selectedQuarter !== 'all') {
+        if (!dateObj || String(dateObj.quarter) !== filters.selectedQuarter) return false;
+      }
+      if (filters.selectedMonth !== 'all') {
+        if (!dateObj || String(dateObj.month) !== filters.selectedMonth) return false;
+      }
+      if (filters.selectedWeek !== 'all') {
+        if (!dateObj || String(dateObj.week) !== filters.selectedWeek) return false;
+      }
+      if (filters.dateFrom) {
+        const fromMs = new Date(filters.dateFrom).setHours(0, 0, 0, 0);
+        if (!dateObj || dateObj.time < fromMs) return false;
+      }
+      if (filters.dateTo) {
+        const toMs = new Date(filters.dateTo).setHours(23, 59, 59, 999);
+        if (!dateObj || dateObj.time > toMs) return false;
       }
 
-      // Supplier Filter (Hỗ trợ lọc 'Chưa chọn' cho các ca chưa gán thầu)
-      if (selectedSupplier !== 'all') {
-        const itemSup = item.supplier?.trim();
-        if (selectedSupplier === 'Chưa chọn' || selectedSupplier === 'Chưa gán thầu') {
-          if (itemSup && itemSup !== 'Chưa chọn' && itemSup !== 'Chưa gán thầu') return false;
-        } else if (itemSup !== selectedSupplier) {
-          return false;
-        }
+      // 3. Classification filters (VIS-Tech, Supplier, Store, Loại POSM, Nhãn)
+      if (filters.selectedVisTechs.length > 0) {
+        if (!filters.selectedVisTechs.includes(item.visTech?.trim())) return false;
       }
-
-      // VIS-Tech Filter
-      if (selectedVisTech !== 'all' && item.visTech !== selectedVisTech) return false;
-
-      // Brand Filter
-      if (selectedBrand !== 'all' && item.brand !== selectedBrand) return false;
+      if (filters.selectedSuppliers.length > 0) {
+        if (!filters.selectedSuppliers.includes(item.supplier?.trim())) return false;
+      }
+      if (filters.selectedStores.length > 0) {
+        if (!filters.selectedStores.includes(item.storeName?.trim())) return false;
+      }
+      if (filters.selectedPosmTypes.length > 0) {
+        if (!filters.selectedPosmTypes.includes(item.posmType?.trim())) return false;
+      }
+      if (filters.selectedBrands.length > 0) {
+        if (!filters.selectedBrands.includes(item.brand?.trim())) return false;
+      }
 
       return true;
     });
-  }, [warrantyItems, selectedProject, selectedYear, searchTerm, selectedProgress, selectedSupplier, selectedVisTech, selectedBrand]);
+  }, [warrantyItems, filters]);
 
   // Metrics (tính trên dataset đã lọc theo Năm & Filters để Analyst phản ánh dữ liệu thực tế)
   const stats: WarrantyStats = useMemo(() => {
@@ -1095,22 +1134,22 @@ export default function TrackingWarranty() {
     val: string
   ) => {
     if (type === 'supplier') {
-      setSelectedSupplier(val);
+      setFilters(prev => ({ ...prev, selectedSuppliers: [val] }));
     } else if (type === 'brand') {
-      setSelectedBrand(val);
+      setFilters(prev => ({ ...prev, selectedBrands: [val] }));
     } else if (type === 'posmType') {
-      setSearchTerm(val);
+      setFilters(prev => ({ ...prev, selectedPosmTypes: [val] }));
     } else if (type === 'project') {
-      setSearchTerm(val);
+      setFilters(prev => ({ ...prev, searchTerm: val }));
     } else if (type === 'category') {
       const cleanKeyword = val.replace(/[^a-zA-Z0-9àáạảãâầấậẩẫăằắặcđèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹ\s]/gi, '').trim();
-      setSearchTerm(cleanKeyword);
+      setFilters(prev => ({ ...prev, searchTerm: cleanKeyword }));
     } else if (type === 'progress') {
-      setSelectedProgress(val);
+      setFilters(prev => ({ ...prev, searchTerm: val }));
     } else if (type === 'recurrent') {
-      setSearchTerm('Lần #');
+      setFilters(prev => ({ ...prev, searchTerm: 'Lần #' }));
     } else if (type === 'aging') {
-      setSelectedProgress('in_progress');
+      setFilters(prev => ({ ...prev, searchTerm: '' }));
     }
 
     setActiveModuleTab('DATA_LIST');
@@ -1119,11 +1158,10 @@ export default function TrackingWarranty() {
 
   // Export Excel 3-Tab BI Workbook (.xlsx) with Project Code Filter Support
   const handleExportExcel = (targetProjCode?: string) => {
-    const projToExport = targetProjCode || (selectedProject !== 'all' ? selectedProject : undefined);
-    if (projToExport) {
-      exportAnalystExecutiveReport([], warrantyItems, `POSM_Warranty_Report_${projToExport}`, projToExport);
-      const count = warrantyItems.filter(i => (i.projectCode || '').trim().toLowerCase().includes(projToExport.toLowerCase())).length;
-      toast.success(`🟢 Đã xuất Báo Cáo Excel DỰ ÁN "${projToExport}" thành công! (${count} ca)`);
+    if (targetProjCode) {
+      exportAnalystExecutiveReport([], warrantyItems, `POSM_Warranty_Report_${targetProjCode}`, targetProjCode);
+      const count = warrantyItems.filter(i => (i.projectCode || '').trim().toLowerCase().includes(targetProjCode.toLowerCase())).length;
+      toast.success(`🟢 Đã xuất Báo Cáo Excel DỰ ÁN "${targetProjCode}" thành công! (${count} ca)`);
     } else {
       exportAnalystExecutiveReport([], filteredItems, 'POSM_Warranty_Executive_Report');
       toast.success(`🟢 Đã xuất Báo Cáo Excel 3-Tab toàn bộ hệ thống! (${filteredItems.length} ca)`);
@@ -1310,191 +1348,17 @@ export default function TrackingWarranty() {
         </div>
       )}
 
-      {/* TAB 2: CLEAN OPERATIONAL DATA LIST & FILTER GRID */}
+      {/* TAB 2: CLEAN OPERATIONAL DATA LIST & UNIFIED 2-GROUP FILTER BAR */}
       {activeModuleTab === 'DATA_LIST' && (
-      <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
-        {/* Active Filter Notification Bar */}
-        {(selectedProject !== 'all' || selectedSupplier !== 'all' || selectedBrand !== 'all' || selectedProgress !== 'all' || selectedVisTech !== 'all' || searchTerm) && (
-          <div className="px-4 py-2 bg-sky-50 dark:bg-sky-950/60 border-b border-sky-200 dark:border-sky-800 flex items-center justify-between gap-2 text-xs">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-bold text-sky-900 dark:text-sky-200 flex items-center gap-1">
-                <Filter className="w-3.5 h-3.5 text-sky-600" />
-                Đang lọc theo Report:
-              </span>
-              {selectedProject !== 'all' && (
-                <Badge variant="secondary" className="bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200 flex items-center gap-1 font-bold border border-amber-300 dark:border-amber-800">
-                  📌 Dự án: {selectedProject}
-                  <X className="w-3 h-3 cursor-pointer hover:text-amber-950" onClick={() => setSelectedProject('all')} />
-                </Badge>
-              )}
-              {selectedSupplier !== 'all' && (
-                <Badge variant="secondary" className="bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-200 flex items-center gap-1">
-                  Nhà thầu: {selectedSupplier}
-                  <X className="w-3 h-3 cursor-pointer hover:text-sky-950" onClick={() => setSelectedSupplier('all')} />
-                </Badge>
-              )}
-              {selectedBrand !== 'all' && (
-                <Badge variant="secondary" className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 flex items-center gap-1">
-                  Brand: {selectedBrand}
-                  <X className="w-3 h-3 cursor-pointer hover:text-purple-950" onClick={() => setSelectedBrand('all')} />
-                </Badge>
-              )}
-              {selectedProgress !== 'all' && (
-                <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200 flex items-center gap-1">
-                  Tiến độ: {selectedProgress}
-                  <X className="w-3 h-3 cursor-pointer hover:text-emerald-950" onClick={() => setSelectedProgress('all')} />
-                </Badge>
-              )}
-              {selectedVisTech !== 'all' && (
-                <Badge variant="secondary" className="bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 flex items-center gap-1">
-                  VIS-Tech: {selectedVisTech}
-                  <X className="w-3 h-3 cursor-pointer hover:text-indigo-950" onClick={() => setSelectedVisTech('all')} />
-                </Badge>
-              )}
-              {searchTerm && (
-                <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 flex items-center gap-1 font-mono font-bold">
-                  Từ khóa: "{searchTerm}"
-                  <X className="w-3 h-3 cursor-pointer hover:text-amber-950" onClick={() => setSearchTerm('')} />
-                </Badge>
-              )}
-            </div>
-            <button
-              onClick={() => {
-                setSelectedProject('all');
-                setSelectedSupplier('all');
-                setSelectedBrand('all');
-                setSelectedProgress('all');
-                setSelectedVisTech('all');
-                setSelectedYear('2026');
-                setSearchTerm('');
-              }}
-              className="text-[11px] font-bold text-sky-700 dark:text-sky-300 hover:underline cursor-pointer shrink-0"
-            >
-              Xóa tất cả bộ lọc
-            </button>
-          </div>
-        )}
+        <div className="space-y-4">
+          <WarrantyFilterBar
+            warrantyItems={warrantyItems}
+            filters={filters}
+            onFilterChange={setFilters}
+            onResetFilters={() => setFilters(INITIAL_WARRANTY_FILTER_STATE)}
+          />
 
-        {/* Filters Header */}
-        <div className="p-4 border-b border-border bg-slate-50/50 dark:bg-slate-900/50 space-y-3">
-          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-            {/* Search Input */}
-            <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="Tìm theo Mã dự án (VD: 118420...), Request ID (BH-577), Tên Store, POSM, Brand, Supplier..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 text-xs bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all"
-              />
-              {searchTerm && (
-                <button
-                  onClick={() => setSearchTerm('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs cursor-pointer"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-
-            {/* Dropdown Filters */}
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <div className="flex items-center gap-1.5 bg-background px-2.5 py-1.5 rounded-lg border border-border">
-                <Filter className="w-3.5 h-3.5 text-muted-foreground" />
-                <span className="text-muted-foreground font-medium">Bộ lọc:</span>
-              </div>
-
-              {/* Project Filter */}
-              <select
-                value={selectedProject}
-                onChange={(e) => {
-                  setSelectedProject(e.target.value);
-                  if (e.target.value !== 'all') {
-                    toast.success(`📌 Đã lọc ca bảo hành theo Mã Dự Án "${e.target.value}"`);
-                  }
-                }}
-                className="bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 font-bold text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 max-w-[190px] truncate cursor-pointer shadow-2xs"
-              >
-                <option value="all">📂 Tất cả Mã Dự Án ({uniqueProjects.length})</option>
-                {uniqueProjects.map(({ code, count }) => (
-                  <option key={code} value={code}>
-                    📌 Dự án: {code} ({count} ca)
-                  </option>
-                ))}
-              </select>
-
-              {/* Year Filter */}
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(e.target.value)}
-                className="bg-background border border-border text-foreground font-bold text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-sky-500/20 cursor-pointer text-sky-700 dark:text-sky-300"
-              >
-                <option value="all">📅 Tất cả Năm</option>
-                {uniqueYears.map((y) => (
-                  <option key={y} value={y}>
-                    📅 Năm {y}
-                  </option>
-                ))}
-              </select>
-
-              {/* Progress Filter */}
-              <select
-                value={selectedProgress}
-                onChange={(e) => setSelectedProgress(e.target.value)}
-                className="bg-background border border-border text-foreground text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-sky-500/20 cursor-pointer"
-              >
-                <option value="all">Tất cả Tiến độ</option>
-                <option value="in_progress">🔵 Tiếp nhận / Đang xử lý</option>
-                <option value="completed">🟢 Hoàn thành</option>
-                <option value="not_started">⚪ Not started</option>
-                <option value="cancelled">🔴 Cancelled</option>
-              </select>
-
-              {/* VIS-Tech Unilever Filter */}
-              <select
-                value={selectedVisTech}
-                onChange={(e) => setSelectedVisTech(e.target.value)}
-                className="bg-background border border-border text-foreground text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-sky-500/20 max-w-[160px] truncate cursor-pointer"
-              >
-                <option value="all">Tất cả VIS-Tech</option>
-                {uniqueVisTechs.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-
-              {/* Supplier Filter */}
-              <select
-                value={selectedSupplier}
-                onChange={(e) => setSelectedSupplier(e.target.value)}
-                className="bg-background border border-border text-foreground text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-sky-500/20 max-w-[150px] truncate cursor-pointer"
-              >
-                <option value="all">Tất cả Supplier</option>
-                {uniqueSuppliers.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-
-              {/* Brand Filter */}
-              <select
-                value={selectedBrand}
-                onChange={(e) => setSelectedBrand(e.target.value)}
-                className="bg-background border border-border text-foreground text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-sky-500/20 max-w-[130px] truncate cursor-pointer"
-              >
-                <option value="all">Tất cả Brand</option>
-                {uniqueBrands.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
+          <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
 
         {/* DATA TABLE WITH STICKY HEADER & ALWAYS VISIBLE SCROLLBAR */}
         <div className="w-full max-h-[calc(100vh-210px)] overflow-auto custom-scrollbar rounded-xl border border-slate-200 dark:border-slate-800">
@@ -1644,7 +1508,8 @@ export default function TrackingWarranty() {
           <span>Google Sheet Connected</span>
         </div>
       </div>
-      )}
+    </div>
+    )}
 
       {/* SLIDE-OVER DRAWER FOR ITEM DETAILS & DIRECT INLINE EDITING */}
       {selectedItem && (

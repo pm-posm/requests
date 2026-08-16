@@ -124,13 +124,25 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
   // Page Tab state (mimicking Power BI Desktop bottom page tabs)
   const [activeReportPage, setActiveReportPage] = useState<'SUMMARY' | 'DETAIL'>('SUMMARY');
 
-  // Slicer States
+  // Slicer States - Group 1: Date Group
+  const [selectedYear, setSelectedYear] = useState<string>('all');
+  const [selectedQuarter, setSelectedQuarter] = useState<string>('all');
+  const [selectedMonth, setSelectedMonth] = useState<string>('all');
   const [selectedWeek, setSelectedWeek] = useState<string>('all');
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
+
+  // Slicer States - Group 2: Classification Group
+  const [selectedVisTech, setSelectedVisTech] = useState<string>('all');
   const [selectedSupplier, setSelectedSupplier] = useState<string>('all');
-  const [selectedProject, setSelectedProject] = useState<string>('all');
-  const [selectedPosmType, setSelectedPosmType] = useState<string>('all');
   const [selectedStore, setSelectedStore] = useState<string>('all');
+  const [selectedPosmType, setSelectedPosmType] = useState<string>('all');
+  const [selectedBrand, setSelectedBrand] = useState<string>('all');
+  const [selectedProject, setSelectedProject] = useState<string>('all');
+
   const [detailSearch, setDetailSearch] = useState<string>('');
+  const [isDateSlicerOpen, setIsDateSlicerOpen] = useState<boolean>(false);
+  const [isClassSlicerOpen, setIsClassSlicerOpen] = useState<boolean>(false);
 
   // Cross-filtering clicked state
   const [crossFilter, setCrossFilter] = useState<{
@@ -138,57 +150,57 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
     value: string;
   }>({ type: null, value: '' });
 
-  // 1. Detect dynamic Weekly date ranges
-  const detectedWeeks = useMemo(() => {
-    const dates = warrantyItems
-      .map(i => parseDateToMs(i.sentDate || i.createdAt))
-      .filter((t): t is number => t !== null && t > 0);
+  // Helper to parse item date
+  const parseItemDate = (item: WarrantyItem) => {
+    const raw = item.sentDate || item.installationDate || item.raiseMailTime || '';
+    if (!raw) return null;
+    const trimmed = raw.trim();
+    let d: Date | null = null;
 
-    if (dates.length === 0) return [];
-
-    const minTs = Math.min(...dates);
-    const maxTs = Math.max(...dates);
-
-    const getMonday = (d: Date) => {
-      const day = d.getDay();
-      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-      return new Date(d.getFullYear(), d.getMonth(), diff);
-    };
-
-    const weeks: { id: string; label: string; startMs: number; endMs: number }[] = [];
-    const cur = getMonday(new Date(minTs));
-    const endLimit = new Date(maxTs + 7 * 86400000);
-
-    while (cur.getTime() <= endLimit.getTime()) {
-      const mon = new Date(cur);
-      const sun = new Date(cur.getTime() + 6 * 86400000);
-      sun.setHours(23, 59, 59, 999);
-
-      const d1 = String(mon.getDate()).padStart(2, '0');
-      const m1 = String(mon.getMonth() + 1).padStart(2, '0');
-      const d2 = String(sun.getDate()).padStart(2, '0');
-      const m2 = String(sun.getMonth() + 1).padStart(2, '0');
-      const y2 = sun.getFullYear();
-
-      const id = `${mon.getTime()}_${sun.getTime()}`;
-      const label = `Weekly (${d1}/${m1} - ${d2}/${m2}/${y2})`;
-
-      const countInWeek = warrantyItems.filter(i => {
-        const ms = parseDateToMs(i.sentDate || i.createdAt);
-        return ms && ms >= mon.getTime() && ms <= sun.getTime();
-      }).length;
-
-      if (countInWeek > 0) {
-        weeks.push({ id, label, startMs: mon.getTime(), endMs: sun.getTime() });
+    if (trimmed.includes('/')) {
+      const parts = trimmed.split('/');
+      if (parts.length === 3) {
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const year = parseInt(parts[2], 10);
+        d = new Date(year, month, day);
       }
-
-      cur.setDate(cur.getDate() + 7);
+    } else if (trimmed.includes('-')) {
+      const parts = trimmed.split('-');
+      if (parts.length === 3) {
+        if (parts[0].length === 4) {
+          d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+        } else {
+          d = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+        }
+      }
     }
 
-    return weeks.reverse();
+    if (!d || isNaN(d.getTime())) return null;
+
+    const year = d.getFullYear();
+    const month = d.getMonth() + 1;
+    const quarter = Math.ceil(month / 3);
+
+    // ISO week
+    const target = new Date(d.valueOf());
+    const dayNr = (d.getDay() + 6) % 7;
+    target.setDate(target.getDate() - dayNr + 3);
+    const firstThursday = target.valueOf();
+    target.setMonth(0, 1);
+    if (target.getDay() !== 4) {
+      target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+    }
+    const week = 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000);
+
+    return { year, month, quarter, week, time: d.getTime() };
+  };
+
+  // Unique options
+  const uniqueVisTechs = useMemo(() => {
+    return Array.from(new Set(warrantyItems.map(i => (i.visTech || '').trim()).filter(Boolean))).sort();
   }, [warrantyItems]);
 
-  // Slicer dropdown items
   const uniqueSuppliers = useMemo(() => {
     return Array.from(new Set(warrantyItems.map(i => (i.supplier || '').trim()).filter(Boolean))).sort();
   }, [warrantyItems]);
@@ -205,31 +217,55 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
     return Array.from(new Set(warrantyItems.map(i => (i.storeName || '').trim()).filter(Boolean))).sort();
   }, [warrantyItems]);
 
-  // Filtered dataset according to Slicers + Cross Filter
+  const uniqueBrands = useMemo(() => {
+    return Array.from(new Set(warrantyItems.map(i => (i.brand || '').trim()).filter(Boolean))).sort();
+  }, [warrantyItems]);
+
+  const uniqueYears = useMemo(() => {
+    const set = new Set<string>();
+    warrantyItems.forEach(i => {
+      const match = (i.sentDate || i.installationDate || '').match(/\b(202[0-9]|201[0-9])\b/);
+      if (match) set.add(match[1]);
+    });
+    if (set.size === 0) set.add('2026');
+    return Array.from(set).sort().reverse();
+  }, [warrantyItems]);
+
+  // Filtered dataset according to 2-Group Slicers + Cross Filter
   const filteredData = useMemo(() => {
     return warrantyItems.filter(item => {
-      // 1. Week slicer
+      // 1. Date Group Slicers
+      const dateObj = parseItemDate(item);
+      if (selectedYear !== 'all') {
+        if (!dateObj || String(dateObj.year) !== selectedYear) return false;
+      }
+      if (selectedQuarter !== 'all') {
+        if (!dateObj || String(dateObj.quarter) !== selectedQuarter) return false;
+      }
+      if (selectedMonth !== 'all') {
+        if (!dateObj || String(dateObj.month) !== selectedMonth) return false;
+      }
       if (selectedWeek !== 'all') {
-        const foundWeek = detectedWeeks.find(w => w.id === selectedWeek);
-        if (foundWeek) {
-          const ms = parseDateToMs(item.sentDate || item.createdAt);
-          if (!ms || ms < foundWeek.startMs || ms > foundWeek.endMs) return false;
-        }
+        if (!dateObj || String(dateObj.week) !== selectedWeek) return false;
+      }
+      if (dateFrom) {
+        const fromMs = new Date(dateFrom).setHours(0, 0, 0, 0);
+        if (!dateObj || dateObj.time < fromMs) return false;
+      }
+      if (dateTo) {
+        const toMs = new Date(dateTo).setHours(23, 59, 59, 999);
+        if (!dateObj || dateObj.time > toMs) return false;
       }
 
-      // 2. Supplier Slicer
+      // 2. Classification Group Slicers
+      if (selectedVisTech !== 'all' && (item.visTech || '').trim() !== selectedVisTech) return false;
       if (selectedSupplier !== 'all' && (item.supplier || '').trim() !== selectedSupplier) return false;
-
-      // 3. Project Slicer
+      if (selectedStore !== 'all' && (item.storeName || '').trim() !== selectedStore) return false;
+      if (selectedPosmType !== 'all' && (item.posmType || '').trim() !== selectedPosmType) return false;
+      if (selectedBrand !== 'all' && (item.brand || '').trim() !== selectedBrand) return false;
       if (selectedProject !== 'all' && (item.projectCode || '').trim() !== selectedProject) return false;
 
-      // 4. POSM Slicer
-      if (selectedPosmType !== 'all' && (item.posmType || '').trim() !== selectedPosmType) return false;
-
-      // 5. Store Slicer
-      if (selectedStore !== 'all' && (item.storeName || '').trim() !== selectedStore) return false;
-
-      // 6. Cross-Filtering
+      // 3. Cross-Filtering
       if (crossFilter.type && crossFilter.value) {
         if (crossFilter.type === 'supplier' && (item.supplier || '').trim() !== crossFilter.value) return false;
         if (crossFilter.type === 'posm' && (item.posmType || '').trim() !== crossFilter.value) return false;
@@ -241,8 +277,9 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
       return true;
     });
   }, [
-    warrantyItems, selectedWeek, selectedSupplier, selectedProject, 
-    selectedPosmType, selectedStore, crossFilter, detectedWeeks
+    warrantyItems, selectedYear, selectedQuarter, selectedMonth, selectedWeek, dateFrom, dateTo,
+    selectedVisTech, selectedSupplier, selectedStore, selectedPosmType, selectedBrand, selectedProject,
+    crossFilter
   ]);
 
   // KPI Calculations
@@ -561,19 +598,39 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
   }, [filteredData, detailSearch]);
 
   const handleResetFilters = () => {
+    setSelectedYear('all');
+    setSelectedQuarter('all');
+    setSelectedMonth('all');
     setSelectedWeek('all');
+    setDateFrom('');
+    setDateTo('');
+    setSelectedVisTech('all');
     setSelectedSupplier('all');
-    setSelectedProject('all');
-    setSelectedPosmType('all');
     setSelectedStore('all');
+    setSelectedPosmType('all');
+    setSelectedBrand('all');
+    setSelectedProject('all');
     setCrossFilter({ type: null, value: '' });
     setDetailSearch('');
     toast.success('Đã làm mới tất cả các bộ lọc slicers');
   };
 
-  const isFilterActive = selectedWeek !== 'all' || selectedSupplier !== 'all' || 
-    selectedProject !== 'all' || selectedPosmType !== 'all' || selectedStore !== 'all' || 
-    crossFilter.type !== null;
+  const isDateFiltered = selectedYear !== 'all' || selectedQuarter !== 'all' || selectedMonth !== 'all' || selectedWeek !== 'all' || !!dateFrom || !!dateTo;
+  const isClassFiltered = selectedVisTech !== 'all' || selectedSupplier !== 'all' || selectedStore !== 'all' || selectedPosmType !== 'all' || selectedBrand !== 'all';
+  const isFilterActive = isDateFiltered || isClassFiltered || selectedProject !== 'all' || crossFilter.type !== null;
+
+  const getDateFilterLabel = () => {
+    if (dateFrom && dateTo) return `${dateFrom} ➔ ${dateTo}`;
+    if (dateFrom) return `Từ ${dateFrom}`;
+    if (dateTo) return `Đến ${dateTo}`;
+    if (selectedWeek !== 'all') return `Tuần ${selectedWeek}`;
+    if (selectedQuarter !== 'all' && selectedYear !== 'all') return `Quý ${selectedQuarter}/${selectedYear}`;
+    if (selectedQuarter !== 'all') return `Quý ${selectedQuarter}`;
+    if (selectedMonth !== 'all' && selectedYear !== 'all') return `T${selectedMonth}/${selectedYear}`;
+    if (selectedMonth !== 'all') return `Tháng ${selectedMonth}`;
+    if (selectedYear !== 'all') return `Năm ${selectedYear}`;
+    return 'Tất cả';
+  };
 
   return (
     <div className="min-h-screen bg-[#F0F2F5] dark:bg-[#181818] text-[#252423] dark:text-[#F3F2F1] flex flex-col font-sans select-text pb-14">
@@ -620,44 +677,334 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
         </div>
       </div>
 
-      {/* POWER BI SLICERS / FILTER PANE BAR */}
+      {/* POWER BI SLICERS / FILTER PANE BAR (UNIFIED 2-GROUPS: DATE + CLASSIFICATION) */}
       <div className="bg-[#FFFFFF] dark:bg-[#242424] border-b border-[#D2D0CE] dark:border-[#383838] px-4 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
-        <div className="flex items-center gap-2 flex-wrap text-xs">
+        <div className="flex items-center gap-2.5 flex-wrap text-xs">
           <div className="flex items-center gap-1.5 text-[#605E5C] dark:text-[#A19F9D] font-semibold uppercase text-[11px] pr-2 border-r border-[#EDEBE9] dark:border-[#383838]">
             <Filter className="w-3.5 h-3.5 text-[#118DFF]" />
             <span>Slicers:</span>
           </div>
 
-          {/* 1. Week Slicer */}
-          <div className="flex items-center gap-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#3B3A39] rounded-[2px] px-2 py-1">
-            <Calendar className="w-3.5 h-3.5 text-[#605E5C]" />
-            <span className="text-[11px] font-medium text-[#605E5C] dark:text-[#A19F9D]">Tuần:</span>
-            <select
-              value={selectedWeek}
-              onChange={(e) => setSelectedWeek(e.target.value)}
-              className="bg-transparent text-xs font-semibold text-[#252423] dark:text-[#F3F2F1] focus:outline-none cursor-pointer"
+          {/* 1. UNIFIED DATE FILTER SLICER BUTTON */}
+          <div className="relative">
+            <button
+              onClick={() => {
+                setIsDateSlicerOpen(!isDateSlicerOpen);
+                setIsClassSlicerOpen(false);
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[2px] border transition-colors cursor-pointer font-semibold ${
+                isDateFiltered
+                  ? 'bg-[#118DFF]/10 text-[#118DFF] border-[#118DFF]'
+                  : 'bg-[#F8F9FA] dark:bg-[#2A2A2A] border-[#D2D0CE] dark:border-[#3B3A39] text-[#252423] dark:text-[#F3F2F1]'
+              }`}
             >
-              <option value="all">Tất cả các tuần ({warrantyItems.length} ca)</option>
-              {detectedWeeks.map(w => (
-                <option key={w.id} value={w.id}>{w.label}</option>
-              ))}
-            </select>
+              <Calendar className="w-3.5 h-3.5 text-[#118DFF]" />
+              <span>Thời gian: {getDateFilterLabel()}</span>
+              <ChevronDown className={`w-3 h-3 text-[#8A8886] transition-transform ${isDateSlicerOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isDateSlicerOpen && (
+              <div className="absolute left-0 mt-1.5 w-80 sm:w-96 bg-[#FFFFFF] dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] shadow-xl z-50 p-3.5 space-y-3">
+                <div className="flex items-center justify-between border-b border-[#EDEBE9] dark:border-[#383838] pb-2">
+                  <span className="font-bold text-xs flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-[#118DFF]" />
+                    Bộ Lọc Thời Gian
+                  </span>
+                  {isDateFiltered && (
+                    <button
+                      onClick={() => {
+                        setSelectedYear('all');
+                        setSelectedQuarter('all');
+                        setSelectedMonth('all');
+                        setSelectedWeek('all');
+                        setDateFrom('');
+                        setDateTo('');
+                      }}
+                      className="text-[11px] text-[#D64550] hover:underline font-semibold"
+                    >
+                      Đặt lại
+                    </button>
+                  )}
+                </div>
+
+                {/* Presets */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    onClick={() => {
+                      setSelectedYear('all');
+                      setSelectedQuarter('all');
+                      setSelectedMonth('all');
+                      setSelectedWeek('all');
+                      setDateFrom('');
+                      setDateTo('');
+                    }}
+                    className={`px-2 py-0.5 rounded-[2px] text-[11px] font-semibold ${!isDateFiltered ? 'bg-[#118DFF] text-white' : 'bg-[#F3F2F1] dark:bg-[#323130]'}`}
+                  >
+                    Tất cả
+                  </button>
+                  <button
+                    onClick={() => {
+                      const now = new Date();
+                      setSelectedYear(String(now.getFullYear()));
+                      setSelectedQuarter('all');
+                      setSelectedMonth('all');
+                      setSelectedWeek('all');
+                      setDateFrom('');
+                      setDateTo('');
+                    }}
+                    className="px-2 py-0.5 bg-[#F3F2F1] dark:bg-[#323130] rounded-[2px] text-[11px] font-semibold hover:bg-[#EDEBE9]"
+                  >
+                    Năm nay ({new Date().getFullYear()})
+                  </button>
+                  <button
+                    onClick={() => {
+                      const now = new Date();
+                      setSelectedYear(String(now.getFullYear()));
+                      setSelectedQuarter(String(Math.ceil((now.getMonth() + 1) / 3)));
+                      setSelectedMonth('all');
+                      setSelectedWeek('all');
+                      setDateFrom('');
+                      setDateTo('');
+                    }}
+                    className="px-2 py-0.5 bg-[#F3F2F1] dark:bg-[#323130] rounded-[2px] text-[11px] font-semibold hover:bg-[#EDEBE9]"
+                  >
+                    Quý này (Q{Math.ceil((new Date().getMonth() + 1) / 3)})
+                  </button>
+                  <button
+                    onClick={() => {
+                      const now = new Date();
+                      setSelectedYear(String(now.getFullYear()));
+                      setSelectedQuarter('all');
+                      setSelectedMonth(String(now.getMonth() + 1));
+                      setSelectedWeek('all');
+                      setDateFrom('');
+                      setDateTo('');
+                    }}
+                    className="px-2 py-0.5 bg-[#F3F2F1] dark:bg-[#323130] rounded-[2px] text-[11px] font-semibold hover:bg-[#EDEBE9]"
+                  >
+                    Tháng này (T{new Date().getMonth() + 1})
+                  </button>
+                </div>
+
+                {/* Grid selectors */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  <div>
+                    <label className="text-[10px] text-[#605E5C] dark:text-[#A19F9D] block mb-0.5">Năm</label>
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => setSelectedYear(e.target.value)}
+                      className="w-full p-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] text-xs font-semibold"
+                    >
+                      <option value="all">Tất cả</option>
+                      {uniqueYears.map(y => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-[#605E5C] dark:text-[#A19F9D] block mb-0.5">Quý</label>
+                    <select
+                      value={selectedQuarter}
+                      onChange={(e) => setSelectedQuarter(e.target.value)}
+                      className="w-full p-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] text-xs font-semibold"
+                    >
+                      <option value="all">Tất cả</option>
+                      <option value="1">Quý 1</option>
+                      <option value="2">Quý 2</option>
+                      <option value="3">Quý 3</option>
+                      <option value="4">Quý 4</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-[#605E5C] dark:text-[#A19F9D] block mb-0.5">Tháng</label>
+                    <select
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(e.target.value)}
+                      className="w-full p-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] text-xs font-semibold"
+                    >
+                      <option value="all">Tất cả</option>
+                      {Array.from({ length: 12 }, (_, i) => String(i + 1)).map(m => (
+                        <option key={m} value={m}>T{m}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-[#605E5C] dark:text-[#A19F9D] block mb-0.5">Tuần</label>
+                    <select
+                      value={selectedWeek}
+                      onChange={(e) => setSelectedWeek(e.target.value)}
+                      className="w-full p-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] text-xs font-semibold"
+                    >
+                      <option value="all">Tất cả</option>
+                      {Array.from({ length: 52 }, (_, i) => String(i + 1)).map(w => (
+                        <option key={w} value={w}>Tuần {w}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Range */}
+                <div className="pt-2 border-t border-[#EDEBE9] dark:border-[#383838] grid grid-cols-2 gap-2">
+                  <div>
+                    <span className="text-[10px] text-[#605E5C] block mb-0.5">Từ ngày:</span>
+                    <input
+                      type="date"
+                      value={dateFrom}
+                      onChange={(e) => setDateFrom(e.target.value)}
+                      className="w-full p-1 text-xs border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] bg-transparent"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-[#605E5C] block mb-0.5">Đến ngày:</span>
+                    <input
+                      type="date"
+                      value={dateTo}
+                      onChange={(e) => setDateTo(e.target.value)}
+                      className="w-full p-1 text-xs border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] bg-transparent"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    onClick={() => setIsDateSlicerOpen(false)}
+                    className="px-3 py-1 bg-[#118DFF] text-white text-xs font-bold rounded-[2px]"
+                  >
+                    Áp dụng
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* 2. Supplier Slicer */}
-          <div className="flex items-center gap-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#3B3A39] rounded-[2px] px-2 py-1">
-            <Building2 className="w-3.5 h-3.5 text-[#605E5C]" />
-            <span className="text-[11px] font-medium text-[#605E5C] dark:text-[#A19F9D]">Nhà thầu:</span>
-            <select
-              value={selectedSupplier}
-              onChange={(e) => setSelectedSupplier(e.target.value)}
-              className="bg-transparent text-xs font-semibold text-[#252423] dark:text-[#F3F2F1] focus:outline-none cursor-pointer"
+          {/* 2. UNIFIED CLASSIFICATION FILTER SLICER BUTTON */}
+          <div className="relative">
+            <button
+              onClick={() => {
+                setIsClassSlicerOpen(!isClassSlicerOpen);
+                setIsDateSlicerOpen(false);
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[2px] border transition-colors cursor-pointer font-semibold ${
+                isClassFiltered
+                  ? 'bg-[#5C2D91]/10 text-[#5C2D91] dark:text-[#C58AF9] border-[#5C2D91]'
+                  : 'bg-[#F8F9FA] dark:bg-[#2A2A2A] border-[#D2D0CE] dark:border-[#3B3A39] text-[#252423] dark:text-[#F3F2F1]'
+              }`}
             >
-              <option value="all">Tất cả ({uniqueSuppliers.length})</option>
-              {uniqueSuppliers.map(s => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
+              <SlidersHorizontal className="w-3.5 h-3.5 text-[#5C2D91] dark:text-[#C58AF9]" />
+              <span>Phân loại: {isClassFiltered ? 'Đang lọc' : 'Tất cả'}</span>
+              <ChevronDown className={`w-3 h-3 text-[#8A8886] transition-transform ${isClassSlicerOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isClassSlicerOpen && (
+              <div className="absolute left-0 mt-1.5 w-80 sm:w-[380px] bg-[#FFFFFF] dark:bg-[#242424] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px] shadow-xl z-50 p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between border-b border-[#EDEBE9] dark:border-[#383838] pb-2">
+                  <span className="font-bold text-xs flex items-center gap-1.5">
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-[#5C2D91]" />
+                    Bộ Lọc Phân Loại POSM
+                  </span>
+                  {isClassFiltered && (
+                    <button
+                      onClick={() => {
+                        setSelectedVisTech('all');
+                        setSelectedSupplier('all');
+                        setSelectedStore('all');
+                        setSelectedPosmType('all');
+                        setSelectedBrand('all');
+                      }}
+                      className="text-[11px] text-[#D64550] hover:underline font-semibold"
+                    >
+                      Đặt lại
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  {/* VIS-Tech */}
+                  <div>
+                    <label className="text-[10px] text-[#605E5C] dark:text-[#A19F9D] block mb-0.5">1. VIS-Tech</label>
+                    <select
+                      value={selectedVisTech}
+                      onChange={(e) => setSelectedVisTech(e.target.value)}
+                      className="w-full p-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px]"
+                    >
+                      <option value="all">Tất cả VIS-Tech ({uniqueVisTechs.length})</option>
+                      {uniqueVisTechs.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Supplier */}
+                  <div>
+                    <label className="text-[10px] text-[#605E5C] dark:text-[#A19F9D] block mb-0.5">2. Nhà thầu (Supplier)</label>
+                    <select
+                      value={selectedSupplier}
+                      onChange={(e) => setSelectedSupplier(e.target.value)}
+                      className="w-full p-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px]"
+                    >
+                      <option value="all">Tất cả Nhà thầu ({uniqueSuppliers.length})</option>
+                      {uniqueSuppliers.map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Store */}
+                  <div>
+                    <label className="text-[10px] text-[#605E5C] dark:text-[#A19F9D] block mb-0.5">3. Siêu thị (Store)</label>
+                    <select
+                      value={selectedStore}
+                      onChange={(e) => setSelectedStore(e.target.value)}
+                      className="w-full p-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px]"
+                    >
+                      <option value="all">Tất cả Siêu thị ({uniqueStores.length})</option>
+                      {uniqueStores.map(st => (
+                        <option key={st} value={st}>{st}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Loại POSM */}
+                  <div>
+                    <label className="text-[10px] text-[#605E5C] dark:text-[#A19F9D] block mb-0.5">4. Loại POSM</label>
+                    <select
+                      value={selectedPosmType}
+                      onChange={(e) => setSelectedPosmType(e.target.value)}
+                      className="w-full p-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px]"
+                    >
+                      <option value="all">Tất cả Loại POSM ({uniquePosmTypes.length})</option>
+                      {uniquePosmTypes.map(p => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Brand / Nhãn */}
+                  <div>
+                    <label className="text-[10px] text-[#605E5C] dark:text-[#A19F9D] block mb-0.5">5. Nhãn / Brand</label>
+                    <select
+                      value={selectedBrand}
+                      onChange={(e) => setSelectedBrand(e.target.value)}
+                      className="w-full p-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#383838] rounded-[2px]"
+                    >
+                      <option value="all">Tất cả Brand ({uniqueBrands.length})</option>
+                      {uniqueBrands.map(b => (
+                        <option key={b} value={b}>{b}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    onClick={() => setIsClassSlicerOpen(false)}
+                    className="px-3 py-1 bg-[#5C2D91] text-white text-xs font-bold rounded-[2px]"
+                  >
+                    Áp dụng
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 3. Project Slicer */}
@@ -667,43 +1014,11 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
             <select
               value={selectedProject}
               onChange={(e) => setSelectedProject(e.target.value)}
-              className="bg-transparent text-xs font-semibold text-[#252423] dark:text-[#F3F2F1] focus:outline-none cursor-pointer"
+              className="bg-transparent text-xs font-semibold text-[#252423] dark:text-[#F3F2F1] focus:outline-none cursor-pointer max-w-[170px] truncate"
             >
               <option value="all">Tất cả ({uniqueProjects.length})</option>
               {uniqueProjects.map(p => (
                 <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* 4. POSM Type Slicer */}
-          <div className="flex items-center gap-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#3B3A39] rounded-[2px] px-2 py-1">
-            <Tag className="w-3.5 h-3.5 text-[#605E5C]" />
-            <span className="text-[11px] font-medium text-[#605E5C] dark:text-[#A19F9D]">Loại POSM:</span>
-            <select
-              value={selectedPosmType}
-              onChange={(e) => setSelectedPosmType(e.target.value)}
-              className="bg-transparent text-xs font-semibold text-[#252423] dark:text-[#F3F2F1] focus:outline-none cursor-pointer"
-            >
-              <option value="all">Tất cả ({uniquePosmTypes.length})</option>
-              {uniquePosmTypes.map(p => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* 5. Store Slicer */}
-          <div className="flex items-center gap-1 bg-[#F8F9FA] dark:bg-[#2A2A2A] border border-[#D2D0CE] dark:border-[#3B3A39] rounded-[2px] px-2 py-1">
-            <Store className="w-3.5 h-3.5 text-[#605E5C]" />
-            <span className="text-[11px] font-medium text-[#605E5C] dark:text-[#A19F9D]">Siêu thị:</span>
-            <select
-              value={selectedStore}
-              onChange={(e) => setSelectedStore(e.target.value)}
-              className="bg-transparent text-xs font-semibold text-[#252423] dark:text-[#F3F2F1] focus:outline-none cursor-pointer max-w-[140px] truncate"
-            >
-              <option value="all">Tất cả ({uniqueStores.length})</option>
-              {uniqueStores.map(s => (
-                <option key={s} value={s}>{s}</option>
               ))}
             </select>
           </div>
