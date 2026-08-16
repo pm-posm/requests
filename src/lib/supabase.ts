@@ -1,13 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
-const defaultSupabaseUrl = "https://ikfychmglmunznceopnh.supabase.co";
-const defaultSupabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ic2xmYnB6aHNndnVzY2Z1dnhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1OTMwMTAsImV4cCI6MjA5NzE2OTAxMH0.5KMFj90fB94P8Yv49ZIuk1N9dngdiYYGloVCqxd3rpw";
-
-const envUrl = import.meta.env.VITE_SUPABASE_URL;
-const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-export const supabaseUrl = (envUrl && envUrl.startsWith('http')) ? envUrl : defaultSupabaseUrl;
-export const supabaseAnonKey = envKey || defaultSupabaseAnonKey;
+export const supabaseUrl = "https://ikfychmglmunznceopnh.supabase.co";
+export const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrZnljaG1nbG11bnpuY2VvcG5oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4Njc0MjAsImV4cCI6MjEwMjQ0MzQyMH0.2eMYy8NPMC66OldPPtmm606zlqOByPv-_zbcNKioM_Y";
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
