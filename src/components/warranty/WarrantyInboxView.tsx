@@ -189,8 +189,8 @@ const EmailBodyViewer: React.FC<{
   );
 };
 
-// Default Official Production Apps Script Web App URL
-const DEFAULT_WARRANTY_GMAIL_APPS_SCRIPT_URL = (import.meta.env.VITE_REQUEST_WEB_APP_URL || '').trim() || 'https://script.google.com/macros/s/AKfycbxztDMOhd6lO6QY_AmF4jMyXUWCP69jlb8XY7f9zIAQVGhXukaa0I_kd_uwqrTce8Y4iA/exec';
+// Default Official Production Apps Script Gmail Web App URL
+const DEFAULT_WARRANTY_GMAIL_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw4AFv2uLyxRStagWmELA6htViMMC_arnmPcTGVFQw865rvRG8eE_BTqTpEDA4kif-F/exec';
 
 // Default dynamic search presets for Warranty
 const DEFAULT_KEYWORD_PRESETS = [
@@ -515,14 +515,31 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
     return () => clearInterval(interval);
   }, [activeKeyword]);
 
-  // Fetch threads directly from Supabase Cloud
-  const fetchLiveGmailThreads = async (_queryToSearch?: string, isSilent = false) => {
+  // Fetch threads directly from Gmail Apps Script & Supabase Cloud
+  const fetchLiveGmailThreads = async (queryToSearch: string = activeKeyword, isSilent = false) => {
     if (isFetchingRef.current) return;
 
     try {
       isFetchingRef.current = true;
       setIsRefreshing(true);
 
+      const activeUrl = (appsScriptUrl || DEFAULT_WARRANTY_GMAIL_APPS_SCRIPT_URL).trim();
+
+      // 1. If Apps Script URL is available, trigger live Gmail search & push to Supabase
+      if (activeUrl) {
+        try {
+          const targetUrl = `${activeUrl}${activeUrl.includes('?') ? '&' : '?'}action=gmail&q=${encodeURIComponent(queryToSearch || activeKeyword)}`;
+          const res = await fetch(targetUrl);
+          const json = await res.json();
+          if (json.status === 'success') {
+            console.log('Apps script live sync triggered:', json.supabaseSynced);
+          }
+        } catch (scriptErr) {
+          console.warn('Apps Script trigger warning:', scriptErr);
+        }
+      }
+
+      // 2. Fetch the latest consolidated data directly from Supabase Cloud
       const { data, error: supaErr } = await supabase
         .from('warranty_emails')
         .select('*')
@@ -574,14 +591,14 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
         setLastSyncedTime(new Date().toLocaleTimeString('vi-VN'));
 
         if (!isSilent) {
-          toast.success(`✓ Đã đồng bộ ${mappedThreads.length} email từ Supabase Cloud!`, {
-            icon: '🟢',
-            duration: 3500
+          toast.success(`✓ Đã kích hoạt quét Gmail thật & cập nhật ${mappedThreads.length} email trên Supabase!`, {
+            icon: '🚀',
+            duration: 4000
           });
         }
       } else {
         if (!isSilent) {
-          toast('Hộp thư trên Supabase đang trống. Hãy chạy hàm autoSyncGmailToSupabase trên Apps Script để đẩy thư vào.', { icon: 'ℹ️' });
+          toast('Hộp thư trên Supabase đang trống.', { icon: 'ℹ️' });
         }
       }
     } catch (err: any) {
