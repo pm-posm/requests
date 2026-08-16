@@ -1199,14 +1199,13 @@ function doGet(e) {
                   )}
                 </div>
 
-                {/* NÚT THU PHÓNG (EXPAND / COLLAPSE) */}
+                {/* BIỂU TƯỢNG THU GỌN DANH SÁCH (GIỐNG SIDEBAR) */}
                 <button
-                  onClick={() => setIsReaderExpanded(!isReaderExpanded)}
-                  className="hidden lg:flex items-center gap-1 px-2.5 py-1 rounded-lg font-semibold bg-slate-100 hover:bg-indigo-50 dark:bg-slate-800 dark:hover:bg-indigo-950/60 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer shrink-0 shadow-2xs border border-slate-200/60 dark:border-slate-700"
-                  title="Phóng to khung đọc email (Thu gọn danh sách)"
+                  onClick={() => setIsReaderExpanded(true)}
+                  className="hidden lg:flex p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer border border-slate-200/60 dark:border-slate-700 shadow-2xs"
+                  title="Thu gọn danh sách"
                 >
-                  <Maximize2 className="w-3.5 h-3.5" />
-                  <span>Phóng to</span>
+                  <PanelLeftClose className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -1325,24 +1324,16 @@ function doGet(e) {
 
                   {/* Header Actions */}
                   <div className="flex items-center gap-2 flex-wrap shrink-0">
-                    {/* Zoom / Expand Toggle Button */}
-                    <button
-                      onClick={() => setIsReaderExpanded(!isReaderExpanded)}
-                      className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-colors cursor-pointer border border-slate-200 dark:border-slate-700 shrink-0 shadow-2xs"
-                      title={isReaderExpanded ? 'Khôi phục hiển thị 2 cột danh sách' : 'Phóng to toàn màn hình đọc email'}
-                    >
-                      {isReaderExpanded ? (
-                        <>
-                          <PanelLeftOpen className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                          <span>Mở danh sách</span>
-                        </>
-                      ) : (
-                        <>
-                          <Maximize2 className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300" />
-                          <span>Phóng to</span>
-                        </>
-                      )}
-                    </button>
+                    {/* Panel Left Open Button when list is collapsed */}
+                    {isReaderExpanded && (
+                      <button
+                        onClick={() => setIsReaderExpanded(false)}
+                        className="hidden lg:flex p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl transition-colors cursor-pointer border border-slate-200 dark:border-slate-700 shrink-0 shadow-2xs"
+                        title="Mở rộng danh sách"
+                      >
+                        <PanelLeftOpen className="w-4 h-4" />
+                      </button>
+                    )}
 
                     {/* Mode Toggle Button (Single Focused Message vs All Messages) */}
                     {activeThread.messages && activeThread.messages.length > 1 && (
