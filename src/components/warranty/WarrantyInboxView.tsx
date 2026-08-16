@@ -755,12 +755,24 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
 
         setLastSyncedTime(new Date().toLocaleTimeString('vi-VN'));
       } else {
-        if (!isSilent) {
+        // If apps script returns an error (e.g. using Sheet sync URL instead of Gmail sync URL), fallback to Supabase data
+        const { data: supaData } = await supabase.from('warranty_emails').select('*').order('last_updated', { ascending: false });
+        if (supaData && supaData.length > 0) {
+          if (!isSilent) {
+            toast.success(`Đã cập nhật ${supaData.length} email mới nhất từ Supabase Cloud!`, { icon: '☁️', duration: 3500 });
+          }
+        } else if (!isSilent) {
           toast.error('Lỗi phản hồi từ Apps Script: ' + (json.message || 'Không có dữ liệu'));
         }
       }
     } catch (err: any) {
-      if (!isSilent) {
+      // If network fails, pull from Supabase
+      const { data: supaData } = await supabase.from('warranty_emails').select('*').order('last_updated', { ascending: false });
+      if (supaData && supaData.length > 0) {
+        if (!isSilent) {
+          toast.success(`Đã tải ${supaData.length} email từ Supabase Cloud`, { icon: '☁️', duration: 3500 });
+        }
+      } else if (!isSilent) {
         toast.error('Không thể kết nối tới Apps Script: ' + err.message);
       }
     } finally {

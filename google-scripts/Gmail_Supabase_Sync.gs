@@ -11,7 +11,7 @@ const SUPABASE_CONFIG = {
   ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrZnljaG1nbG11bnpuY2VvcG5oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4Njc0MjAsImV4cCI6MjEwMjQ0MzQyMH0.2eMYy8NPMC66OldPPtmm606zlqOByPv-_zbcNKioM_Y',
   TABLE_NAME: 'warranty_emails',
   DEFAULT_QUERY: 'subject:"bảo hành" OR subject:"ĐĂNG KÝ LỊCH BẢO HÀNH"',
-  DEFAULT_LIMIT: 25
+  DEFAULT_LIMIT: 100
 };
 
 /**
