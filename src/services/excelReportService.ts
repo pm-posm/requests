@@ -47,10 +47,32 @@ const formatDateStr = (str?: string): string => {
   return `${dd}/${mm}/${yyyy}`;
 };
 
+// Normalize cause matching 100% with Dashboard
+const normalizeCauseKey = (item: WarrantyItem): string => {
+  let causeKey = (item.errorType || '').trim();
+  if (!causeKey) {
+    const err = (item.errorDetail || (item as any).reason || item.note || '').toLowerCase();
+    if (err.includes('cầu chì') || err.includes('đèn led') || err.includes('led') || err.includes('đèn') || err.includes('tắt đèn') || err.includes('sáng')) {
+      causeKey = 'Tắt, hỏng hệ thống cầu chì/Đèn LED';
+    } else if (err.includes('nguồn') || err.includes('điện') || err.includes('adapter') || err.includes('chập')) {
+      causeKey = 'Thiết bị nguồn/Điện thông minh hư hại';
+    } else if (err.includes('keo') || err.includes('in màu') || err.includes('sơn') || err.includes('bong tróc') || err.includes('vệ sinh')) {
+      causeKey = 'Chất lượng keo dán/In màu AW/Sơn bong tróc (Không đạt vệ sinh)';
+    } else if (err.includes('xe đẩy') || err.includes('ngoại lực') || err.includes('khách') || err.includes('va đập') || err.includes('gãy') || err.includes('vỡ') || err.includes('móp')) {
+      causeKey = 'Tác động ngoại lực (Xe đẩy siêu thị, khách hàng)';
+    } else if (err.includes('kết cấu') || err.includes('biến dạng') || err.includes('khung')) {
+      causeKey = 'Kết cấu hư hỏng, biến dạng';
+    } else {
+      causeKey = 'Khác / Chưa phân loại';
+    }
+  }
+  return causeKey;
+};
+
 /**
  * Service xuất Báo Cáo Bảo Hành trực tiếp bằng ExcelJS
- * - Giữ nguyên 100% màu sắc, viền khung (borders), font chữ, background fills của template chuẩn Executive Report
- * - Tab 1: Weekly (Báo Cáo Điều Hành Trực Quan: KPI, Đánh Giá Nhà Thầu, Nguyên Nhân Lỗi, Phân Bố POSM/Store/Dự Án, Chi Tiết Ca)
+ * - ĐỒNG BỘ 100% SỐ LIỆU VỚI DASHBOARD (Cùng công thức tính toán và phân loại)
+ * - Tab 1: Weekly (Template gốc với số liệu chuẩn hóa)
  * - Tab 2: Raw Data (Toàn bộ 21 cột chi tiết)
  */
 export const exportAnalystExecutiveReport = async (
@@ -78,22 +100,37 @@ export const exportAnalystExecutiveReport = async (
     : filenamePrefix;
 
   // =========================================================================
-  // 1. STATS & KPIS COMPUTATION
+  // 1. STATS & KPIS COMPUTATION (EXACTLY MATCHING DASHBOARD LOGIC)
   // =========================================================================
   let onTimeCount = 0;
   let overdueCount = 0;
   let earlyFailCount = 0;
   let inProgressCount = 0;
 
-  const supplierMap = new Map<string, { total: number; early: number; repeat: number; overdue: number; done: number }>();
-  const causeMap = new Map<string, { count: number; topSupplier: string }>();
+  const supplierMap = new Map<string, {
+    supplier: string;
+    total: number;
+    earlyFail: number;
+    recurrent: number;
+    overdue: number;
+    onTime: number;
+  }>();
+
+  const causeMap = new Map<string, { count: number; suppliers: Set<string> }>();
   const posmMap = new Map<string, number>();
   const storeMap = new Map<string, number>();
   const projectMap = new Map<string, number>();
   const catMap = new Map<string, number>();
   const activeProjectsSet = new Set<string>();
 
-  // Aging breakdown for Overdue cases: 1-3d, 4-7d, >7d
+  // Recurrent check: Store + POSM
+  const storePosmCounts = new Map<string, number>();
+  activeItems.forEach(item => {
+    const key = `${(item.storeName || '').trim()}__${(item.posmType || '').trim()}`;
+    storePosmCounts.set(key, (storePosmCounts.get(key) || 0) + 1);
+  });
+
+  // Delay Tiers breakdown (Matching Dashboard SLA delay brackets)
   let delay1to3 = 0;
   let delay4to7 = 0;
   let delayOver7 = 0;
@@ -101,87 +138,98 @@ export const exportAnalystExecutiveReport = async (
   const dateTimestamps: number[] = [];
 
   activeItems.forEach(item => {
-    const pLower = (item.progress || '').toLowerCase();
-    const isDone = pLower.includes('hoàn thành');
-    const isCancel = pLower.includes('cancel');
+    const isDone = (item.status || '').toLowerCase().includes('hoàn thành') || (item.progress || '').toLowerCase().includes('hoàn thành') || !!item.completedDate;
+    const sentMs = parseDateToMs(item.sentDate || item.createdAt);
+    const doneMs = parseDateToMs(item.completedDate);
+    const schedMs = parseDateToMs(item.scheduledDate || item.expectedDate);
+    const installMs = parseDateToMs(item.installationDate);
 
-    if (!isDone && !isCancel) {
+    if (sentMs) dateTimestamps.push(sentMs);
+
+    // 1. Early fail check (<30 days from install to fault)
+    let isEarly = false;
+    if (installMs && sentMs && sentMs >= installMs && (sentMs - installMs) < 30 * 86400000) {
+      earlyFailCount++;
+      isEarly = true;
+    }
+
+    // 2. On-time vs Overdue check (Matching Dashboard)
+    let isOver = false;
+    if (isDone) {
+      if (doneMs && schedMs && doneMs > schedMs + 86400000) {
+        overdueCount++;
+        isOver = true;
+      } else if (sentMs && doneMs && (doneMs - sentMs) > 7 * 86400000) {
+        overdueCount++;
+        isOver = true;
+      } else {
+        onTimeCount++;
+      }
+    } else {
       inProgressCount++;
+      const now = Date.now();
+      if (sentMs && (now - sentMs) > 7 * 86400000) {
+        overdueCount++;
+        isOver = true;
+      } else {
+        onTimeCount++;
+      }
       if (item.projectCode && item.projectCode.trim()) {
         activeProjectsSet.add(item.projectCode.trim());
       }
     }
 
-    const sentMs = parseDateToMs(item.sentDate || item.createdAt);
-    if (sentMs) dateTimestamps.push(sentMs);
-
-    const installMs = parseDateToMs(item.installationDate);
-    const expMs = parseDateToMs(item.expectedDate || item.requestDeadline);
-    const compMs = parseDateToMs(item.completedDate);
-
-    // Early fail check (<31 days)
-    let isEarly = false;
-    if (installMs && sentMs && sentMs >= installMs) {
-      const days = Math.round((sentMs - installMs) / 86400000);
-      if (days < 31) {
-        earlyFailCount++;
-        isEarly = true;
-      }
+    // 3. Delay Tiers (Matching Dashboard SLA logic)
+    let delayDays = 0;
+    if (isDone && doneMs && schedMs && doneMs > schedMs) {
+      delayDays = Math.round((doneMs - schedMs) / 86400000);
+    } else if (!isDone && sentMs) {
+      const diff = Math.round((Date.now() - sentMs) / 86400000);
+      if (diff > 3) delayDays = diff - 3;
     }
 
-    // Overdue check
-    let isOver = false;
-    let overdueDays = 0;
-    if (isDone && compMs && expMs && compMs > expMs) {
-      isOver = true;
-      overdueDays = Math.ceil((compMs - expMs) / 86400000);
-    } else if (!isDone && expMs && Date.now() > expMs) {
-      isOver = true;
-      overdueDays = Math.ceil((Date.now() - expMs) / 86400000);
-    }
+    if (delayDays >= 1 && delayDays <= 3) delay1to3++;
+    else if (delayDays >= 4 && delayDays <= 7) delay4to7++;
+    else if (delayDays > 7) delayOver7++;
 
-    if (isOver) {
-      overdueCount++;
-      if (overdueDays <= 3) delay1to3++;
-      else if (overdueDays <= 7) delay4to7++;
-      else delayOver7++;
-    } else {
-      if (isDone) onTimeCount++;
-    }
-
-    // Supplier stats
-    const sup = (item.supplier || '').trim() || 'Chưa gán thầu';
+    // 4. Supplier stats
+    const sup = (item.supplier || 'Chưa gán').trim();
     if (!supplierMap.has(sup)) {
-      supplierMap.set(sup, { total: 0, early: 0, repeat: 0, overdue: 0, done: 0 });
+      supplierMap.set(sup, { supplier: sup, total: 0, earlyFail: 0, recurrent: 0, overdue: 0, onTime: 0 });
     }
     const supStat = supplierMap.get(sup)!;
     supStat.total++;
-    if (isEarly) supStat.early++;
-    if (item.precedingRequestId && item.precedingRequestId.trim()) supStat.repeat++;
-    if (isOver) supStat.overdue++;
-    if (isDone) supStat.done++;
-
-    // Cause stats (Cột W errorType fallback to detail)
-    const cause = (item.errorType || item.errorDetail || 'Chưa xác định').trim();
-    if (!causeMap.has(cause)) {
-      causeMap.set(cause, { count: 0, topSupplier: sup });
+    if (isEarly) supStat.earlyFail++;
+    const key = `${(item.storeName || '').trim()}__${(item.posmType || '').trim()}`;
+    if ((storePosmCounts.get(key) || 0) > 1) {
+      supStat.recurrent++;
     }
-    causeMap.get(cause)!.count++;
+    if (isOver) {
+      supStat.overdue++;
+    } else {
+      supStat.onTime++;
+    }
 
-    // POSM stats
-    const posm = (item.posmType || 'Chưa xác định').trim();
+    // 5. Cause stats (Unified with Dashboard)
+    const cause = normalizeCauseKey(item);
+    if (!causeMap.has(cause)) {
+      causeMap.set(cause, { count: 0, suppliers: new Set<string>() });
+    }
+    const causeEntry = causeMap.get(cause)!;
+    causeEntry.count++;
+    if (sup) causeEntry.suppliers.add(sup);
+
+    // 6. POSM / Store / Project / Cat
+    const posm = (item.posmType || 'Chưa gán').trim();
     posmMap.set(posm, (posmMap.get(posm) || 0) + 1);
 
-    // Store stats
-    const store = (item.storeName || 'Chưa xác định').trim();
+    const store = (item.storeName || 'Chưa gán').trim();
     storeMap.set(store, (storeMap.get(store) || 0) + 1);
 
-    // Project stats
-    const prj = (item.projectCode || 'Chưa xác định').trim();
+    const prj = (item.projectCode || 'Chưa gán').trim();
     projectMap.set(prj, (projectMap.get(prj) || 0) + 1);
 
-    // Cat / Brand stats
-    const cat = (item.category || item.brand || 'Chưa xác định').trim();
+    const cat = (item.category || item.brand || 'Chưa gán').trim();
     catMap.set(cat, (catMap.get(cat) || 0) + 1);
   });
 
@@ -210,11 +258,9 @@ export const exportAnalystExecutiveReport = async (
   }
 
   // =========================================================================
-  // 2. LOAD TEMPLATE WORKBOOK VIA EXCELJS (PRESERVING 100% STYLES)
+  // 2. LOAD TEMPLATE WORKBOOK VIA EXCELJS
   // =========================================================================
   const wb = new ExcelJS.Workbook();
-  
-  // Convert base64 to buffer for ExcelJS
   const binaryString = atob(WEEKLY_REPORT_TEMPLATE_BASE64);
   const len = binaryString.length;
   const bytes = new Uint8Array(len);
@@ -226,43 +272,43 @@ export const exportAnalystExecutiveReport = async (
   const ws = wb.getWorksheet('Weekly') || wb.worksheets[0];
 
   // =========================================================================
-  // 3. SET EXPANDED COLUMN WIDTHS & ROW HEIGHTS (NO TRUNCATION / NO CLIPPING)
+  // 3. SET EXPANDED COLUMN WIDTHS & ROW HEIGHTS
   // =========================================================================
   ws.columns = [
-    { width: 22 }, // A: TỔNG CA BẢO HÀNH / Nhà Thầu / Loại POSM / ID
-    { width: 14 }, // B: % XỬ LÝ ĐÚNG HẠN / Total Case / Số ca / Store
-    { width: 16 }, // C: POSM / Hỏng sớm
-    { width: 18 }, // D: % XỬ LÝ TRỄ HẠN / Tái diễn / Store
+    { width: 22 }, // A: Nhà Thầu / Loại POSM / ID
+    { width: 14 }, // B: Total Case / Số ca POSM
+    { width: 16 }, // C: Hỏng sớm (<30d)
+    { width: 18 }, // D: Tái diễn / Store
     { width: 14 }, // E: Số ca trễ / Số ca Store
-    { width: 16 }, // F: % HỎNG SỚM / % Đạt tiến độ / Mã dự án
-    { width: 18 }, // G: Mã dự án / Supplier
-    { width: 34 }, // H: TOP SUPPLIER / Nguyên nhân lỗi / Ngày lắp đặt
+    { width: 16 }, // F: % Đạt tiến độ / Mã dự án
+    { width: 18 }, // G: Mã dự án
+    { width: 38 }, // H: Nguyên nhân lỗi / Ngày lắp đặt
     { width: 16 }, // I: Ngày gửi BH
-    { width: 16 }, // J: TOP PROJECT / Số ca lỗi
-    { width: 14 }, // K: % Tỷ lệ
-    { width: 32 }, // L: TOP STORE / Chi tiết lỗi
-    { width: 26 }, // M: Thời gian trễ hạn
-    { width: 16 }, // N: TOP CAT / Ngày hẹn
+    { width: 16 }, // J: Số ca lỗi
+    { width: 14 }, // K: % Tỷ lệ lỗi / Ngành hàng
+    { width: 32 }, // L: Chi tiết lỗi
+    { width: 28 }, // M: Thời gian trễ hạn
+    { width: 16 }, // N: Hạn xử lý
     { width: 16 }, // O: Số ca trễ / Ngày hoàn thành
-    { width: 22 }, // P: TOP POSM / Trạng thái
-    { width: 26 }  // Q: Mức độ cảnh báo / Note
+    { width: 16 }, // P: % Tỷ lệ trễ / Tiến độ
+    { width: 26 }  // Q: Ghi chú
   ];
 
-  // Set explicit, spacious row heights
-  ws.getRow(1).height = 36; // Title banner
-  ws.getRow(2).height = 10; // Spacing
-  ws.getRow(3).height = 10; // Spacing
-  ws.getRow(4).height = 28; // Header for KPI cards
-  ws.getRow(5).height = 42; // 24pt large KPI numbers
-  ws.getRow(6).height = 24; // Subtitles (⚡ 36/62 ca)
-  ws.getRow(7).height = 26; // ⏳ Đang xử lí note
-  ws.getRow(8).height = 10; // Spacing
-  ws.getRow(10).height = 28; // Section headers (1. BY SUPPLIER, 2. BY CAUSE, 3. BY TIMELINE)
-  ws.getRow(11).height = 26; // Table headers
-  ws.getRow(19).height = 28; // Section headers (4. BY POSM, 5. BY STORE, 6. BY PROJECT, 7. BY CAT)
-  ws.getRow(20).height = 26; // Table headers
-  ws.getRow(29).height = 28; // Section header CHI TIẾT CÁC CASE...
-  ws.getRow(30).height = 26; // Action table header
+  // Set row heights
+  ws.getRow(1).height = 36;
+  ws.getRow(2).height = 10;
+  ws.getRow(3).height = 10;
+  ws.getRow(4).height = 28;
+  ws.getRow(5).height = 42;
+  ws.getRow(6).height = 24;
+  ws.getRow(7).height = 26;
+  ws.getRow(8).height = 10;
+  ws.getRow(10).height = 28;
+  ws.getRow(11).height = 26;
+  ws.getRow(19).height = 28;
+  ws.getRow(20).height = 26;
+  ws.getRow(29).height = 28;
+  ws.getRow(30).height = 26;
 
   // Common Reusable Styles
   const thinBorder: Partial<ExcelJS.Borders> = {
@@ -301,10 +347,7 @@ export const exportAnalystExecutiveReport = async (
   ws.getCell('A1').font = { name: 'Calibri', size: 16, bold: true, color: { argb: 'FF1F4E79' } };
   ws.getCell('A1').alignment = { vertical: 'middle', horizontal: 'left' };
 
-  // =========================================================================
-  // FIX: FILL ENTIRE TOP KPI BANNER (ROWS 2-8, COLS A-Q) WITH UNIFORM GREEN
-  // (Eliminating any white boxes or missing fills from template artifacts)
-  // =========================================================================
+  // Fill entire top KPI area (Rows 2-8, Cols A-Q) with uniform green
   for (let r = 2; r <= 8; r++) {
     for (let c = 1; c <= 17; c++) {
       const cell = ws.getRow(r).getCell(c);
@@ -317,7 +360,7 @@ export const exportAnalystExecutiveReport = async (
     { col: 'A', title: 'TỔNG CA BẢO HÀNH' },
     { col: 'B', title: '% XỬ LÝ ĐÚNG HẠN' },
     { col: 'D', title: '% XỬ LÝ TRỄ HẠN' },
-    { col: 'F', title: '% HỎNG SỚM (<31 NGÀY)' },
+    { col: 'F', title: '% HỎNG SỚM (<30 NGÀY)' },
     { col: 'H', title: 'TOP NHÀ THẦU' },
     { col: 'J', title: 'TOP DỰ ÁN' },
     { col: 'L', title: 'TOP SIÊU THỊ' },
@@ -333,6 +376,7 @@ export const exportAnalystExecutiveReport = async (
 
   // 3. Row 5: KPI Large Numbers
   ws.getCell('A5').value = totalCount;
+  ws.getCell('A5').numFmt = '#,##0';
   ws.getCell('A5').font = { name: 'Calibri', size: 24, bold: true, color: { argb: 'FF1F4E79' } };
   ws.getCell('A5').alignment = { horizontal: 'center', vertical: 'middle' };
 
@@ -357,6 +401,7 @@ export const exportAnalystExecutiveReport = async (
   const formatTopKpiCell = (col: string, text: string) => {
     const cell = ws.getCell(`${col}5`);
     cell.value = text;
+    cell.numFmt = '@';
     cell.font = { name: 'Calibri', size: 13, bold: true, color: { argb: 'FF1F4E79' } };
     cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
   };
@@ -371,6 +416,7 @@ export const exportAnalystExecutiveReport = async (
   const formatSubtitle = (col: string, text: string, color = 'FF1F4E79') => {
     const cell = ws.getCell(`${col}6`);
     cell.value = text;
+    cell.numFmt = '@';
     cell.font = { name: 'Calibri', size: 10, color: { argb: color } };
     cell.alignment = { horizontal: 'center', vertical: 'middle' };
   };
@@ -384,49 +430,48 @@ export const exportAnalystExecutiveReport = async (
   formatSubtitle('N', `${topCat.count} ca (${topCat.pct})`);
   formatSubtitle('P', `${topPosm.count} ca (${topPosm.pct})`);
 
-  // 5. Row 7: Active in-progress note (Properly styled & merged)
+  // 5. Row 7: Active in-progress note
   const activePrjStr = Array.from(activeProjectsSet).join(', ') || 'Không có ca tồn đọng';
   ws.getCell('A7').value = `⏳ Đang xử lí ${inProgressCount} ca thuộc dự án:`;
+  ws.getCell('A7').numFmt = '@';
   ws.getCell('A7').font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF1F4E79' } };
   ws.getCell('A7').alignment = { vertical: 'middle', horizontal: 'left' };
 
   ws.getCell('D7').value = activePrjStr;
+  ws.getCell('D7').numFmt = '@';
   ws.getCell('D7').font = { name: 'Calibri', size: 10, italic: true, color: { argb: 'FF252423' } };
   ws.getCell('D7').alignment = { vertical: 'middle', horizontal: 'left' };
 
   // =========================================================================
-  // 6. ROWS 10-17: 3 EVALUATION TABLES (BY SUPPLIER, BY CAUSE, BY TIMELINE)
+  // 6. ROWS 10-18: 3 EVALUATION TABLES (BY SUPPLIER, BY CAUSE, BY TIMELINE)
   // =========================================================================
 
-  // Clear rows 10-18 for all columns A-Q
+  // Fully clear rows 10 to 18 to remove any leftover template formulas or formats
   for (let r = 10; r <= 18; r++) {
-    ['A', 'B', 'C', 'D', 'E', 'F', 'H', 'I', 'J', 'K', 'M', 'N', 'O', 'P', 'Q'].forEach(col => {
-      ws.getCell(`${col}${r}`).value = null;
-      ws.getCell(`${col}${r}`).fill = { type: 'pattern', pattern: 'none' };
-      ws.getCell(`${col}${r}`).border = {};
-    });
+    for (let c = 1; c <= 17; c++) {
+      const cell = ws.getRow(r).getCell(c);
+      cell.value = null;
+      cell.fill = { type: 'pattern', pattern: 'none' };
+      cell.border = {};
+      cell.numFmt = '@';
+    }
   }
 
   // Section Headers (Row 10)
   ws.getCell('A10').value = '1. BY SUPPLIER';
   ws.getCell('A10').font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF1F4E79' } };
-  ws.getCell('A10').alignment = { vertical: 'middle', horizontal: 'left' };
-
   ws.getCell('H10').value = '2. BY CAUSE';
   ws.getCell('H10').font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF1F4E79' } };
-  ws.getCell('H10').alignment = { vertical: 'middle', horizontal: 'left' };
-
   ws.getCell('M10').value = '3. BY TIMELINE (TRỄ HẠN)';
   ws.getCell('M10').font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF1F4E79' } };
-  ws.getCell('M10').alignment = { vertical: 'middle', horizontal: 'left' };
 
   // Table 1 Headers (Row 11)
   const t1Headers = [
     { col: 'A', title: 'Nhà Thầu' },
     { col: 'B', title: 'Total Case' },
-    { col: 'C', title: 'Hỏng Sớm (<31d)' },
-    { col: 'D', title: 'Tái Diễn Trên 1 POSM' },
-    { col: 'E', title: 'Số Ca Trễ Hạn' },
+    { col: 'C', title: 'Hỏng Sớm (<30d)' },
+    { col: 'D', title: 'Tái Diễn' },
+    { col: 'E', title: 'Trễ Hạn' },
     { col: 'F', title: '% Đạt Tiến Độ' }
   ];
   t1Headers.forEach(({ col, title }) => {
@@ -439,7 +484,7 @@ export const exportAnalystExecutiveReport = async (
   });
 
   // Table 2 Headers (Row 11)
-  ws.getCell('H11').value = 'Nguyên Nhân Lỗi';
+  ws.getCell('H11').value = 'Nguyên Nhân Hư Hỏng';
   ws.getCell('H11').fill = navyHeaderFill;
   ws.getCell('H11').font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
   ws.getCell('H11').alignment = { horizontal: 'center', vertical: 'middle' };
@@ -457,7 +502,7 @@ export const exportAnalystExecutiveReport = async (
   ws.getCell('K11').alignment = { horizontal: 'center', vertical: 'middle' };
   ws.getCell('K11').border = thinBorder;
 
-  // Table 3 Headers (Row 11)
+  // Table 3 Headers (Row 11) - Clean 3 columns without subjective warning note
   ws.getCell('M11').value = 'Thời Gian Trễ Hạn';
   ws.getCell('M11').fill = navyHeaderFill;
   ws.getCell('M11').font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
@@ -476,67 +521,67 @@ export const exportAnalystExecutiveReport = async (
   ws.getCell('P11').alignment = { horizontal: 'center', vertical: 'middle' };
   ws.getCell('P11').border = thinBorder;
 
-  ws.getCell('Q11').value = 'Mức Độ Cảnh Báo';
-  ws.getCell('Q11').fill = navyHeaderFill;
-  ws.getCell('Q11').font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
-  ws.getCell('Q11').alignment = { horizontal: 'center', vertical: 'middle' };
-  ws.getCell('Q11').border = thinBorder;
-
-  // Populate Bảng 1: BY SUPPLIER
-  const sortedSuppliers = Array.from(supplierMap.entries()).sort((a, b) => b[1].total - a[1].total);
-  sortedSuppliers.forEach(([sup, d], idx) => {
+  // Populate Bảng 1: BY SUPPLIER (Exact numbers matching Dashboard)
+  const sortedSuppliers = Array.from(supplierMap.values()).sort((a, b) => b.total - a.total);
+  sortedSuppliers.forEach((d, idx) => {
     const r = 12 + idx;
     ws.getRow(r).height = 22;
 
-    ws.getCell(`A${r}`).value = sup;
+    ws.getCell(`A${r}`).value = d.supplier;
+    ws.getCell(`A${r}`).numFmt = '@';
     ws.getCell(`A${r}`).border = thinBorder;
     ws.getCell(`A${r}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF252423' } };
     ws.getCell(`A${r}`).fill = softGreenItemFill;
     ws.getCell(`A${r}`).alignment = { vertical: 'middle', horizontal: 'left' };
 
     ws.getCell(`B${r}`).value = d.total;
+    ws.getCell(`B${r}`).numFmt = '#,##0';
     ws.getCell(`B${r}`).border = thinBorder;
     ws.getCell(`B${r}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF1F4E79' } };
     ws.getCell(`B${r}`).fill = numberCellFill;
     ws.getCell(`B${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
 
-    ws.getCell(`C${r}`).value = d.early;
+    ws.getCell(`C${r}`).value = d.earlyFail > 0 ? d.earlyFail : '-';
+    ws.getCell(`C${r}`).numFmt = d.earlyFail > 0 ? '#,##0' : '@';
     ws.getCell(`C${r}`).border = thinBorder;
-    ws.getCell(`C${r}`).font = { name: 'Calibri', size: 11, bold: d.early > 0, color: { argb: d.early > 0 ? 'FFD93025' : 'FF57BB8A' } };
+    ws.getCell(`C${r}`).font = { name: 'Calibri', size: 11, bold: d.earlyFail > 0, color: { argb: d.earlyFail > 0 ? 'FFD93025' : 'FF808080' } };
     ws.getCell(`C${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
 
-    ws.getCell(`D${r}`).value = d.repeat;
+    ws.getCell(`D${r}`).value = d.recurrent > 0 ? d.recurrent : '-';
+    ws.getCell(`D${r}`).numFmt = d.recurrent > 0 ? '#,##0' : '@';
     ws.getCell(`D${r}`).border = thinBorder;
-    ws.getCell(`D${r}`).font = { name: 'Calibri', size: 11, bold: d.repeat > 0, color: { argb: d.repeat > 0 ? 'FFD93025' : 'FF57BB8A' } };
+    ws.getCell(`D${r}`).font = { name: 'Calibri', size: 11, bold: d.recurrent > 0, color: { argb: d.recurrent > 0 ? 'FFD93025' : 'FF808080' } };
     ws.getCell(`D${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
 
-    ws.getCell(`E${r}`).value = d.overdue;
+    ws.getCell(`E${r}`).value = d.overdue > 0 ? d.overdue : '-';
+    ws.getCell(`E${r}`).numFmt = d.overdue > 0 ? '#,##0' : '@';
     ws.getCell(`E${r}`).border = thinBorder;
-    ws.getCell(`E${r}`).font = { name: 'Calibri', size: 11, bold: d.overdue > 0, color: { argb: d.overdue > 0 ? 'FFD93025' : 'FF57BB8A' } };
+    ws.getCell(`E${r}`).font = { name: 'Calibri', size: 11, bold: d.overdue > 0, color: { argb: d.overdue > 0 ? 'FFD93025' : 'FF808080' } };
     ws.getCell(`E${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
 
     const rate = d.total > 0 ? (d.total - d.overdue) / d.total : 1;
     ws.getCell(`F${r}`).value = rate;
-    ws.getCell(`F${r}`).numFmt = '0.0%';
+    ws.getCell(`F${r}`).numFmt = '0%';
     ws.getCell(`F${r}`).border = thinBorder;
-    ws.getCell(`F${r}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: rate < 0.8 ? 'FFD93025' : 'FF57BB8A' } };
+    ws.getCell(`F${r}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: rate >= 0.75 ? 'FF57BB8A' : 'FFD93025' } };
     ws.getCell(`F${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
   });
 
-  // Populate Bảng 2: BY CAUSE (Clean numeric count, no messy multiline brackets)
+  // Populate Bảng 2: BY CAUSE (Exact categories matching Dashboard)
   const sortedCauses = Array.from(causeMap.entries()).sort((a, b) => b[1].count - a[1].count);
   sortedCauses.slice(0, 6).forEach(([cause, d], idx) => {
     const r = 12 + idx;
     ws.getRow(r).height = 22;
 
     ws.getCell(`H${r}`).value = cause;
+    ws.getCell(`H${r}`).numFmt = '@';
     ws.getCell(`H${r}`).border = thinBorder;
     ws.getCell(`H${r}`).font = { name: 'Calibri', size: 11, color: { argb: 'FF252423' } };
     ws.getCell(`H${r}`).fill = softGreenItemFill;
     ws.getCell(`H${r}`).alignment = { vertical: 'middle', horizontal: 'left' };
 
-    // Pure numeric count for clean Excel display
     ws.getCell(`J${r}`).value = d.count;
+    ws.getCell(`J${r}`).numFmt = '#,##0';
     ws.getCell(`J${r}`).border = thinBorder;
     ws.getCell(`J${r}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF1F4E79' } };
     ws.getCell(`J${r}`).fill = numberCellFill;
@@ -550,23 +595,25 @@ export const exportAnalystExecutiveReport = async (
     ws.getCell(`K${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
   });
 
-  // Populate Bảng 3: BY TIMELINE
+  // Populate Bảng 3: BY TIMELINE (Exact 1-3d, 4-7d, >7d matching Dashboard)
   const timelineData = [
-    { label: '1 - 3 ngày (Trễ nhẹ)', count: delay1to3, badge: 'Nhắc nhở', color: 'FF1F4E79' },
-    { label: '4 - 7 ngày (Cảnh báo tiến độ)', count: delay4to7, badge: 'Đôn đốc xử lý gấp', color: 'FFD93025' },
-    { label: '> 7 ngày (Quá hạn nghiêm trọng)', count: delayOver7, badge: 'Yêu cầu giải trình', color: 'FFD93025' }
+    { label: '1 - 3 ngày (Trễ nhẹ)', count: delay1to3, color: 'FFD9B300' },
+    { label: '4 - 7 ngày (Cảnh báo tiến độ)', count: delay4to7, color: 'FFE66C37' },
+    { label: '> 7 ngày (Quá hạn nghiêm trọng)', count: delayOver7, color: 'FFD64550' }
   ];
   timelineData.forEach((t, idx) => {
     const r = 12 + idx;
     ws.getRow(r).height = 22;
 
     ws.getCell(`M${r}`).value = t.label;
+    ws.getCell(`M${r}`).numFmt = '@';
     ws.getCell(`M${r}`).border = thinBorder;
     ws.getCell(`M${r}`).font = { name: 'Calibri', size: 11, color: { argb: 'FF252423' } };
     ws.getCell(`M${r}`).fill = softGreenItemFill;
     ws.getCell(`M${r}`).alignment = { vertical: 'middle', horizontal: 'left' };
 
     ws.getCell(`O${r}`).value = t.count;
+    ws.getCell(`O${r}`).numFmt = '#,##0';
     ws.getCell(`O${r}`).border = thinBorder;
     ws.getCell(`O${r}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: t.count > 0 ? t.color : 'FF57BB8A' } };
     ws.getCell(`O${r}`).fill = numberCellFill;
@@ -578,16 +625,22 @@ export const exportAnalystExecutiveReport = async (
     ws.getCell(`P${r}`).border = thinBorder;
     ws.getCell(`P${r}`).font = { name: 'Calibri', size: 11 };
     ws.getCell(`P${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
-
-    ws.getCell(`Q${r}`).value = t.badge;
-    ws.getCell(`Q${r}`).border = thinBorder;
-    ws.getCell(`Q${r}`).font = { name: 'Calibri', size: 10, italic: true, color: { argb: 'FF605E5C' } };
-    ws.getCell(`Q${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
   });
 
   // =========================================================================
   // 7. ROWS 19-27: 4 BREAKDOWN TABLES (BY POSM, BY STORE, BY PROJECT, BY CAT)
   // =========================================================================
+
+  // Fully clear rows 19 to 27 first
+  for (let r = 19; r <= 27; r++) {
+    for (let c = 1; c <= 17; c++) {
+      const cell = ws.getRow(r).getCell(c);
+      cell.value = null;
+      cell.fill = { type: 'pattern', pattern: 'none' };
+      cell.border = {};
+      cell.numFmt = '@';
+    }
+  }
 
   // Section Headers (Row 19)
   ws.getCell('A19').value = '4. BY POSM';
@@ -622,15 +675,6 @@ export const exportAnalystExecutiveReport = async (
     c2.border = thinBorder;
   });
 
-  // Clear rows 21 to 27 first
-  for (let r = 21; r <= 27; r++) {
-    ['A', 'B', 'D', 'E', 'G', 'H', 'J', 'K'].forEach(col => {
-      ws.getCell(`${col}${r}`).value = null;
-      ws.getCell(`${col}${r}`).fill = { type: 'pattern', pattern: 'none' };
-      ws.getCell(`${col}${r}`).border = {};
-    });
-  }
-
   const sortedPosm = Array.from(posmMap.entries()).sort((a, b) => b[1] - a[1]);
   const sortedStore = Array.from(storeMap.entries()).sort((a, b) => b[1] - a[1]);
   const sortedProject = Array.from(projectMap.entries()).sort((a, b) => b[1] - a[1]);
@@ -638,7 +682,6 @@ export const exportAnalystExecutiveReport = async (
 
   const maxBreakdown = Math.max(sortedPosm.length, sortedStore.length, sortedProject.length, sortedCat.length, 3);
   
-  // Format each row with uniform soft green label background and light gray number styling
   for (let i = 0; i < maxBreakdown && i < 6; i++) {
     const r = 21 + i;
     ws.getRow(r).height = 22;
@@ -646,12 +689,14 @@ export const exportAnalystExecutiveReport = async (
     // Col A & B (Loại POSM)
     if (sortedPosm[i]) {
       ws.getCell(`A${r}`).value = sortedPosm[i][0];
+      ws.getCell(`A${r}`).numFmt = '@';
       ws.getCell(`A${r}`).fill = softGreenItemFill;
       ws.getCell(`A${r}`).font = { name: 'Calibri', size: 11, color: { argb: 'FF252423' } };
       ws.getCell(`A${r}`).border = thinBorder;
       ws.getCell(`A${r}`).alignment = { vertical: 'middle', horizontal: 'left' };
 
       ws.getCell(`B${r}`).value = sortedPosm[i][1];
+      ws.getCell(`B${r}`).numFmt = '#,##0';
       ws.getCell(`B${r}`).fill = numberCellFill;
       ws.getCell(`B${r}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF1F4E79' } };
       ws.getCell(`B${r}`).border = thinBorder;
@@ -661,12 +706,14 @@ export const exportAnalystExecutiveReport = async (
     // Col D & E (Store)
     if (sortedStore[i]) {
       ws.getCell(`D${r}`).value = sortedStore[i][0];
+      ws.getCell(`D${r}`).numFmt = '@';
       ws.getCell(`D${r}`).fill = softGreenItemFill;
       ws.getCell(`D${r}`).font = { name: 'Calibri', size: 11, color: { argb: 'FF252423' } };
       ws.getCell(`D${r}`).border = thinBorder;
       ws.getCell(`D${r}`).alignment = { vertical: 'middle', horizontal: 'left' };
 
       ws.getCell(`E${r}`).value = sortedStore[i][1];
+      ws.getCell(`E${r}`).numFmt = '#,##0';
       ws.getCell(`E${r}`).fill = numberCellFill;
       ws.getCell(`E${r}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF1F4E79' } };
       ws.getCell(`E${r}`).border = thinBorder;
@@ -676,12 +723,14 @@ export const exportAnalystExecutiveReport = async (
     // Col G & H (Mã dự án)
     if (sortedProject[i]) {
       ws.getCell(`G${r}`).value = sortedProject[i][0];
+      ws.getCell(`G${r}`).numFmt = '@';
       ws.getCell(`G${r}`).fill = softGreenItemFill;
       ws.getCell(`G${r}`).font = { name: 'Calibri', size: 11, color: { argb: 'FF252423' } };
       ws.getCell(`G${r}`).border = thinBorder;
       ws.getCell(`G${r}`).alignment = { vertical: 'middle', horizontal: 'left' };
 
       ws.getCell(`H${r}`).value = sortedProject[i][1];
+      ws.getCell(`H${r}`).numFmt = '#,##0';
       ws.getCell(`H${r}`).fill = numberCellFill;
       ws.getCell(`H${r}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF1F4E79' } };
       ws.getCell(`H${r}`).border = thinBorder;
@@ -691,12 +740,14 @@ export const exportAnalystExecutiveReport = async (
     // Col J & K (CAT / Brand)
     if (sortedCat[i]) {
       ws.getCell(`J${r}`).value = sortedCat[i][0];
+      ws.getCell(`J${r}`).numFmt = '@';
       ws.getCell(`J${r}`).fill = softGreenItemFill;
       ws.getCell(`J${r}`).font = { name: 'Calibri', size: 11, color: { argb: 'FF252423' } };
       ws.getCell(`J${r}`).border = thinBorder;
       ws.getCell(`J${r}`).alignment = { vertical: 'middle', horizontal: 'left' };
 
       ws.getCell(`K${r}`).value = sortedCat[i][1];
+      ws.getCell(`K${r}`).numFmt = '#,##0';
       ws.getCell(`K${r}`).fill = numberCellFill;
       ws.getCell(`K${r}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF1F4E79' } };
       ws.getCell(`K${r}`).border = thinBorder;
@@ -730,7 +781,7 @@ export const exportAnalystExecutiveReport = async (
     { col: 'N', title: 'Hạn Xử Lý' },
     { col: 'O', title: 'Ngày Hoàn Thành' },
     { col: 'P', title: 'Tiến Độ' },
-    { col: 'Q', title: 'Cảnh Báo / Ghi Chú' }
+    { col: 'Q', title: 'Ghi Chú' }
   ];
 
   detailHeaders.forEach(({ col, title }) => {
@@ -744,11 +795,13 @@ export const exportAnalystExecutiveReport = async (
 
   // Clear any existing dummy rows from row 31 to 1000
   for (let r = 31; r <= 1000; r++) {
-    ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q'].forEach(col => {
-      ws.getCell(`${col}${r}`).value = null;
-      ws.getCell(`${col}${r}`).fill = { type: 'pattern', pattern: 'none' };
-      ws.getCell(`${col}${r}`).border = {};
-    });
+    for (let c = 1; c <= 17; c++) {
+      const cell = ws.getRow(r).getCell(c);
+      cell.value = null;
+      cell.fill = { type: 'pattern', pattern: 'none' };
+      cell.border = {};
+      cell.numFmt = '@';
+    }
   }
 
   // Inject all active items with styling
@@ -774,7 +827,7 @@ export const exportAnalystExecutiveReport = async (
     } else if (pExp && Date.now() > pExp) {
       const days = Math.ceil((Date.now() - pExp) / 86400000);
       noteText = `Trễ hạn ${days} ngày`;
-    } else if (pInst && pSent && pSent >= pInst && Math.round((pSent - pInst) / 86400000) < 31) {
+    } else if (pInst && pSent && pSent >= pInst && Math.round((pSent - pInst) / 86400000) < 30) {
       noteText = 'Hỏng sớm';
     }
 
@@ -787,7 +840,7 @@ export const exportAnalystExecutiveReport = async (
     ws.getCell(`G${r}`).value = item.supplier || 'Chưa xác định';
     ws.getCell(`H${r}`).value = formatDateStr(item.installationDate);
     ws.getCell(`I${r}`).value = formatDateStr(item.sentDate || item.createdAt);
-    ws.getCell(`J${r}`).value = item.errorType || item.errorDetail || 'Chưa xác định';
+    ws.getCell(`J${r}`).value = normalizeCauseKey(item);
     ws.getCell(`L${r}`).value = item.errorDetail || 'Chưa xác định';
     ws.getCell(`N${r}`).value = formatDateStr(item.expectedDate || item.requestDeadline);
     ws.getCell(`O${r}`).value = formatDateStr(item.completedDate);
@@ -807,7 +860,7 @@ export const exportAnalystExecutiveReport = async (
   });
 
   // =========================================================================
-  // 9. BUILD SHEET 2: "Raw Data" (FULL 21 COLUMNS WITH CLEAN STYLING)
+  // 9. BUILD SHEET 2: "Raw Data" (FULL 21 COLUMNS)
   // =========================================================================
   const existingRaw = wb.getWorksheet('Raw Data');
   if (existingRaw) wb.removeWorksheet(existingRaw.id);
@@ -877,7 +930,7 @@ export const exportAnalystExecutiveReport = async (
       item.brand || '-',
       item.category || item.brand || '-',
       item.supplier || 'Chưa gán thầu',
-      item.errorType || '-',
+      normalizeCauseKey(item),
       item.errorDetail || '-',
       formatDateStr(item.installationDate),
       formatDateStr(item.sentDate || item.createdAt),
