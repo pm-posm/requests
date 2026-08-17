@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Papa from 'papaparse';
+import toast from 'react-hot-toast';
 import { 
   Search, Loader2, RefreshCw, AlertCircle, ChevronDown, ChevronUp, ChevronRight,
   CheckCircle2, AlertTriangle, ClipboardList, Filter, FileSpreadsheet, 
@@ -140,48 +141,59 @@ export default function TrackingNtxx() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  const loadData = (showToast = false) => {
+  const loadData = async (showToast = false) => {
     setIsRefreshing(true);
     setError(null);
-    const targetUrl = `${SHEET_CSV_URL}&_cachebust=${Date.now()}`;
-    Papa.parse(targetUrl, {
-      download: true,
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        if (results.errors.length > 0) {
-          console.warn('CSV parsing warnings:', results.errors);
-        }
-        
-        // Map raw row fields with flexible spaces cleaning
-        const formattedData = (results.data as any[]).map((row) => {
-          const mappedRow: Partial<NtxxRow> = {};
-          Object.entries(row).forEach(([key, val]) => {
-            const cleaned = key.replace(/\s+/g, ' ').trim();
-            const mappedField = COLUMN_MAPPING[cleaned];
-            if (mappedField) {
-              mappedRow[mappedField] = (val as string || '').trim();
-            }
-          });
-          return mappedRow as NtxxRow;
-        }).filter(item => item.projectCode || item.item || item.supplierName); // Filter empty rows
-
-        setRawData(formattedData);
-        setIsLoading(false);
-        setIsRefreshing(false);
-        setLastSyncedAt(new Date().toLocaleTimeString('vi-VN'));
-        setCountdownSeconds(30);
-        if (showToast) {
-          toast.success('Đã kéo dữ liệu mới nhất từ Sheet Form_Responses2!');
-        }
-      },
-      error: (err: any) => {
-        console.error('Error fetching NTXX sheet data:', err);
-        setError('Không thể lấy dữ liệu Nghiệm thu xuất xưởng từ Google Sheet. Vui lòng kiểm tra quyền truy cập hoặc kết nối.');
-        setIsLoading(false);
-        setIsRefreshing(false);
+    try {
+      const targetUrl = `${SHEET_CSV_URL}&_cachebust=${Date.now()}`;
+      let csvText = '';
+      try {
+        const res = await fetch(targetUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        csvText = await res.text();
+      } catch {
+        // Fallback to gviz endpoint if export endpoint fails
+        const gvizUrl = `https://docs.google.com/spreadsheets/d/110dpKX0WPZ76LHImzqrZwt58wG6Kq3rkCJ-ilpRpsbg/gviz/tq?tqx=out:csv&gid=2095387878&_cachebust=${Date.now()}`;
+        const res2 = await fetch(gvizUrl);
+        if (!res2.ok) throw new Error(`Fallback HTTP ${res2.status}`);
+        csvText = await res2.text();
       }
-    });
+
+      const results = Papa.parse(csvText, {
+        header: true,
+        skipEmptyLines: true,
+      });
+
+      // Map raw row fields with flexible spaces cleaning
+      const formattedData = (results.data as any[]).map((row) => {
+        const mappedRow: Partial<NtxxRow> = {};
+        Object.entries(row).forEach(([key, val]) => {
+          const cleaned = key.replace(/\s+/g, ' ').trim();
+          const mappedField = COLUMN_MAPPING[cleaned];
+          if (mappedField) {
+            mappedRow[mappedField] = (val as string || '').trim();
+          }
+        });
+        return mappedRow as NtxxRow;
+      }).filter(item => item.projectCode || item.item || item.supplierName);
+
+      setRawData(formattedData);
+      setIsLoading(false);
+      setIsRefreshing(false);
+      setLastSyncedAt(new Date().toLocaleTimeString('vi-VN'));
+      setCountdownSeconds(30);
+      if (showToast) {
+        toast.success('Đã kéo dữ liệu mới nhất từ Sheet Form_Responses2!');
+      }
+    } catch (err: any) {
+      console.error('Error fetching NTXX sheet data:', err);
+      setError('Không thể lấy dữ liệu Nghiệm thu xuất xưởng từ Google Sheet. Vui lòng kiểm tra quyền truy cập hoặc kết nối.');
+      setIsLoading(false);
+      setIsRefreshing(false);
+      if (showToast) {
+        toast.error('Lỗi khi tải dữ liệu NTXX từ Google Sheet');
+      }
+    }
   };
 
   // Real-time Auto-polling Interval (mỗi 30s tự động kéo dữ liệu mới từ Sheet)
