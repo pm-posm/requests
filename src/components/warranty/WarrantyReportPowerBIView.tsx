@@ -1257,16 +1257,23 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
                   Thuộc các mã dự án:
                 </span>
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  {kpiData.activeProjects.map(prj => (
-                    <span 
-                      key={prj}
-                      onClick={() => setSelectedProject(prj)}
-                      className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 hover:text-indigo-600 text-slate-800 dark:text-slate-200 font-mono font-bold border border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer text-xs transition-colors"
-                      title="Bấm để lọc theo dự án này"
-                    >
-                      {prj}
-                    </span>
-                  ))}
+                  {kpiData.activeProjects.map(prj => {
+                    const isSelected = selectedProjects.includes(prj);
+                    return (
+                      <span 
+                        key={prj}
+                        onClick={() => setSelectedProjects(prev => prev.includes(prj) ? [] : [prj])}
+                        className={`px-2 py-0.5 font-mono font-bold border rounded-lg cursor-pointer text-xs transition-colors ${
+                          isSelected
+                            ? 'bg-purple-600 text-white border-purple-600 shadow-2xs'
+                            : 'bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 hover:text-indigo-600 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700'
+                        }`}
+                        title="Bấm để lọc theo dự án này"
+                      >
+                        {prj}
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
             )}
