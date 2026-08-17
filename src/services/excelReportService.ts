@@ -49,8 +49,8 @@ const formatDateStr = (str?: string): string => {
 
 /**
  * Service xuất Báo Cáo Bảo Hành trực tiếp bằng ExcelJS
- * - Giữ nguyên 100% màu sắc, viền khung (borders), font chữ, background fills, merged cells của template gốc Weekly_Report.xlsx
- * - Tab 1: Weekly (Template gốc kèm dữ liệu thực tế)
+ * - Giữ nguyên 100% màu sắc, viền khung (borders), font chữ, background fills của template chuẩn Executive Report
+ * - Tab 1: Weekly (Báo Cáo Điều Hành Trực Quan: KPI, Đánh Giá Nhà Thầu, Nguyên Nhân Lỗi, Phân Bố POSM/Store/Dự Án, Chi Tiết Ca)
  * - Tab 2: Raw Data (Toàn bộ 21 cột chi tiết)
  */
 export const exportAnalystExecutiveReport = async (
@@ -230,30 +230,33 @@ export const exportAnalystExecutiveReport = async (
   // =========================================================================
   ws.columns = [
     { width: 22 }, // A: TỔNG CA BẢO HÀNH / Nhà Thầu / Loại POSM / ID
-    { width: 15 }, // B: % XỬ LÝ ĐÚNG HẠN / Total Case / Số ca / Store
-    { width: 14 }, // C: POSM
-    { width: 16 }, // D: % XỬ LÝ TRỄ HẠN / Store (Bảng 5) / Brand
-    { width: 14 }, // E: Số ca (Bảng 5) / Cat
-    { width: 18 }, // F: % HỎNG SỚM / % Đạt tiến độ / Mã dự án
-    { width: 16 }, // G: Mã dự án (Bảng 6) / Supplier
-    { width: 22 }, // H: TOP SUPPLIER / Nguyên nhân lỗi / Ngày lắp đặt
-    { width: 15 }, // I: Ngày gửi BH
-    { width: 26 }, // J: TOP PROJECT / Loại lỗi (Cột W) / CAT
-    { width: 16 }, // K: % Tỷ lệ / Số ca (Bảng 7)
-    { width: 28 }, // L: TOP STORE / Chi tiết lỗi
-    { width: 16 }, // M: Thời gian trễ hạn
-    { width: 18 }, // N: TOP CAT / Ngày hẹn
-    { width: 16 }, // O: Số ca (Bảng 3) / Ngày hoàn thành
-    { width: 22 }, // P: TOP POSM / % Tỷ lệ (Bảng 3) / Status
-    { width: 25 }  // Q: Mức độ cảnh báo / Note
+    { width: 14 }, // B: % XỬ LÝ ĐÚNG HẠN / Total Case / Số ca / Store
+    { width: 16 }, // C: POSM / Hỏng sớm
+    { width: 18 }, // D: % XỬ LÝ TRỄ HẠN / Tái diễn / Store
+    { width: 14 }, // E: Số ca trễ / Số ca Store
+    { width: 16 }, // F: % HỎNG SỚM / % Đạt tiến độ / Mã dự án
+    { width: 18 }, // G: Mã dự án / Supplier
+    { width: 34 }, // H: TOP SUPPLIER / Nguyên nhân lỗi / Ngày lắp đặt
+    { width: 16 }, // I: Ngày gửi BH
+    { width: 16 }, // J: TOP PROJECT / Số ca lỗi
+    { width: 14 }, // K: % Tỷ lệ
+    { width: 32 }, // L: TOP STORE / Chi tiết lỗi
+    { width: 26 }, // M: Thời gian trễ hạn
+    { width: 16 }, // N: TOP CAT / Ngày hẹn
+    { width: 16 }, // O: Số ca trễ / Ngày hoàn thành
+    { width: 22 }, // P: TOP POSM / Trạng thái
+    { width: 26 }  // Q: Mức độ cảnh báo / Note
   ];
 
   // Set explicit, spacious row heights
-  ws.getRow(1).height = 42; // Title banner
+  ws.getRow(1).height = 36; // Title banner
+  ws.getRow(2).height = 10; // Spacing
+  ws.getRow(3).height = 10; // Spacing
   ws.getRow(4).height = 28; // Header for KPI cards
-  ws.getRow(5).height = 44; // 24pt large KPI numbers
+  ws.getRow(5).height = 42; // 24pt large KPI numbers
   ws.getRow(6).height = 24; // Subtitles (⚡ 36/62 ca)
   ws.getRow(7).height = 26; // ⏳ Đang xử lí note
+  ws.getRow(8).height = 10; // Spacing
   ws.getRow(10).height = 28; // Section headers (1. BY SUPPLIER, 2. BY CAUSE, 3. BY TIMELINE)
   ws.getRow(11).height = 26; // Table headers
   ws.getRow(19).height = 28; // Section headers (4. BY POSM, 5. BY STORE, 6. BY PROJECT, 7. BY CAT)
@@ -269,109 +272,275 @@ export const exportAnalystExecutiveReport = async (
     right: { style: 'thin', color: { argb: 'FFD2D0CE' } }
   };
 
-  const greenCellFill: ExcelJS.Fill = {
+  const navyHeaderFill: ExcelJS.Fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FF1F4E79' }
+  };
+
+  const greenHeaderFill: ExcelJS.Fill = {
     type: 'pattern',
     pattern: 'solid',
     fgColor: { argb: 'FFB7E1CD' }
   };
 
+  const softGreenItemFill: ExcelJS.Fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FFE6F4EA' }
+  };
+
   const numberCellFill: ExcelJS.Fill = {
     type: 'pattern',
     pattern: 'solid',
-    fgColor: { argb: 'FFF2F4F7' }
+    fgColor: { argb: 'FFF8F9FA' }
   };
 
-  // 1. Title Header
+  // 1. Title Header in Row 1
   ws.getCell('A1').value = dateRangeLabel;
+  ws.getCell('A1').font = { name: 'Calibri', size: 16, bold: true, color: { argb: 'FF1F4E79' } };
+  ws.getCell('A1').alignment = { vertical: 'middle', horizontal: 'left' };
 
-  // 2. Row 5: KPI Values (Keep 24pt bold colors)
+  // =========================================================================
+  // FIX: FILL ENTIRE TOP KPI BANNER (ROWS 2-8, COLS A-Q) WITH UNIFORM GREEN
+  // (Eliminating any white boxes or missing fills from template artifacts)
+  // =========================================================================
+  for (let r = 2; r <= 8; r++) {
+    for (let c = 1; c <= 17; c++) {
+      const cell = ws.getRow(r).getCell(c);
+      cell.fill = greenHeaderFill;
+    }
+  }
+
+  // 2. Row 4: KPI Titles
+  const kpiHeaders: { col: string; title: string }[] = [
+    { col: 'A', title: 'TỔNG CA BẢO HÀNH' },
+    { col: 'B', title: '% XỬ LÝ ĐÚNG HẠN' },
+    { col: 'D', title: '% XỬ LÝ TRỄ HẠN' },
+    { col: 'F', title: '% HỎNG SỚM (<31 NGÀY)' },
+    { col: 'H', title: 'TOP NHÀ THẦU' },
+    { col: 'J', title: 'TOP DỰ ÁN' },
+    { col: 'L', title: 'TOP SIÊU THỊ' },
+    { col: 'N', title: 'TOP NGÀNH HÀNG' },
+    { col: 'P', title: 'TOP LOẠI POSM' }
+  ];
+  kpiHeaders.forEach(({ col, title }) => {
+    const cell = ws.getCell(`${col}4`);
+    cell.value = title;
+    cell.font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: 'FF1F4E79' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+  });
+
+  // 3. Row 5: KPI Large Numbers
   ws.getCell('A5').value = totalCount;
-  ws.getCell('B5').value = totalCount > 0 ? onTimeCount / totalCount : 0;
+  ws.getCell('A5').font = { name: 'Calibri', size: 24, bold: true, color: { argb: 'FF1F4E79' } };
+  ws.getCell('A5').alignment = { horizontal: 'center', vertical: 'middle' };
+
+  const onTimeRate = totalCount > 0 ? onTimeCount / totalCount : 0;
+  ws.getCell('B5').value = onTimeRate;
   ws.getCell('B5').numFmt = '0.0%';
-  ws.getCell('D5').value = totalCount > 0 ? overdueCount / totalCount : 0;
+  ws.getCell('B5').font = { name: 'Calibri', size: 24, bold: true, color: { argb: onTimeRate >= 0.8 ? 'FF57BB8A' : 'FFD93025' } };
+  ws.getCell('B5').alignment = { horizontal: 'center', vertical: 'middle' };
+
+  const overdueRate = totalCount > 0 ? overdueCount / totalCount : 0;
+  ws.getCell('D5').value = overdueRate;
   ws.getCell('D5').numFmt = '0.0%';
-  ws.getCell('F5').value = totalCount > 0 ? earlyFailCount / totalCount : 0;
+  ws.getCell('D5').font = { name: 'Calibri', size: 24, bold: true, color: { argb: overdueCount > 0 ? 'FFD93025' : 'FF57BB8A' } };
+  ws.getCell('D5').alignment = { horizontal: 'center', vertical: 'middle' };
+
+  const earlyRate = totalCount > 0 ? earlyFailCount / totalCount : 0;
+  ws.getCell('F5').value = earlyRate;
   ws.getCell('F5').numFmt = '0.0%';
-  ws.getCell('H5').value = topSupplier.name;
-  ws.getCell('J5').value = topProject.name;
-  ws.getCell('L5').value = topStore.name;
-  ws.getCell('N5').value = topCat.name;
-  ws.getCell('P5').value = topPosm.name;
+  ws.getCell('F5').font = { name: 'Calibri', size: 24, bold: true, color: { argb: earlyFailCount > 0 ? 'FFE37400' : 'FF57BB8A' } };
+  ws.getCell('F5').alignment = { horizontal: 'center', vertical: 'middle' };
 
-  // 3. Row 6: KPI Subtitles
-  ws.getCell('B6').value = `⚡ ${onTimeCount}/${totalCount} ca`;
-  ws.getCell('D6').value = `⚠️ ${overdueCount}/${totalCount} ca`;
-  ws.getCell('F6').value = `⚠️ ${earlyFailCount}/${totalCount} ca`;
-  ws.getCell('H6').value = `${topSupplier.count} ca (${topSupplier.pct})`;
-  ws.getCell('J6').value = `${topProject.count} ca (${topProject.pct})`;
-  ws.getCell('L6').value = `${topStore.count} ca (${topStore.pct})`;
-  ws.getCell('N6').value = `${topCat.count} ca (${topCat.pct})`;
-  ws.getCell('P6').value = `${topPosm.count} ca (${topPosm.pct})`;
+  const formatTopKpiCell = (col: string, text: string) => {
+    const cell = ws.getCell(`${col}5`);
+    cell.value = text;
+    cell.font = { name: 'Calibri', size: 13, bold: true, color: { argb: 'FF1F4E79' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+  };
 
-  // 4. Row 7: Active in-progress note
+  formatTopKpiCell('H', topSupplier.name);
+  formatTopKpiCell('J', topProject.name);
+  formatTopKpiCell('L', topStore.name);
+  formatTopKpiCell('N', topCat.name);
+  formatTopKpiCell('P', topPosm.name);
+
+  // 4. Row 6: KPI Subtitles
+  const formatSubtitle = (col: string, text: string, color = 'FF1F4E79') => {
+    const cell = ws.getCell(`${col}6`);
+    cell.value = text;
+    cell.font = { name: 'Calibri', size: 10, color: { argb: color } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  };
+
+  formatSubtitle('B', `⚡ ${onTimeCount}/${totalCount} ca`, onTimeRate >= 0.8 ? 'FF1F4E79' : 'FFD93025');
+  formatSubtitle('D', `⚠️ ${overdueCount}/${totalCount} ca`, overdueCount > 0 ? 'FFD93025' : 'FF57BB8A');
+  formatSubtitle('F', `⚠️ ${earlyFailCount}/${totalCount} ca`, earlyFailCount > 0 ? 'FFE37400' : 'FF57BB8A');
+  formatSubtitle('H', `${topSupplier.count} ca (${topSupplier.pct})`);
+  formatSubtitle('J', `${topProject.count} ca (${topProject.pct})`);
+  formatSubtitle('L', `${topStore.count} ca (${topStore.pct})`);
+  formatSubtitle('N', `${topCat.count} ca (${topCat.pct})`);
+  formatSubtitle('P', `${topPosm.count} ca (${topPosm.pct})`);
+
+  // 5. Row 7: Active in-progress note (Properly styled & merged)
   const activePrjStr = Array.from(activeProjectsSet).join(', ') || 'Không có ca tồn đọng';
   ws.getCell('A7').value = `⏳ Đang xử lí ${inProgressCount} ca thuộc dự án:`;
-  ws.getCell('D7').value = activePrjStr;
+  ws.getCell('A7').font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF1F4E79' } };
+  ws.getCell('A7').alignment = { vertical: 'middle', horizontal: 'left' };
 
-  // 5. Rows 12-17: 3 Evaluation Tables (BY SUPPLIER, BY CAUSE, BY TIMELINE)
-  for (let r = 12; r <= 17; r++) {
-    ['A', 'B', 'C', 'D', 'E', 'F', 'H', 'J', 'K', 'M', 'O', 'P', 'Q'].forEach(col => {
+  ws.getCell('D7').value = activePrjStr;
+  ws.getCell('D7').font = { name: 'Calibri', size: 10, italic: true, color: { argb: 'FF252423' } };
+  ws.getCell('D7').alignment = { vertical: 'middle', horizontal: 'left' };
+
+  // =========================================================================
+  // 6. ROWS 10-17: 3 EVALUATION TABLES (BY SUPPLIER, BY CAUSE, BY TIMELINE)
+  // =========================================================================
+
+  // Clear rows 10-18 for all columns A-Q
+  for (let r = 10; r <= 18; r++) {
+    ['A', 'B', 'C', 'D', 'E', 'F', 'H', 'I', 'J', 'K', 'M', 'N', 'O', 'P', 'Q'].forEach(col => {
       ws.getCell(`${col}${r}`).value = null;
+      ws.getCell(`${col}${r}`).fill = { type: 'pattern', pattern: 'none' };
+      ws.getCell(`${col}${r}`).border = {};
     });
   }
+
+  // Section Headers (Row 10)
+  ws.getCell('A10').value = '1. BY SUPPLIER';
+  ws.getCell('A10').font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF1F4E79' } };
+  ws.getCell('A10').alignment = { vertical: 'middle', horizontal: 'left' };
+
+  ws.getCell('H10').value = '2. BY CAUSE';
+  ws.getCell('H10').font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF1F4E79' } };
+  ws.getCell('H10').alignment = { vertical: 'middle', horizontal: 'left' };
+
+  ws.getCell('M10').value = '3. BY TIMELINE (TRỄ HẠN)';
+  ws.getCell('M10').font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF1F4E79' } };
+  ws.getCell('M10').alignment = { vertical: 'middle', horizontal: 'left' };
+
+  // Table 1 Headers (Row 11)
+  const t1Headers = [
+    { col: 'A', title: 'Nhà Thầu' },
+    { col: 'B', title: 'Total Case' },
+    { col: 'C', title: 'Hỏng Sớm (<31d)' },
+    { col: 'D', title: 'Tái Diễn Trên 1 POSM' },
+    { col: 'E', title: 'Số Ca Trễ Hạn' },
+    { col: 'F', title: '% Đạt Tiến Độ' }
+  ];
+  t1Headers.forEach(({ col, title }) => {
+    const cell = ws.getCell(`${col}11`);
+    cell.value = title;
+    cell.fill = navyHeaderFill;
+    cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.border = thinBorder;
+  });
+
+  // Table 2 Headers (Row 11)
+  ws.getCell('H11').value = 'Nguyên Nhân Lỗi';
+  ws.getCell('H11').fill = navyHeaderFill;
+  ws.getCell('H11').font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+  ws.getCell('H11').alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getCell('H11').border = thinBorder;
+
+  ws.getCell('J11').value = 'Số Ca';
+  ws.getCell('J11').fill = navyHeaderFill;
+  ws.getCell('J11').font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+  ws.getCell('J11').alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getCell('J11').border = thinBorder;
+
+  ws.getCell('K11').value = '% Tỷ Lệ';
+  ws.getCell('K11').fill = navyHeaderFill;
+  ws.getCell('K11').font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+  ws.getCell('K11').alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getCell('K11').border = thinBorder;
+
+  // Table 3 Headers (Row 11)
+  ws.getCell('M11').value = 'Thời Gian Trễ Hạn';
+  ws.getCell('M11').fill = navyHeaderFill;
+  ws.getCell('M11').font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+  ws.getCell('M11').alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getCell('M11').border = thinBorder;
+
+  ws.getCell('O11').value = 'Số Ca';
+  ws.getCell('O11').fill = navyHeaderFill;
+  ws.getCell('O11').font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+  ws.getCell('O11').alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getCell('O11').border = thinBorder;
+
+  ws.getCell('P11').value = '% Tỷ Lệ';
+  ws.getCell('P11').fill = navyHeaderFill;
+  ws.getCell('P11').font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+  ws.getCell('P11').alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getCell('P11').border = thinBorder;
+
+  ws.getCell('Q11').value = 'Mức Độ Cảnh Báo';
+  ws.getCell('Q11').fill = navyHeaderFill;
+  ws.getCell('Q11').font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+  ws.getCell('Q11').alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getCell('Q11').border = thinBorder;
 
   // Populate Bảng 1: BY SUPPLIER
   const sortedSuppliers = Array.from(supplierMap.entries()).sort((a, b) => b[1].total - a[1].total);
   sortedSuppliers.forEach(([sup, d], idx) => {
     const r = 12 + idx;
     ws.getRow(r).height = 22;
+
     ws.getCell(`A${r}`).value = sup;
     ws.getCell(`A${r}`).border = thinBorder;
-    ws.getCell(`A${r}`).font = { name: 'Calibri', size: 11 };
-    ws.getCell(`A${r}`).fill = greenCellFill;
+    ws.getCell(`A${r}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF252423' } };
+    ws.getCell(`A${r}`).fill = softGreenItemFill;
+    ws.getCell(`A${r}`).alignment = { vertical: 'middle', horizontal: 'left' };
 
     ws.getCell(`B${r}`).value = d.total;
     ws.getCell(`B${r}`).border = thinBorder;
     ws.getCell(`B${r}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF1F4E79' } };
+    ws.getCell(`B${r}`).fill = numberCellFill;
     ws.getCell(`B${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
 
     ws.getCell(`C${r}`).value = d.early;
     ws.getCell(`C${r}`).border = thinBorder;
-    ws.getCell(`C${r}`).font = { name: 'Calibri', size: 11, bold: d.early > 0, color: { argb: d.early > 0 ? 'FFFF0000' : 'FF57BB8A' } };
+    ws.getCell(`C${r}`).font = { name: 'Calibri', size: 11, bold: d.early > 0, color: { argb: d.early > 0 ? 'FFD93025' : 'FF57BB8A' } };
     ws.getCell(`C${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
 
     ws.getCell(`D${r}`).value = d.repeat;
     ws.getCell(`D${r}`).border = thinBorder;
-    ws.getCell(`D${r}`).font = { name: 'Calibri', size: 11, color: { argb: 'FF57BB8A' } };
+    ws.getCell(`D${r}`).font = { name: 'Calibri', size: 11, bold: d.repeat > 0, color: { argb: d.repeat > 0 ? 'FFD93025' : 'FF57BB8A' } };
     ws.getCell(`D${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
 
     ws.getCell(`E${r}`).value = d.overdue;
     ws.getCell(`E${r}`).border = thinBorder;
-    ws.getCell(`E${r}`).font = { name: 'Calibri', size: 11, bold: d.overdue > 0, color: { argb: d.overdue > 0 ? 'FFFF0000' : 'FF57BB8A' } };
+    ws.getCell(`E${r}`).font = { name: 'Calibri', size: 11, bold: d.overdue > 0, color: { argb: d.overdue > 0 ? 'FFD93025' : 'FF57BB8A' } };
     ws.getCell(`E${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
 
     const rate = d.total > 0 ? (d.total - d.overdue) / d.total : 1;
     ws.getCell(`F${r}`).value = rate;
     ws.getCell(`F${r}`).numFmt = '0.0%';
     ws.getCell(`F${r}`).border = thinBorder;
-    ws.getCell(`F${r}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: rate < 0.8 ? 'FFFF0000' : 'FF57BB8A' } };
+    ws.getCell(`F${r}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: rate < 0.8 ? 'FFD93025' : 'FF57BB8A' } };
     ws.getCell(`F${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
   });
 
-  // Populate Bảng 2: BY CAUSE
+  // Populate Bảng 2: BY CAUSE (Clean numeric count, no messy multiline brackets)
   const sortedCauses = Array.from(causeMap.entries()).sort((a, b) => b[1].count - a[1].count);
   sortedCauses.slice(0, 6).forEach(([cause, d], idx) => {
     const r = 12 + idx;
     ws.getRow(r).height = 22;
+
     ws.getCell(`H${r}`).value = cause;
     ws.getCell(`H${r}`).border = thinBorder;
-    ws.getCell(`H${r}`).font = { name: 'Calibri', size: 11 };
-    ws.getCell(`H${r}`).fill = greenCellFill;
+    ws.getCell(`H${r}`).font = { name: 'Calibri', size: 11, color: { argb: 'FF252423' } };
+    ws.getCell(`H${r}`).fill = softGreenItemFill;
+    ws.getCell(`H${r}`).alignment = { vertical: 'middle', horizontal: 'left' };
 
-    ws.getCell(`J${r}`).value = `${d.count}\n(${d.topSupplier}>>)`;
+    // Pure numeric count for clean Excel display
+    ws.getCell(`J${r}`).value = d.count;
     ws.getCell(`J${r}`).border = thinBorder;
     ws.getCell(`J${r}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF1F4E79' } };
-    ws.getCell(`J${r}`).alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    ws.getCell(`J${r}`).fill = numberCellFill;
+    ws.getCell(`J${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
 
     const pct = totalCount > 0 ? d.count / totalCount : 0;
     ws.getCell(`K${r}`).value = pct;
@@ -384,19 +553,23 @@ export const exportAnalystExecutiveReport = async (
   // Populate Bảng 3: BY TIMELINE
   const timelineData = [
     { label: '1 - 3 ngày (Trễ nhẹ)', count: delay1to3, badge: 'Nhắc nhở', color: 'FF1F4E79' },
-    { label: '4 - 7 ngày (Cảnh báo tiến độ)', count: delay4to7, badge: 'Đôn đốc xử lý gấp', color: 'FFFF0000' },
-    { label: '> 7 ngày (Quá hạn nghiêm trọng)', count: delayOver7, badge: 'Yêu cầu giải trình', color: 'FFFF0000' }
+    { label: '4 - 7 ngày (Cảnh báo tiến độ)', count: delay4to7, badge: 'Đôn đốc xử lý gấp', color: 'FFD93025' },
+    { label: '> 7 ngày (Quá hạn nghiêm trọng)', count: delayOver7, badge: 'Yêu cầu giải trình', color: 'FFD93025' }
   ];
   timelineData.forEach((t, idx) => {
     const r = 12 + idx;
     ws.getRow(r).height = 22;
+
     ws.getCell(`M${r}`).value = t.label;
     ws.getCell(`M${r}`).border = thinBorder;
-    ws.getCell(`M${r}`).font = { name: 'Calibri', size: 11 };
+    ws.getCell(`M${r}`).font = { name: 'Calibri', size: 11, color: { argb: 'FF252423' } };
+    ws.getCell(`M${r}`).fill = softGreenItemFill;
+    ws.getCell(`M${r}`).alignment = { vertical: 'middle', horizontal: 'left' };
 
     ws.getCell(`O${r}`).value = t.count;
     ws.getCell(`O${r}`).border = thinBorder;
     ws.getCell(`O${r}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: t.count > 0 ? t.color : 'FF57BB8A' } };
+    ws.getCell(`O${r}`).fill = numberCellFill;
     ws.getCell(`O${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
 
     const pct = totalCount > 0 ? t.count / totalCount : 0;
@@ -408,10 +581,47 @@ export const exportAnalystExecutiveReport = async (
 
     ws.getCell(`Q${r}`).value = t.badge;
     ws.getCell(`Q${r}`).border = thinBorder;
-    ws.getCell(`Q${r}`).font = { name: 'Calibri', size: 11, italic: true, color: { argb: 'FF605E5C' } };
+    ws.getCell(`Q${r}`).font = { name: 'Calibri', size: 10, italic: true, color: { argb: 'FF605E5C' } };
+    ws.getCell(`Q${r}`).alignment = { horizontal: 'center', vertical: 'middle' };
   });
 
-  // 6. Rows 21-27: 4 Breakdown Tables (BY POSM, BY STORE, BY PROJECT, BY CAT)
+  // =========================================================================
+  // 7. ROWS 19-27: 4 BREAKDOWN TABLES (BY POSM, BY STORE, BY PROJECT, BY CAT)
+  // =========================================================================
+
+  // Section Headers (Row 19)
+  ws.getCell('A19').value = '4. BY POSM';
+  ws.getCell('A19').font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF1F4E79' } };
+  ws.getCell('D19').value = '5. BY STORE';
+  ws.getCell('D19').font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF1F4E79' } };
+  ws.getCell('G19').value = '6. BY PROJECT';
+  ws.getCell('G19').font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF1F4E79' } };
+  ws.getCell('J19').value = '7. BY CAT';
+  ws.getCell('J19').font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF1F4E79' } };
+
+  // Subheaders (Row 20)
+  const subheaders: { col1: string; label1: string; col2: string; label2: string }[] = [
+    { col1: 'A', label1: 'Loại POSM', col2: 'B', label2: 'Số ca' },
+    { col1: 'D', label1: 'Tên Siêu Thị', col2: 'E', label2: 'Số ca' },
+    { col1: 'G', label1: 'Mã Dự Án', col2: 'H', label2: 'Số ca' },
+    { col1: 'J', label1: 'Ngành Hàng / Brand', col2: 'K', label2: 'Số ca' }
+  ];
+  subheaders.forEach(({ col1, label1, col2, label2 }) => {
+    const c1 = ws.getCell(`${col1}20`);
+    c1.value = label1;
+    c1.fill = navyHeaderFill;
+    c1.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    c1.alignment = { horizontal: 'center', vertical: 'middle' };
+    c1.border = thinBorder;
+
+    const c2 = ws.getCell(`${col2}20`);
+    c2.value = label2;
+    c2.fill = navyHeaderFill;
+    c2.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    c2.alignment = { horizontal: 'center', vertical: 'middle' };
+    c2.border = thinBorder;
+  });
+
   // Clear rows 21 to 27 first
   for (let r = 21; r <= 27; r++) {
     ['A', 'B', 'D', 'E', 'G', 'H', 'J', 'K'].forEach(col => {
@@ -428,7 +638,7 @@ export const exportAnalystExecutiveReport = async (
 
   const maxBreakdown = Math.max(sortedPosm.length, sortedStore.length, sortedProject.length, sortedCat.length, 3);
   
-  // Format each row with uniform green label background and gray number styling!
+  // Format each row with uniform soft green label background and light gray number styling
   for (let i = 0; i < maxBreakdown && i < 6; i++) {
     const r = 21 + i;
     ws.getRow(r).height = 22;
@@ -436,10 +646,10 @@ export const exportAnalystExecutiveReport = async (
     // Col A & B (Loại POSM)
     if (sortedPosm[i]) {
       ws.getCell(`A${r}`).value = sortedPosm[i][0];
-      ws.getCell(`A${r}`).fill = greenCellFill;
+      ws.getCell(`A${r}`).fill = softGreenItemFill;
       ws.getCell(`A${r}`).font = { name: 'Calibri', size: 11, color: { argb: 'FF252423' } };
       ws.getCell(`A${r}`).border = thinBorder;
-      ws.getCell(`A${r}`).alignment = { vertical: 'middle' };
+      ws.getCell(`A${r}`).alignment = { vertical: 'middle', horizontal: 'left' };
 
       ws.getCell(`B${r}`).value = sortedPosm[i][1];
       ws.getCell(`B${r}`).fill = numberCellFill;
@@ -451,10 +661,10 @@ export const exportAnalystExecutiveReport = async (
     // Col D & E (Store)
     if (sortedStore[i]) {
       ws.getCell(`D${r}`).value = sortedStore[i][0];
-      ws.getCell(`D${r}`).fill = greenCellFill;
+      ws.getCell(`D${r}`).fill = softGreenItemFill;
       ws.getCell(`D${r}`).font = { name: 'Calibri', size: 11, color: { argb: 'FF252423' } };
       ws.getCell(`D${r}`).border = thinBorder;
-      ws.getCell(`D${r}`).alignment = { vertical: 'middle' };
+      ws.getCell(`D${r}`).alignment = { vertical: 'middle', horizontal: 'left' };
 
       ws.getCell(`E${r}`).value = sortedStore[i][1];
       ws.getCell(`E${r}`).fill = numberCellFill;
@@ -466,10 +676,10 @@ export const exportAnalystExecutiveReport = async (
     // Col G & H (Mã dự án)
     if (sortedProject[i]) {
       ws.getCell(`G${r}`).value = sortedProject[i][0];
-      ws.getCell(`G${r}`).fill = greenCellFill;
+      ws.getCell(`G${r}`).fill = softGreenItemFill;
       ws.getCell(`G${r}`).font = { name: 'Calibri', size: 11, color: { argb: 'FF252423' } };
       ws.getCell(`G${r}`).border = thinBorder;
-      ws.getCell(`G${r}`).alignment = { vertical: 'middle' };
+      ws.getCell(`G${r}`).alignment = { vertical: 'middle', horizontal: 'left' };
 
       ws.getCell(`H${r}`).value = sortedProject[i][1];
       ws.getCell(`H${r}`).fill = numberCellFill;
@@ -481,10 +691,10 @@ export const exportAnalystExecutiveReport = async (
     // Col J & K (CAT / Brand)
     if (sortedCat[i]) {
       ws.getCell(`J${r}`).value = sortedCat[i][0];
-      ws.getCell(`J${r}`).fill = greenCellFill;
+      ws.getCell(`J${r}`).fill = softGreenItemFill;
       ws.getCell(`J${r}`).font = { name: 'Calibri', size: 11, color: { argb: 'FF252423' } };
       ws.getCell(`J${r}`).border = thinBorder;
-      ws.getCell(`J${r}`).alignment = { vertical: 'middle' };
+      ws.getCell(`J${r}`).alignment = { vertical: 'middle', horizontal: 'left' };
 
       ws.getCell(`K${r}`).value = sortedCat[i][1];
       ws.getCell(`K${r}`).fill = numberCellFill;
@@ -494,11 +704,50 @@ export const exportAnalystExecutiveReport = async (
     }
   }
 
-  // 7. Rows 31+: Detail Action Table
+  // =========================================================================
+  // 8. ROWS 29+: DETAIL ACTION TABLE (17 COLUMNS DRILL-DOWN)
+  // =========================================================================
+
+  // Section Header (Row 29)
+  ws.getCell('A29').value = `CHI TIẾT CÁC CA BẢO HÀNH (${totalCount} CA)`;
+  ws.getCell('A29').font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
+  ws.getCell('A29').fill = navyHeaderFill;
+  ws.getCell('A29').alignment = { vertical: 'middle', horizontal: 'left' };
+
+  // Table Headers (Row 30)
+  const detailHeaders = [
+    { col: 'A', title: 'Mã Ca (ID)' },
+    { col: 'B', title: 'Tên Siêu Thị' },
+    { col: 'C', title: 'Loại POSM' },
+    { col: 'D', title: 'Brand' },
+    { col: 'E', title: 'Ngành Hàng' },
+    { col: 'F', title: 'Mã Dự Án' },
+    { col: 'G', title: 'Nhà Thầu' },
+    { col: 'H', title: 'Ngày Lắp Đặt' },
+    { col: 'I', title: 'Ngày Báo Lỗi' },
+    { col: 'J', title: 'Loại Lỗi (Cột W)' },
+    { col: 'L', title: 'Chi Tiết Lỗi' },
+    { col: 'N', title: 'Hạn Xử Lý' },
+    { col: 'O', title: 'Ngày Hoàn Thành' },
+    { col: 'P', title: 'Tiến Độ' },
+    { col: 'Q', title: 'Cảnh Báo / Ghi Chú' }
+  ];
+
+  detailHeaders.forEach(({ col, title }) => {
+    const cell = ws.getCell(`${col}30`);
+    cell.value = title;
+    cell.fill = navyHeaderFill;
+    cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.border = thinBorder;
+  });
+
   // Clear any existing dummy rows from row 31 to 1000
   for (let r = 31; r <= 1000; r++) {
     ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q'].forEach(col => {
       ws.getCell(`${col}${r}`).value = null;
+      ws.getCell(`${col}${r}`).fill = { type: 'pattern', pattern: 'none' };
+      ws.getCell(`${col}${r}`).border = {};
     });
   }
 
@@ -549,21 +798,16 @@ export const exportAnalystExecutiveReport = async (
     ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q'].forEach(c => {
       const cell = ws.getCell(`${c}${r}`);
       cell.border = thinBorder;
-      cell.font = { name: 'Calibri', size: 11, color: { argb: 'FF252423' } };
-      cell.alignment = { vertical: 'middle', wrapText: true };
+      cell.font = { name: 'Calibri', size: 10, color: { argb: 'FF252423' } };
+      cell.alignment = { vertical: 'middle', wrapText: c === 'L' || c === 'Q' };
+      if (idx % 2 === 1) {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } };
+      }
     });
-
-    // Merge J:K and L:M for row
-    try {
-      ws.mergeCells(`J${r}:K${r}`);
-      ws.mergeCells(`L${r}:M${r}`);
-    } catch {
-      // Ignore if already merged
-    }
   });
 
   // =========================================================================
-  // 4. BUILD SHEET 2: "Raw Data" (FULL 21 COLUMNS WITH CLEAN STYLING)
+  // 9. BUILD SHEET 2: "Raw Data" (FULL 21 COLUMNS WITH CLEAN STYLING)
   // =========================================================================
   const existingRaw = wb.getWorksheet('Raw Data');
   if (existingRaw) wb.removeWorksheet(existingRaw.id);
@@ -599,7 +843,7 @@ export const exportAnalystExecutiveReport = async (
   rawWs.mergeCells('A1:U1');
   const titleCell = rawWs.getCell('A1');
   titleCell.font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FFFFFFFF' } };
-  titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E79' } };
+  titleCell.fill = navyHeaderFill;
   titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
   rawWs.getRow(1).height = 30;
 
@@ -614,7 +858,7 @@ export const exportAnalystExecutiveReport = async (
   headerRow.height = 25;
   headerRow.eachCell(cell => {
     cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E79' } };
+    cell.fill = navyHeaderFill;
     cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
     cell.border = thinBorder;
   });
@@ -665,7 +909,7 @@ export const exportAnalystExecutiveReport = async (
   ];
 
   // =========================================================================
-  // 5. GENERATE BINARY & TRIGGER BROWSER DOWNLOAD
+  // 10. GENERATE BINARY & TRIGGER BROWSER DOWNLOAD
   // =========================================================================
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], {
