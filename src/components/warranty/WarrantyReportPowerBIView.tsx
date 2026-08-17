@@ -1102,14 +1102,15 @@ export const WarrantyReportPowerBIView: React.FC<WarrantyReportPowerBIViewProps>
               </button>
             )}
 
-            <button
+            {/* Tạm khóa nút Xuất Excel theo yêu cầu người dùng */}
+            {/* <button
               onClick={() => onExportExcel()}
               className="px-3.5 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer border border-emerald-400/40"
               title="Xuất báo cáo Excel 3-Sheet đầy đủ theo chuẩn Weekly_Report"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Xuất Excel ({filteredData.length})</span>
-            </button>
+            </button> */}
 
             <div className="text-xs text-slate-500 dark:text-slate-400 font-mono pl-2 border-l border-slate-200 dark:border-slate-800">
               Hiển thị <span className="font-bold text-slate-900 dark:text-slate-100">{filteredData.length}</span> / {warrantyItems.length} ca
