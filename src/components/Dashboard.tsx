@@ -202,6 +202,13 @@ export default function Dashboard() {
               {/* Active Contacts / Master Stores Route */}
               <Route path="/contacts" element={<StoreContactPage />} />
 
+              <Route path="/tracking/ntxx/*" element={
+                <div className="absolute inset-0 p-2.5 sm:p-4 md:p-5 overflow-y-auto custom-scrollbar bg-background">
+                  <div className="w-full max-w-[1920px] mx-auto">
+                    <TrackingNtxx />
+                  </div>
+                </div>
+              } />
               <Route path="/tracking/ntxx" element={
                 <div className="absolute inset-0 p-2.5 sm:p-4 md:p-5 overflow-y-auto custom-scrollbar bg-background">
                   <div className="w-full max-w-[1920px] mx-auto">

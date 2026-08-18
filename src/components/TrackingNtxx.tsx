@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Papa from 'papaparse';
 import toast from 'react-hot-toast';
 import { 
   Search, Loader2, RefreshCw, AlertCircle, ChevronDown, ChevronUp, ChevronRight,
   CheckCircle2, AlertTriangle, ClipboardList, Filter, FileSpreadsheet, 
   FileText, Image, Play, ShieldAlert, Award, Package, ShieldCheck, Table, BarChart3, Factory,
-  X, ExternalLink, Calendar, UserCheck, MapPin, Eye, ArrowLeft, Store, Phone, User
+  X, ExternalLink, Calendar, UserCheck, MapPin, Eye, ArrowLeft, Store, Phone, User, Mail
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { getLiveMasterContactMap, type MasterStoreContactInfo } from '@/services/sheetSyncService';
+import { NtxxInboxView } from './ntxx/NtxxInboxView';
 
 // Define the interface for the raw NTXX spreadsheet row mapped to clean camelCase fields
 interface NtxxRow {
@@ -82,9 +84,43 @@ const COLUMN_MAPPING: Record<string, keyof NtxxRow> = {
 };
 
 const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/110dpKX0WPZ76LHImzqrZwt58wG6Kq3rkCJ-ilpRpsbg/export?format=csv&gid=2095387878';
+const DEFAULT_NTXX_WEB_APP_URL = (import.meta.env.VITE_REQUEST_WEB_APP_URL || '').trim() || 'https://script.google.com/macros/s/AKfycbxztDMOhd6lO6QY_AmF4jMyXUWCP69jlb8XY7f9zIAQVGhXukaa0I_kd_uwqrTce8Y4iA/exec';
 
 export default function TrackingNtxx() {
-  const [activeModuleTab, setActiveModuleTab] = useState<'DATA_LIST' | 'ANALYST'>('DATA_LIST');
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Derive activeModuleTab directly from URL pathname
+  const activeModuleTab = useMemo<'DATA_LIST' | 'ANALYST' | 'INBOX'>(() => {
+    const path = location.pathname.toLowerCase();
+    if (path.includes('/tracking/ntxx/analytics') || path.includes('/tracking/ntxx/report')) {
+      return 'ANALYST';
+    }
+    if (path.includes('/tracking/ntxx/inbox')) {
+      return 'INBOX';
+    }
+    return 'DATA_LIST';
+  }, [location.pathname]);
+
+  const handleTabChange = (tab: 'DATA_LIST' | 'ANALYST' | 'INBOX') => {
+    if (tab === 'ANALYST') {
+      navigate('/tracking/ntxx/analytics');
+    } else if (tab === 'INBOX') {
+      navigate('/tracking/ntxx/inbox');
+    } else {
+      navigate('/tracking/ntxx');
+    }
+  };
+
+  const [webAppUrl, setWebAppUrl] = useState<string>(() => {
+    return localStorage.getItem('ntxx_web_app_url') || DEFAULT_NTXX_WEB_APP_URL;
+  });
+
+  const handleSaveWebAppUrl = (newUrl: string) => {
+    setWebAppUrl(newUrl);
+    localStorage.setItem('ntxx_web_app_url', newUrl);
+  };
+
   const [rawData, setRawData] = useState<NtxxRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -427,6 +463,10 @@ export default function TrackingNtxx() {
           project={selectedDetailProject} 
           onBack={() => setSelectedDetailProject(null)} 
           onOpenStoreDrawer={(config) => setStoreDrawerConfig({ ...config, isOpen: true })}
+          onViewInbox={() => {
+            setSelectedDetailProject(null);
+            navigate('/tracking/ntxx/inbox');
+          }}
         />
 
         <NtxxStoreListDrawer 
@@ -488,9 +528,9 @@ export default function TrackingNtxx() {
       </div>
 
       {/* MODULE INTERNAL NAVIGATION SUB-TABS */}
-      <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 w-fit">
+      <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 w-fit flex-wrap">
         <button
-          onClick={() => setActiveModuleTab('DATA_LIST')}
+          onClick={() => handleTabChange('DATA_LIST')}
           className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
             activeModuleTab === 'DATA_LIST'
               ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm'
@@ -505,7 +545,7 @@ export default function TrackingNtxx() {
         </button>
 
         <button
-          onClick={() => setActiveModuleTab('ANALYST')}
+          onClick={() => handleTabChange('ANALYST')}
           className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
             activeModuleTab === 'ANALYST'
               ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-sm'
@@ -513,7 +553,22 @@ export default function TrackingNtxx() {
           }`}
         >
           <BarChart3 className="w-4 h-4" />
-          <span>Báo Cáo & Thống Kê (Analyst)</span>
+          <span>Báo Cáo Phân Tích</span>
+        </button>
+
+        <button
+          onClick={() => handleTabChange('INBOX')}
+          className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeModuleTab === 'INBOX'
+              ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <Mail className="w-4 h-4" />
+          <span>Hộp Thư Gmail</span>
+          <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 uppercase tracking-wider animate-pulse">
+            Live
+          </span>
         </button>
       </div>
 
@@ -905,7 +960,20 @@ export default function TrackingNtxx() {
 
               </div>
             )}
-            </div>
+          </div>
+        </div>
+      )}
+
+          {/* TAB 3: DEDICATED NTXX GMAIL INBOX WORKSPACE */}
+          {activeModuleTab === 'INBOX' && (
+            <div className="animate-in fade-in duration-150">
+              <NtxxInboxView
+                groupedProjects={groupedProjects}
+                rawNtxxRows={rawData}
+                onOpenProjectDrawer={(p) => setSelectedDetailProject(p)}
+                webAppUrl={webAppUrl}
+                onSaveWebAppUrl={handleSaveWebAppUrl}
+              />
             </div>
           )}
         </>
@@ -918,7 +986,8 @@ export default function TrackingNtxx() {
 function NtxxProjectDetailView({ 
   project, 
   onBack,
-  onOpenStoreDrawer
+  onOpenStoreDrawer,
+  onViewInbox
 }: { 
   project: GroupedNtxxProject; 
   onBack: () => void; 
@@ -929,6 +998,7 @@ function NtxxProjectDetailView({
     projectCode: string;
     supplierName: string;
   }) => void;
+  onViewInbox?: (projectCode: string) => void;
 }) {
   // Track open/collapsed state for each batch card inside this project view
   // Default open all batch cards so user sees details right away, but can click to collapse/expand
@@ -966,9 +1036,23 @@ function NtxxProjectDetailView({
           </span>
         </div>
 
-        <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950 dark:text-indigo-300 font-bold text-xs px-3 py-1">
-          {project.brand} ({project.category})
-        </Badge>
+        <div className="flex items-center gap-2">
+          {onViewInbox && (
+            <button
+              type="button"
+              onClick={() => onViewInbox(project.projectCode)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+              title="Xem hòm thư trao đổi và BBNT dự án này"
+            >
+              <Mail className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              <span>Hộp Thư NTXX</span>
+            </button>
+          )}
+
+          <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950 dark:text-indigo-300 font-bold text-xs px-3 py-1">
+            {project.brand} ({project.category})
+          </Badge>
+        </div>
       </div>
 
       {/* Project Executive Summary Card */}

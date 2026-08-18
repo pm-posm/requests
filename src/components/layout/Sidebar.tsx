@@ -198,6 +198,28 @@ export function Sidebar({
                 isLocked={false}
                 onClick={() => handleRouteClick('/tracking/ntxx', 'tracking_ntxx', false)} 
               />
+              {!isCollapsed && pathname.startsWith('/tracking/ntxx') && (
+                <div className="pl-6 pr-2 py-1 space-y-0.5 border-l border-slate-200 dark:border-slate-800 ml-5 my-1">
+                  <SubSidebarItem 
+                    label="Danh Sách Dữ Liệu" 
+                    active={pathname === '/tracking/ntxx' || pathname === '/tracking/ntxx/list'} 
+                    isLocked={false}
+                    onClick={() => handleRouteClick('/tracking/ntxx', 'tracking_ntxx', false)} 
+                  />
+                  <SubSidebarItem 
+                    label="Báo Cáo Phân Tích" 
+                    active={pathname.startsWith('/tracking/ntxx/analytics') || pathname.startsWith('/tracking/ntxx/report')} 
+                    isLocked={false}
+                    onClick={() => handleRouteClick('/tracking/ntxx/analytics', 'tracking_ntxx', false)} 
+                  />
+                  <SubSidebarItem 
+                    label="Hộp Thư Gmail" 
+                    active={pathname.startsWith('/tracking/ntxx/inbox')} 
+                    isLocked={false}
+                    onClick={() => handleRouteClick('/tracking/ntxx/inbox', 'tracking_ntxx', false)} 
+                  />
+                </div>
+              )}
               <SidebarItem 
                 icon={<ClipboardCheck />} label="Theo dõi Lắp đặt" 
                 active={pathname.startsWith('/tracking/installation')} 
