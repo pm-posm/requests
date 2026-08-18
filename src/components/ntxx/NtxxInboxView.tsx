@@ -445,9 +445,9 @@ export const NtxxInboxView: React.FC<NtxxInboxViewProps> = ({
     try {
       // 1. Check Supabase table for NTXX emails if configured
       const { data: supaData, error: supaErr } = await supabase
-        .from('ntxx_email_threads')
+        .from('ntxx_emails')
         .select('*')
-        .order('raw_timestamp', { ascending: false });
+        .order('last_updated', { ascending: false });
 
       if (!supaErr && supaData && supaData.length > 0) {
         const mapped: NtxxEmailThread[] = supaData.map((d: any) => ({
@@ -460,12 +460,12 @@ export const NtxxInboxView: React.FC<NtxxInboxViewProps> = ({
           from: d.from_email || '',
           fromName: d.from_name || '',
           lastUpdated: formatEmailDate(d.last_updated || d.created_at),
-          rawTimestamp: d.raw_timestamp || new Date(d.created_at || Date.now()).getTime(),
+          rawTimestamp: new Date(d.last_updated || d.created_at || Date.now()).getTime(),
           snippet: d.snippet || '',
-          messagesCount: d.messages_count || (d.messages ? d.messages.length : 1),
+          messagesCount: d.messages ? d.messages.length : (d.message_count || 1),
           hasAttachments: d.has_attachments || false,
           attachmentsCount: d.attachments_count || 0,
-          status: d.status || 'IN_PROGRESS',
+          status: (d.result || d.status || 'IN_PROGRESS') as any,
           messages: d.messages || []
         }));
         setThreads(mapped);
@@ -473,7 +473,7 @@ export const NtxxInboxView: React.FC<NtxxInboxViewProps> = ({
           setSelectedThreadId(mapped[0].threadId);
         }
         setLastSyncedAt(new Date().toLocaleTimeString('vi-VN'));
-        if (showToast) toast.success(`Đã đồng bộ ${mapped.length} luồng thư NTXX từ Supabase!`);
+        if (showToast) toast.success(`Đã đồng bộ ${mapped.length} luồng thư NTXX từ Supabase Cloud!`);
         setIsSyncing(false);
         return;
       }
@@ -484,10 +484,10 @@ export const NtxxInboxView: React.FC<NtxxInboxViewProps> = ({
         const res = await fetch(queryUrl);
         if (res.ok) {
           const json = await res.json();
-          if (json.success && Array.isArray(json.threads) && json.threads.length > 0) {
-            setThreads(json.threads);
+          if (json.success && json.data && Array.isArray(json.data.threads) && json.data.threads.length > 0) {
+            setThreads(json.data.threads);
             setLastSyncedAt(new Date().toLocaleTimeString('vi-VN'));
-            if (showToast) toast.success(`Đã kéo ${json.threads.length} luồng thư NTXX từ Gmail!`);
+            if (showToast) toast.success(`Đã kéo ${json.data.threads.length} luồng thư NTXX từ Gmail!`);
             setIsSyncing(false);
             return;
           }
@@ -507,6 +507,22 @@ export const NtxxInboxView: React.FC<NtxxInboxViewProps> = ({
 
   useEffect(() => {
     fetchNtxxEmails(false);
+
+    // Subscribe to realtime changes on ntxx_emails table in Supabase
+    const channel = supabase
+      .channel('ntxx_emails_realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'ntxx_emails' },
+        () => {
+          fetchNtxxEmails(false);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Filtered threads
