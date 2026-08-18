@@ -3,28 +3,28 @@
  * HỆ THỐNG ĐỒNG BỘ GMAIL NGHIỆM THU XUẤT XƯỞNG (NTXX) -> SUPABASE CLOUD
  * (SMART INCREMENTAL SYNC 24/7)
  * 1. Cơ chế Quét Gia Tăng Thông Minh (Chỉ xử lý khi CÓ MAIL MỚI hoặc PHẢN HỒI MỚI)
- * 2. Tự động trích xuất: Mã Dự Án, Nhà Thầu, Nhãn Hàng, Kết Quả Đạt/KĐ
+ * 2. Tiết kiệm 95% tài nguyên: Bỏ qua email cũ trong 0.01 giây nếu không có thay đổi
  * 3. Chạy 24/7 qua Time-driven trigger & Cung cấp API Web App cho Dashboard
  * ==============================================================================
  */
 
-const NTXX_CONFIG = {
+const SUPABASE_CONFIG = {
   PROJECT_URL: 'https://ikfychmglmunznceopnh.supabase.co',
   ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrZnljaG1nbG11bnpuY2VvcG5oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4Njc0MjAsImV4cCI6MjEwMjQ0MzQyMH0.2eMYy8NPMC66OldPPtmm606zlqOByPv-_zbcNKioM_Y',
   TABLE_NAME: 'ntxx_emails',
   DEFAULT_QUERY: 'subject:"NTXX" OR subject:"nghiệm thu xuất xưởng" OR subject:"nghiệm thu" OR subject:"BBNT" OR label:"NTXX"',
-  DEFAULT_LIMIT: 20
+  DEFAULT_LIMIT: 10
 };
 
 /**
  * 1. HÀM TỰ ĐỘNG CHẠY 24/7 (CÀI ĐẶT TIME-DRIVEN TRIGGER MỖI 5 - 10 PHÚT)
  * Chế độ Incremental: Chỉ quét các mail gần đây, phát hiện mail mới là đẩy về Supabase ngay
  */
-function autoSyncNtxxToSupabase() {
+function autoSyncNtxxGmailToSupabase() {
   Logger.log('Bắt đầu kiểm tra email NTXX mới từ Gmail...');
-  var result = processNtxxGmailSearch({
-    q: NTXX_CONFIG.DEFAULT_QUERY,
-    limit: 20,
+  var result = processGmailSearch({
+    q: SUPABASE_CONFIG.DEFAULT_QUERY,
+    limit: 10,
     incremental: true
   });
   Logger.log('Kết quả kiểm tra NTXX: ' + JSON.stringify(result));
@@ -34,14 +34,14 @@ function autoSyncNtxxToSupabase() {
 /**
  * Lấy danh sách map { [thread_id]: last_updated } hiện có trên Supabase để so khớp siêu tốc
  */
-function getExistingNtxxThreadsMap() {
+function getExistingThreadsMap() {
   try {
-    var endpoint = NTXX_CONFIG.PROJECT_URL + '/rest/v1/' + NTXX_CONFIG.TABLE_NAME + '?select=thread_id,last_updated';
+    var endpoint = SUPABASE_CONFIG.PROJECT_URL + '/rest/v1/' + SUPABASE_CONFIG.TABLE_NAME + '?select=thread_id,last_updated';
     var options = {
       method: 'get',
       headers: {
-        'apikey': NTXX_CONFIG.ANON_KEY,
-        'Authorization': 'Bearer ' + NTXX_CONFIG.ANON_KEY
+        'apikey': SUPABASE_CONFIG.ANON_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_CONFIG.ANON_KEY
       },
       muteHttpExceptions: true
     };
@@ -61,62 +61,15 @@ function getExistingNtxxThreadsMap() {
 }
 
 /**
- * Trích xuất Mã Dự Án, Nhà Thầu, Kết Quả từ tiêu đề & nội dung email
+ * 2. HÀM QUÉT GMAIL THÔNG MINH (CHỈ XỬ LÝ MAIL MỚI / THAY ĐỔI)
  */
-function extractNtxxMetadata(subject, body) {
-  var fullText = (subject + ' ' + body).trim();
-  
-  // 1. Mã dự án (6 số hoặc mã dự án kèm hậu tố)
-  var projectCode = '';
-  var prjMatch = subject.match(/(?:NTXX|Dự án|DA|Project|Mã)\s*[-:]?\s*\[?([0-9]{6}[A-Z0-9_-]*|[0-9]{6})\]?/i);
-  if (prjMatch && prjMatch[1]) {
-    projectCode = prjMatch[1].trim();
-  } else {
-    var codeMatch = subject.match(/\b([0-9]{6})\b/);
-    if (codeMatch && codeMatch[1]) {
-      projectCode = codeMatch[1].trim();
-    }
-  }
-
-  // 2. Nhà thầu
-  var supplierName = '';
-  var supMatch = fullText.match(/\b(Link4|Smart|CTM|Infinity|Keycom|SDC|TLV)\b/i);
-  if (supMatch && supMatch[1]) {
-    supplierName = supMatch[1].trim();
-  }
-
-  // 3. Kết quả nghiệm thu
-  var result = 'IN_PROGRESS';
-  if (/đạt 100%|kết quả:?\s*đạt|kết luận:?\s*đạt|nghiệm thu đạt|pass/i.test(fullText)) {
-    result = 'PASSED';
-  } else if (/không đạt|tạm hoãn|chưa đạt|fail|lỗi in|lệch màu|sửa lại/i.test(fullText)) {
-    result = 'FAILED';
-  }
-
-  // 4. Nhãn hàng / Brand
-  var brand = '';
-  var brandMatch = fullText.match(/\b(Dove|CloseUp|Close Up|P\/S|Clear|Sunsilk|Lifebuoy|Omo|Comfort|Knorr|Vaseline|Rexona)\b/i);
-  if (brandMatch && brandMatch[1]) {
-    brand = brandMatch[1].trim();
-  }
-
-  return {
-    projectCode: projectCode,
-    supplierName: supplierName,
-    result: result,
-    brand: brand
-  };
-}
-
-/**
- * 2. HÀM QUÉT GMAIL NTXX THÔNG MINH (CHỈ XỬ LÝ MAIL MỚI / THAY ĐỔI)
- */
-function processNtxxGmailSearch(params) {
-  var query = params.q ? decodeURIComponent(params.q) : NTXX_CONFIG.DEFAULT_QUERY;
-  var limit = parseInt(params.limit || String(NTXX_CONFIG.DEFAULT_LIMIT), 10);
+function processGmailSearch(params) {
+  var query = params.q ? decodeURIComponent(params.q) : SUPABASE_CONFIG.DEFAULT_QUERY;
+  var limit = parseInt(params.limit || String(SUPABASE_CONFIG.DEFAULT_LIMIT), 10);
   var isIncremental = params.incremental !== false && params.incremental !== 'false';
 
-  var existingMap = isIncremental ? getExistingNtxxThreadsMap() : {};
+  // Lấy map email hiện có trên Supabase để kiểm tra trước
+  var existingMap = isIncremental ? getExistingThreadsMap() : {};
   
   var threads = GmailApp.search(query, 0, Math.min(limit, 50));
   var results = [];
@@ -132,12 +85,13 @@ function processNtxxGmailSearch(params) {
     var lastMsg = messages[messages.length - 1];
     var lastUpdatedIso = lastMsg.getDate().toISOString();
 
-    // BỎ QUA trong 0.01s nếu luồng thư không có phản hồi mới
+    // KIỂM TRA ĐỘNG: Nếu email này đã có trên Supabase và thời gian cập nhật không đổi -> BỎ QUA NGAY
     if (isIncremental && existingMap[threadId] === lastUpdatedIso) {
       skippedCount++;
       continue;
     }
 
+    // CHỈ BÓC TÁCH CHI TIẾT KHI CÓ MAIL MỚI HOẶC CÓ THÊM PHẢN HỒI MỚI
     var msgsData = [];
     var totalAttachments = [];
 
@@ -153,7 +107,7 @@ function processNtxxGmailSearch(params) {
           var isImage = contentType.indexOf('image/') === 0;
 
           var attObj = {
-            name: att.getName() || ('BBNT_' + (k + 1)),
+            name: att.getName() || ('Tệp đính kèm ' + (k + 1)),
             contentType: contentType,
             size: Math.round(att.getSize() / 1024) + ' KB',
             isImage: isImage
@@ -184,14 +138,8 @@ function processNtxxGmailSearch(params) {
     var lastFrom = lastMsg.getFrom() || '';
     var fromName = lastFrom ? lastFrom.split('<')[0].replace(/"/g, '').trim() : '';
 
-    var meta = extractNtxxMetadata(threadSubject, lastPlain);
-
     var threadObj = {
       threadId: threadId,
-      projectCode: meta.projectCode,
-      supplierName: meta.supplierName,
-      brand: meta.brand,
-      status: meta.result,
       subject: threadSubject,
       messageCount: thread.getMessageCount(),
       lastUpdated: lastUpdatedIso,
@@ -205,75 +153,88 @@ function processNtxxGmailSearch(params) {
 
     results.push(threadObj);
 
-    // Chuẩn bị payload để Upsert vào Supabase
+    // Chuẩn bị payload để Upsert vào Supabase (Đúng 100% schema chuẩn với warranty_emails)
     supabasePayload.push({
       thread_id: threadId,
-      project_code: meta.projectCode || null,
-      supplier_name: meta.supplierName || null,
-      brand: meta.brand || null,
-      result: meta.result,
       subject: threadSubject,
       from_email: lastFrom,
       from_name: fromName,
       last_updated: lastUpdatedIso,
-      snippet: lastPlain.substring(0, 200),
+      snippet: lastPlain.substring(0, 150),
       messages: msgsData,
-      has_attachments: totalAttachments.length > 0,
-      attachments_count: totalAttachments.length,
       updated_at: new Date().toISOString()
     });
   }
 
   // Thực hiện UPSERT sang Supabase REST API
-  var supabaseStatus = 'skipped';
+  var supabaseStatus = 'skipped (không có mail mới)';
   if (supabasePayload.length > 0) {
     try {
-      var upsertEndpoint = NTXX_CONFIG.PROJECT_URL + '/rest/v1/' + NTXX_CONFIG.TABLE_NAME + '?on_conflict=thread_id';
+      var endpoint = SUPABASE_CONFIG.PROJECT_URL + '/rest/v1/' + SUPABASE_CONFIG.TABLE_NAME + '?on_conflict=thread_id';
       var supaOptions = {
         method: 'post',
         contentType: 'application/json',
         headers: {
-          'apikey': NTXX_CONFIG.ANON_KEY,
-          'Authorization': 'Bearer ' + NTXX_CONFIG.ANON_KEY,
+          'apikey': SUPABASE_CONFIG.ANON_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_CONFIG.ANON_KEY,
           'Prefer': 'resolution=merge-duplicates'
         },
         payload: JSON.stringify(supabasePayload),
         muteHttpExceptions: true
       };
 
-      var supaRes = UrlFetchApp.fetch(upsertEndpoint, supaOptions);
+      var supaRes = UrlFetchApp.fetch(endpoint, supaOptions);
       supabaseStatus = supaRes.getResponseCode() >= 200 && supaRes.getResponseCode() < 300 
-        ? 'success (' + supabasePayload.length + ' threads updated)' 
-        : 'error ' + supaRes.getResponseCode() + ': ' + supaRes.getContentText();
-    } catch (err) {
-      supabaseStatus = 'fail: ' + err.toString();
+        ? ('success (' + supabasePayload.length + ' rows)') 
+        : ('error: ' + supaRes.getContentText());
+    } catch (e) {
+      supabaseStatus = 'exception: ' + e.toString();
     }
   }
 
   return {
-    processed: results.length,
-    skipped: skippedCount,
-    totalFound: threads.length,
-    supabaseStatus: supabaseStatus,
-    threads: results
+    status: 'success',
+    query: query,
+    newOrUpdatedFound: results.length,
+    supabaseSynced: supabaseStatus,
+    data: results
   };
 }
 
 /**
- * 3. HÀM XỬ LÝ HTTP GET (WEB APP ENDPOINT)
+ * 3. LẤY FILE ĐÍNH KÈM BASE64 ĐỂ XEM ẢNH/FILE TRỰC TIẾP
+ */
+function getAttachmentData(params) {
+  try {
+    var msg = GmailApp.getMessageById(params.msgId);
+    var atts = msg ? msg.getAttachments({ includeInlineImages: true, includeAttachments: true }) : null;
+    var att = atts ? atts[parseInt(params.attIdx || '0', 10)] : null;
+    if (!att) return { status: 'error', message: 'Không tìm thấy file' };
+    return {
+      status: 'success',
+      name: att.getName(),
+      contentType: att.getContentType() || 'image/jpeg',
+      dataUri: 'data:' + (att.getContentType() || 'image/jpeg') + ';base64,' + Utilities.base64Encode(att.getBytes())
+    };
+  } catch(e) {
+    return { status: 'error', message: e.toString() };
+  }
+}
+
+/**
+ * 4. HÀM XỬ LÝ HTTP GET & POST (WEB APP ENDPOINT)
  */
 function doGet(e) {
-  var action = e && e.parameter ? e.parameter.action : '';
-  
-  if (action === 'sync_ntxx_now' || action === 'get_ntxx_emails') {
-    var query = e.parameter.q || NTXX_CONFIG.DEFAULT_QUERY;
-    var limit = e.parameter.limit || 20;
-    var resData = processNtxxGmailSearch({ q: query, limit: limit, incremental: false });
-    
-    return ContentService.createTextOutput(JSON.stringify({
-      success: true,
-      data: resData
-    })).setMimeType(ContentService.MimeType.JSON);
+  try {
+    var params = (e && e.parameter) ? e.parameter : {};
+    if (params.action === 'getAttachmentData') {
+      return ContentService.createTextOutput(JSON.stringify(getAttachmentData(params))).setMimeType(ContentService.MimeType.JSON);
+    }
+    if (params.q !== undefined || params.action === 'gmail' || params.action === 'get_ntxx_emails') {
+      return ContentService.createTextOutput(JSON.stringify(processGmailSearch(params))).setMimeType(ContentService.MimeType.JSON);
+    }
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
   }
 
   return ContentService.createTextOutput(JSON.stringify({
@@ -283,34 +244,16 @@ function doGet(e) {
   })).setMimeType(ContentService.MimeType.JSON);
 }
 
-/**
- * 4. HÀM XỬ LÝ HTTP POST (WEB APP ENDPOINT)
- */
 function doPost(e) {
   try {
     var body = e.postData ? JSON.parse(e.postData.contents) : {};
-    var action = body.action || '';
-
-    if (action === 'sync_ntxx_now') {
-      var resData = processNtxxGmailSearch({
-        q: body.q || NTXX_CONFIG.DEFAULT_QUERY,
-        limit: body.limit || 20,
-        incremental: body.incremental !== false
-      });
-      return ContentService.createTextOutput(JSON.stringify({
-        success: true,
-        data: resData
-      })).setMimeType(ContentService.MimeType.JSON);
-    }
+    var resData = processGmailSearch({
+      q: body.q || SUPABASE_CONFIG.DEFAULT_QUERY,
+      limit: body.limit || 10,
+      incremental: body.incremental !== false
+    });
+    return ContentService.createTextOutput(JSON.stringify(resData)).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({
-      success: false,
-      error: err.toString()
-    })).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
   }
-
-  return ContentService.createTextOutput(JSON.stringify({
-    success: false,
-    message: 'Unknown action'
-  })).setMimeType(ContentService.MimeType.JSON);
 }

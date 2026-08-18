@@ -5,55 +5,12 @@ import {
   Send, Filter, ShieldCheck, ChevronRight, ChevronLeft, Inbox, MessageSquare, 
   Sparkles, Check, Copy, Settings, X, Download, FileText, Image as ImageIcon,
   Plus, Tag, Trash2, Globe, CheckCheck, CheckSquare, Square, Layers,
-  Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Factory, ShieldAlert, Award
+  Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import toast from 'react-hot-toast';
 import DOMPurify from 'dompurify';
 import { supabase } from '@/lib/supabase';
-
-// Define the interface for the raw NTXX spreadsheet row
-export interface NtxxRow {
-  timestamp: string;
-  email: string;
-  technician: string;
-  scheduleDate: string;
-  actualDate: string;
-  projectCode: string;
-  supplierName: string;
-  category: string;
-  brand: string;
-  item: string;
-  qty: string;
-  unit: string;
-  result: string;
-  customer: string;
-  bbntLink: string;
-  overviewLink: string;
-  detailLink1: string;
-  detailLink2: string;
-  videoLink: string;
-  storesPass: string;
-  storesFail: string;
-  note: string;
-}
-
-export interface GroupedNtxxProject {
-  projectCode: string;
-  category: string;
-  brand: string;
-  customer: string;
-  item: string;
-  batches: NtxxRow[];
-  stats: {
-    totalBatches: number;
-    totalQty: number;
-    passedBatches: number;
-    failedBatches: number;
-    passRate: number;
-    isFailed: boolean;
-  };
-}
 
 export interface NtxxEmailAttachment {
   name: string;
@@ -80,10 +37,6 @@ export interface NtxxEmailMessage {
 
 export interface NtxxEmailThread {
   threadId: string;
-  projectCode?: string;    // Mã dự án trích xuất (e.g. 156822)
-  supplierName?: string;   // Nhà thầu sản xuất
-  brand?: string;          // Brand / Nhãn hàng
-  category?: string;       // Ngành hàng
   subject: string;
   from: string;
   fromName?: string;
@@ -94,10 +47,9 @@ export interface NtxxEmailThread {
   hasAttachments: boolean;
   attachmentsCount: number;
   messages: NtxxEmailMessage[];
-  status?: 'NEW' | 'PASSED' | 'FAILED' | 'IN_PROGRESS';
 }
 
-// Utility: Normalize and format file sizes cleanly (e.g. 1.2 MB, 340 KB)
+// Utility: Format file size cleanly
 export const formatFileSize = (size: string | number | undefined): string => {
   if (!size) return '0 KB';
   if (typeof size === 'string') {
@@ -131,7 +83,7 @@ export const formatEmailDate = (dateVal: string | Date | number | undefined): st
   }
 };
 
-// Sub-component: Clean & Fast Email Body Viewer
+// Sub-component: Clean Email Body Viewer
 const EmailBodyViewer = React.memo<{ 
   body: string; 
   htmlBody?: string;
@@ -249,171 +201,30 @@ const EmailBodyViewer = React.memo<{
   );
 });
 
-// Initial Real Sample NTXX Threads
-const INITIAL_SAMPLE_NTXX_THREADS: NtxxEmailThread[] = [
-  {
-    threadId: 'ntxx-th-01',
-    projectCode: '156822',
-    supplierName: 'Link4',
-    brand: 'Dove Hair',
-    category: 'Hair',
-    subject: '[NTXX]-[156822]: Dove Hair MT Total Dream Campaign - BBNT Xuất Xưởng Đợt 1 (Đạt 100%)',
-    from: 'qc.posm@unilever-partner.com',
-    fromName: 'Lê Hữu Thắng (QC VIS-Tech)',
-    lastUpdated: '15/08/2026 14:30',
-    rawTimestamp: new Date('2026-08-15T14:30:00').getTime(),
-    snippet: 'Kính gửi Team Unilever & Nhà thầu Link4, Đã hoàn thành công tác nghiệm thu xuất xưởng đợt 1 cho 18 booth GE Customize...',
-    messagesCount: 3,
-    hasAttachments: true,
-    attachmentsCount: 4,
-    status: 'PASSED',
-    messages: [
-      {
-        id: 'msg-ntxx-1',
-        from: 'link4.production@link4.vn',
-        fromName: 'Nguyễn Văn Hùng (Nhà thầu Link4)',
-        to: 'qc.posm@unilever-partner.com',
-        cc: 'posm.lead@unilever.com',
-        date: '14/08/2026 09:15',
-        snippet: 'Gửi lịch mời nghiệm thu xuất xưởng đợt 1 cho dự án 156822 Dove Hair...',
-        body: 'Kính gửi anh Thắng và Team POSM Unilever,\n\nNhà thầu Link4 trân trọng kính mời anh/chị sang xưởng Link4 (KCN Tân Bình) để thực hiện nghiệm thu xuất xưởng đợt 1 cho dự án 156822 Dove Hair MT Total Dream Campaign.\n- Số lượng: 18 bộ GE Customize\n- Thời gian: 14h00 ngày 15/08/2026.\n\nTrân trọng!',
-        attachments: []
-      },
-      {
-        id: 'msg-ntxx-2',
-        from: 'qc.posm@unilever-partner.com',
-        fromName: 'Lê Hữu Thắng (QC VIS-Tech)',
-        to: 'link4.production@link4.vn',
-        cc: 'posm.lead@unilever.com',
-        date: '15/08/2026 14:30',
-        snippet: 'Đã hoàn thành NTXX đợt 1. Kết quả: ĐẠT 18/18 bộ. Đính kèm BBNT và hình ảnh thực tế.',
-        body: 'Chào team Link4 và Team Unilever,\n\nTôi đã kiểm tra thực tế tại xưởng sản xuất Link4. Kết quả nghiệm thu:\n1. Kết cấu & Khung sắt: Đúng bản vẽ kỹ thuật, sơn tĩnh điện đều màu.\n2. Hệ thống đèn LED & Nguồn: Đèn sáng đều 3 tầng, không nhấp nháy, nguồn Meanwell có cầu chì bảo vệ.\n3. In ấn Artwork: Chuẩn màu Pantone thương hiệu Dove, màng laminate bóng không bong rộp.\n\n==> KẾT LUẬN: ĐẠT 100% (18/18 bộ). Cho phép nhà thầu đóng gói và vận chuyển đến các siêu thị GO!, Lotte, Coop theo tiến độ.\nĐính kèm biên bản ký nhận và ảnh chụp chi tiết.',
-        attachments: [
-          {
-            name: 'BBNT_156822_Dot1_Link4.pdf',
-            contentType: 'application/pdf',
-            size: '1.8 MB',
-            url: '#'
-          },
-          {
-            name: 'Anh_Tong_Quan_Xuong.jpg',
-            contentType: 'image/jpeg',
-            size: '2.4 MB',
-            isImage: true,
-            url: 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=800&auto=format&fit=crop'
-          },
-          {
-            name: 'Chi_Tiet_Den_LED.jpg',
-            contentType: 'image/jpeg',
-            size: '1.9 MB',
-            isImage: true,
-            url: 'https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?w=800&auto=format&fit=crop'
-          }
-        ]
-      }
-    ]
-  },
-  {
-    threadId: 'ntxx-th-02',
-    projectCode: '118420',
-    supplierName: 'Smart',
-    brand: 'Close Up',
-    category: 'Oral',
-    subject: '[NTXX]-[118420]: CloseUp White Attraction Diamond - BBNT Đợt 2 (Cần chỉnh sửa AW)',
-    from: 'qc.posm@unilever-partner.com',
-    fromName: 'Phạm Quang Chính (QC VIS-Tech)',
-    lastUpdated: '12/08/2026 16:45',
-    rawTimestamp: new Date('2026-08-12T16:45:00').getTime(),
-    snippet: 'Kết quả NTXX đợt 2: Tạm hoãn 4 bộ do màu in Artwork phần Header bị lệch tone xanh...',
-    messagesCount: 2,
-    hasAttachments: true,
-    attachmentsCount: 2,
-    status: 'FAILED',
-    messages: [
-      {
-        id: 'msg-ntxx-201',
-        from: 'qc.posm@unilever-partner.com',
-        fromName: 'Phạm Quang Chính (QC VIS-Tech)',
-        to: 'smart.factory@smartposm.vn',
-        cc: 'posm.lead@unilever.com',
-        date: '12/08/2026 16:45',
-        snippet: 'Kết quả NTXX: 5 bộ Đạt, 4 bộ KHÔNG ĐẠT do lệch màu in Artwork.',
-        body: 'Gửi Team Xưởng Smart,\n\nSau khi kiểm tra đợt 2 dự án 118420 CloseUp tại xưởng:\n- 5 bộ đạt tiêu chuẩn.\n- 4 bộ Header bị sai màu mực (quá đậm so với mẫu Proof chuẩn).\n\nYêu cầu xưởng in lại 4 tấm decal mica Header và hoàn thiện trước ngày 14/08 để kiểm tra lại trước khi xuất xưởng.',
-        attachments: [
-          {
-            name: 'Bien_Ban_Tam_Hoan_118420.pdf',
-            contentType: 'application/pdf',
-            size: '1.2 MB',
-            url: '#'
-          },
-          {
-            name: 'So_Sanh_Mau_In.jpg',
-            contentType: 'image/jpeg',
-            size: '3.1 MB',
-            isImage: true,
-            url: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=800&auto=format&fit=crop'
-          }
-        ]
-      }
-    ]
-  },
-  {
-    threadId: 'ntxx-th-03',
-    projectCode: '130319U01-U08',
-    supplierName: 'CTM',
-    brand: 'P/S',
-    category: 'Oral',
-    subject: '[NTXX]-[130319U01-U08]: P/S Sensitive Expert - Lịch kiểm tra xuất xưởng xưởng CTM',
-    from: 'ctm.operation@ctm.vn',
-    fromName: 'Đặng Tuấn Anh (CTM)',
-    lastUpdated: '10/08/2026 11:20',
-    rawTimestamp: new Date('2026-08-10T11:20:00').getTime(),
-    snippet: 'Kính gửi Team POSM, Đã hoàn thành gia công 6 bộ SS Customize...',
-    messagesCount: 1,
-    hasAttachments: false,
-    attachmentsCount: 0,
-    status: 'IN_PROGRESS',
-    messages: [
-      {
-        id: 'msg-ntxx-301',
-        from: 'ctm.operation@ctm.vn',
-        fromName: 'Đặng Tuấn Anh (CTM)',
-        to: 'qc.posm@unilever-partner.com',
-        cc: 'posm.lead@unilever.com',
-        date: '10/08/2026 11:20',
-        snippet: 'Gửi lịch hẹn NTXX dự án P/S Sensitive Expert',
-        body: 'Kính gửi Team POSM Unilever,\n\nXưởng CTM đã hoàn thành 6 bộ SS Customize cho chiến dịch P/S Sensitive Expert. Kính mời chuyên viên QC sang kiểm tra vào lúc 10h00 sáng mai (11/08).\n\nTrân trọng!',
-        attachments: []
-      }
-    ]
-  }
+// Default Keywords for NTXX Gmail Search
+const DEFAULT_NTXX_KEYWORDS = [
+  'subject:"NTXX"',
+  'subject:"nghiệm thu xuất xưởng"',
+  'subject:"nghiệm thu"',
+  'subject:"BBNT"',
+  'label:"NTXX"'
 ];
 
-interface NtxxInboxViewProps {
-  groupedProjects: GroupedNtxxProject[];
-  rawNtxxRows: NtxxRow[];
-  onOpenProjectDrawer?: (project: GroupedNtxxProject) => void;
+export const NtxxInboxView: React.FC<{
   initialSearch?: string;
-  webAppUrl: string;
-  onSaveWebAppUrl: (url: string) => void;
-}
-
-export const NtxxInboxView: React.FC<NtxxInboxViewProps> = ({
-  groupedProjects,
-  rawNtxxRows,
-  onOpenProjectDrawer,
-  initialSearch = '',
-  webAppUrl,
-  onSaveWebAppUrl
+  webAppUrl?: string;
+  onSaveWebAppUrl?: (url: string) => void;
+}> = ({
+  initialSearch = ''
 }) => {
-  const [threads, setThreads] = useState<NtxxEmailThread[]>(INITIAL_SAMPLE_NTXX_THREADS);
-  const [selectedThreadId, setSelectedThreadId] = useState<string>(() => INITIAL_SAMPLE_NTXX_THREADS[0]?.threadId || '');
+  const [threads, setThreads] = useState<NtxxEmailThread[]>([]);
+  const [selectedThreadId, setSelectedThreadId] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>(initialSearch);
-  const [selectedResultFilter, setSelectedResultFilter] = useState<'ALL' | 'PASSED' | 'FAILED' | 'IN_PROGRESS'>('ALL');
-  const [selectedSupplierFilter, setSelectedSupplierFilter] = useState<string>('all');
+  const [filterType, setFilterType] = useState<'ALL' | 'NEW' | 'HAS_ATTACHMENT'>('ALL');
   
   // Collapse / expand sidebar list (100% full width reader mode)
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
+  const [isReaderExpanded, setIsReaderExpanded] = useState<boolean>(false);
+  const [mobileShowDetail, setMobileShowDetail] = useState<boolean>(false);
   
   // Message stepper inside active thread (1-indexed)
   const [activeMessageIndex, setActiveMessageIndex] = useState<number>(0);
@@ -422,100 +233,156 @@ export const NtxxInboxView: React.FC<NtxxInboxViewProps> = ({
   const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
 
   // Sync state
-  const [isSyncing, setIsSyncing] = useState<boolean>(false);
-  const [lastSyncedAt, setLastSyncedAt] = useState<string>(new Date().toLocaleTimeString('vi-VN'));
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [lastSyncedTime, setLastSyncedTime] = useState<string>('');
+  const [newThreadIds, setNewThreadIds] = useState<Set<string>>(new Set());
 
-  // Web App settings modal
-  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
-  const [tempUrl, setTempUrl] = useState<string>(webAppUrl);
-
-  // Available suppliers from NTXX rows
-  const availableSuppliers = useMemo(() => {
-    const set = new Set<string>();
-    rawNtxxRows.forEach(r => {
-      const s = (r.supplierName || '').trim();
-      if (s) set.add(s);
-    });
-    return Array.from(set).sort();
-  }, [rawNtxxRows]);
-
-  // Sync NTXX threads from Supabase or Apps Script
-  const fetchNtxxEmails = async (showToast = false) => {
-    setIsSyncing(true);
+  // Keyword Filter State
+  const [keywords, setKeywords] = useState<string[]>(() => {
     try {
-      // 1. Check Supabase table for NTXX emails if configured
-      const { data: supaData, error: supaErr } = await supabase
+      const saved = localStorage.getItem('NTXX_GMAIL_KEYWORDS_LIST');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return DEFAULT_NTXX_KEYWORDS;
+  });
+
+  const [selectedKeywords, setSelectedKeywords] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('NTXX_GMAIL_SELECTED_KEYWORDS');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [DEFAULT_NTXX_KEYWORDS[0], DEFAULT_NTXX_KEYWORDS[1]];
+  });
+
+  const [isKeywordPopoverOpen, setIsKeywordPopoverOpen] = useState<boolean>(false);
+  const [newKeywordInput, setNewKeywordInput] = useState<string>('');
+  const keywordPopoverRef = useRef<HTMLDivElement>(null);
+
+  // Apps Script Web App URL configuration
+  const [appsScriptUrl, setAppsScriptUrl] = useState<string>(() => {
+    return localStorage.getItem('NTXX_GMAIL_APPS_SCRIPT_URL') || '';
+  });
+  const [showConfigModal, setShowConfigModal] = useState<boolean>(false);
+  const [tempUrl, setTempUrl] = useState<string>(appsScriptUrl);
+
+  // Save keywords to localStorage
+  useEffect(() => {
+    localStorage.setItem('NTXX_GMAIL_KEYWORDS_LIST', JSON.stringify(keywords));
+  }, [keywords]);
+
+  useEffect(() => {
+    localStorage.setItem('NTXX_GMAIL_SELECTED_KEYWORDS', JSON.stringify(selectedKeywords));
+  }, [selectedKeywords]);
+
+  // Click outside to close Keyword Popover
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (keywordPopoverRef.current && !keywordPopoverRef.current.contains(e.target as Node)) {
+        setIsKeywordPopoverOpen(false);
+      }
+    };
+    if (isKeywordPopoverOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isKeywordPopoverOpen]);
+
+  // Build Gmail search query from selected keywords
+  const buildCombinedQuery = (kwList: string[]): string => {
+    if (!kwList || kwList.length === 0) return DEFAULT_NTXX_KEYWORDS[0];
+    if (kwList.length === 1) return kwList[0];
+    return '(' + kwList.join(' OR ') + ')';
+  };
+
+  // Fetch threads from Supabase or trigger scan via Apps Script
+  const fetchThreads = async (queryStr?: string, isSilent = false) => {
+    setIsRefreshing(true);
+    try {
+      // 1. If Apps Script URL is set and manual scan requested, trigger Apps Script sync
+      if (appsScriptUrl && !isSilent) {
+        const q = encodeURIComponent(queryStr || buildCombinedQuery(selectedKeywords));
+        const scanUrl = `${appsScriptUrl}?action=gmail&q=${q}&t=${Date.now()}`;
+        try {
+          await fetch(scanUrl, { method: 'GET', mode: 'no-cors' });
+        } catch {}
+      }
+
+      // 2. Fetch directly from Supabase table ntxx_emails (Schema identical to warranty_emails)
+      const { data, error } = await supabase
         .from('ntxx_emails')
         .select('*')
         .order('last_updated', { ascending: false });
 
-      if (!supaErr && supaData && supaData.length > 0) {
-        const mapped: NtxxEmailThread[] = supaData.map((d: any) => ({
-          threadId: d.thread_id || d.id,
-          projectCode: d.project_code,
-          supplierName: d.supplier_name,
-          brand: d.brand,
-          category: d.category,
-          subject: d.subject || '(Không có tiêu đề)',
-          from: d.from_email || '',
-          fromName: d.from_name || '',
-          lastUpdated: formatEmailDate(d.last_updated || d.created_at),
-          rawTimestamp: new Date(d.last_updated || d.created_at || Date.now()).getTime(),
-          snippet: d.snippet || '',
-          messagesCount: d.messages ? d.messages.length : (d.message_count || 1),
-          hasAttachments: d.has_attachments || false,
-          attachmentsCount: d.attachments_count || 0,
-          status: (d.result || d.status || 'IN_PROGRESS') as any,
-          messages: d.messages || []
-        }));
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const mapped: NtxxEmailThread[] = data.map((item: any) => {
+          const msgs = Array.isArray(item.messages) ? item.messages : [];
+          let attCount = 0;
+          msgs.forEach((m: any) => {
+            if (Array.isArray(m.attachments)) attCount += m.attachments.length;
+          });
+
+          return {
+            threadId: item.thread_id,
+            subject: item.subject || '(Không có tiêu đề)',
+            from: item.from_email || '',
+            fromName: item.from_name || (item.from_email ? item.from_email.split('@')[0] : ''),
+            lastUpdated: formatEmailDate(item.last_updated),
+            rawTimestamp: new Date(item.last_updated || item.created_at || Date.now()).getTime(),
+            snippet: item.snippet || '',
+            messagesCount: msgs.length || 1,
+            hasAttachments: attCount > 0,
+            attachmentsCount: attCount,
+            messages: msgs.map((m: any) => ({
+              ...m,
+              date: formatEmailDate(m.date)
+            }))
+          };
+        });
+
         setThreads(mapped);
         if (mapped.length > 0 && !selectedThreadId) {
           setSelectedThreadId(mapped[0].threadId);
         }
-        setLastSyncedAt(new Date().toLocaleTimeString('vi-VN'));
-        if (showToast) toast.success(`Đã đồng bộ ${mapped.length} luồng thư NTXX từ Supabase Cloud!`);
-        setIsSyncing(false);
-        return;
-      }
-
-      // 2. Fallback: Query Apps Script Web App URL if available
-      if (webAppUrl && webAppUrl.startsWith('http')) {
-        const queryUrl = `${webAppUrl}?action=get_ntxx_emails&t=${Date.now()}`;
-        const res = await fetch(queryUrl);
-        if (res.ok) {
-          const json = await res.json();
-          if (json.success && json.data && Array.isArray(json.data.threads) && json.data.threads.length > 0) {
-            setThreads(json.data.threads);
-            setLastSyncedAt(new Date().toLocaleTimeString('vi-VN'));
-            if (showToast) toast.success(`Đã kéo ${json.data.threads.length} luồng thư NTXX từ Gmail!`);
-            setIsSyncing(false);
-            return;
-          }
+        setLastSyncedTime(new Date().toLocaleTimeString('vi-VN'));
+        if (!isSilent) {
+          toast.success(`Đã tải ${mapped.length} luồng thư NTXX từ Supabase Cloud!`);
+        }
+      } else {
+        setThreads([]);
+        setSelectedThreadId('');
+        if (!isSilent) {
+          toast('Hộp thư NTXX trên Supabase hiện chưa có dữ liệu (0 email).', { icon: 'ℹ️' });
         }
       }
-
-      // Default sample fallback
-      setLastSyncedAt(new Date().toLocaleTimeString('vi-VN'));
-      if (showToast) toast.success('Hộp thư NTXX đã được cập nhật dữ liệu mới nhất!');
     } catch (err: any) {
-      console.warn('NTXX emails fetch note:', err);
-      if (showToast) toast.success('Đã làm mới danh sách thư NTXX');
+      console.warn('Lỗi tải email NTXX:', err);
+      if (!isSilent) {
+        toast.error('Lỗi kết nối Supabase: ' + (err.message || 'Thất bại'));
+      }
     } finally {
-      setIsSyncing(false);
+      setIsRefreshing(false);
     }
   };
 
+  // Initial load & Supabase Realtime Channel
   useEffect(() => {
-    fetchNtxxEmails(false);
+    fetchThreads(undefined, true);
 
-    // Subscribe to realtime changes on ntxx_emails table in Supabase
     const channel = supabase
       .channel('ntxx_emails_realtime')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'ntxx_emails' },
         () => {
-          fetchNtxxEmails(false);
+          fetchThreads(undefined, true);
         }
       )
       .subscribe();
@@ -525,26 +392,78 @@ export const NtxxInboxView: React.FC<NtxxInboxViewProps> = ({
     };
   }, []);
 
-  // Filtered threads
+  // Keyword management handlers
+  const handleToggleKeyword = (kw: string) => {
+    setSelectedKeywords(prev => {
+      if (prev.includes(kw)) {
+        if (prev.length <= 1) {
+          toast('Phải giữ ít nhất 1 từ khóa tìm kiếm!', { icon: '⚠️' });
+          return prev;
+        }
+        return prev.filter(k => k !== kw);
+      } else {
+        return [...prev, kw];
+      }
+    });
+  };
+
+  const handleSelectAllKeywords = () => {
+    setSelectedKeywords([...keywords]);
+  };
+
+  const handleDeselectAllKeywords = () => {
+    if (keywords.length > 0) {
+      setSelectedKeywords([keywords[0]]);
+    }
+  };
+
+  const handleAddKeyword = () => {
+    const trimmed = newKeywordInput.trim();
+    if (!trimmed) return;
+    if (keywords.includes(trimmed)) {
+      toast.error('Từ khóa này đã tồn tại trong danh sách!');
+      return;
+    }
+    const updated = [...keywords, trimmed];
+    setKeywords(updated);
+    setSelectedKeywords(prev => [...prev, trimmed]);
+    setNewKeywordInput('');
+    toast.success(`Đã thêm từ khóa: "${trimmed}"`);
+  };
+
+  const handleDeleteKeyword = (kwToDelete: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (keywords.length <= 1) {
+      toast.error('Cần giữ ít nhất 1 từ khóa trong danh sách!');
+      return;
+    }
+    const updated = keywords.filter(k => k !== kwToDelete);
+    setKeywords(updated);
+    setSelectedKeywords(prev => {
+      const filtered = prev.filter(k => k !== kwToDelete);
+      return filtered.length > 0 ? filtered : [updated[0]];
+    });
+    toast.success('Đã xóa từ khóa!');
+  };
+
+  const handleApplyAndScan = () => {
+    setIsKeywordPopoverOpen(false);
+    fetchThreads(buildCombinedQuery(selectedKeywords), false);
+  };
+
+  // Filtered threads list
   const filteredThreads = useMemo(() => {
-    return threads.filter(th => {
-      const q = searchQuery.toLowerCase().trim();
-      const matchesSearch = !q || (
-        th.subject.toLowerCase().includes(q) ||
-        (th.projectCode || '').toLowerCase().includes(q) ||
-        (th.supplierName || '').toLowerCase().includes(q) ||
-        (th.brand || '').toLowerCase().includes(q) ||
-        (th.fromName || '').toLowerCase().includes(q) ||
-        (th.from || '').toLowerCase().includes(q) ||
-        th.snippet.toLowerCase().includes(q)
-      );
-
-      const matchesStatus = selectedResultFilter === 'ALL' || th.status === selectedResultFilter;
-      const matchesSupplier = selectedSupplierFilter === 'all' || (th.supplierName || '').toLowerCase() === selectedSupplierFilter.toLowerCase();
-
-      return matchesSearch && matchesStatus && matchesSupplier;
+    return threads.filter(t => {
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const str = `${t.subject} ${t.from} ${t.fromName} ${t.snippet}`.toLowerCase();
+        if (!str.includes(q)) return false;
+      }
+      if (filterType === 'NEW' && !newThreadIds.has(t.threadId)) return false;
+      if (filterType === 'HAS_ATTACHMENT' && !t.hasAttachments) return false;
+      return true;
     }).sort((a, b) => (b.rawTimestamp || 0) - (a.rawTimestamp || 0));
-  }, [threads, searchQuery, selectedResultFilter, selectedSupplierFilter]);
+  }, [threads, searchQuery, filterType, newThreadIds]);
 
   // Active selected thread
   const activeThread = useMemo(() => {
@@ -558,13 +477,6 @@ export const NtxxInboxView: React.FC<NtxxInboxViewProps> = ({
     }
   }, [activeThread?.threadId]);
 
-  // Matched Grouped Project in Data list for cross-referencing
-  const matchedProject = useMemo(() => {
-    if (!activeThread?.projectCode) return null;
-    const cleanCode = activeThread.projectCode.trim().toLowerCase();
-    return groupedProjects.find(p => p.projectCode.toLowerCase().includes(cleanCode) || cleanCode.includes(p.projectCode.toLowerCase())) || null;
-  }, [activeThread, groupedProjects]);
-
   // Active message in thread
   const activeMessage = useMemo(() => {
     if (!activeThread || !activeThread.messages || activeThread.messages.length === 0) return null;
@@ -572,205 +484,314 @@ export const NtxxInboxView: React.FC<NtxxInboxViewProps> = ({
   }, [activeThread, activeMessageIndex]);
 
   return (
-    <div className="space-y-4 font-sans pb-12">
+    <div className="space-y-3 font-sans pb-8">
       
-      {/* 1. TOP HEADER & FILTER BAR */}
-      <div className="bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
+      {/* 1. COMPACT TOOLBAR BAR */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+        
+        {/* Left: Quick Realtime Info */}
+        <div className="flex items-center gap-2 text-xs">
+          <Badge className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 text-[10px] font-semibold flex items-center gap-1.5 py-0.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>Live Realtime ({threads.length} luồng thư)</span>
+          </Badge>
+          {lastSyncedTime && (
+            <span className="text-[11px] text-slate-400 font-mono hidden sm:inline">
+              • Cập nhật {lastSyncedTime}
+            </span>
+          )}
+        </div>
+
+        {/* Right Actions */}
+        <div className="flex items-center gap-2 flex-wrap">
           
-          {/* Left: Search & Filter Tools */}
-          <div className="flex items-center gap-2.5 flex-wrap flex-1 max-w-2xl">
-            <div className="relative flex-1 min-w-[220px]">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Tìm mã dự án, nhà thầu, tiêu đề BBNT..."
-                className="w-full pl-9 pr-8 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs outline-none focus:border-indigo-500 transition-colors"
-              />
-              {searchQuery && (
-                <X
-                  className="w-3.5 h-3.5 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                  onClick={() => setSearchQuery('')}
-                />
-              )}
-            </div>
+          {/* KEYWORD POPOVER TRIGGER */}
+          <div className="relative" ref={keywordPopoverRef}>
+            <button
+              onClick={() => setIsKeywordPopoverOpen(!isKeywordPopoverOpen)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-semibold transition-all cursor-pointer border border-indigo-200 dark:border-indigo-800 shadow-2xs"
+            >
+              <Tag className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              <span>
+                Từ khóa: <strong className="font-mono">{selectedKeywords.length === 1 ? selectedKeywords[0] : `${selectedKeywords.length} đang chọn`}</strong>
+              </span>
+              <ChevronRight className={`w-3 h-3 text-indigo-500 transition-transform ${isKeywordPopoverOpen ? 'rotate-90' : ''}`} />
+            </button>
 
-            {/* Status Filter Pills */}
-            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-semibold">
-              <button
-                onClick={() => setSelectedResultFilter('ALL')}
-                className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
-                  selectedResultFilter === 'ALL'
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs font-bold'
-                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-              >
-                Tất cả ({threads.length})
-              </button>
-              <button
-                onClick={() => setSelectedResultFilter('PASSED')}
-                className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer flex items-center gap-1 ${
-                  selectedResultFilter === 'PASSED'
-                    ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-2xs font-bold'
-                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-              >
-                <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                <span>Đạt</span>
-              </button>
-              <button
-                onClick={() => setSelectedResultFilter('FAILED')}
-                className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer flex items-center gap-1 ${
-                  selectedResultFilter === 'FAILED'
-                    ? 'bg-white dark:bg-slate-900 text-rose-600 dark:text-rose-400 shadow-2xs font-bold'
-                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-              >
-                <ShieldAlert className="w-3 h-3 text-rose-500" />
-                <span>Không đạt</span>
-              </button>
-            </div>
+            {/* KEYWORD POPOVER PANEL */}
+            {isKeywordPopoverOpen && (
+              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 p-4 space-y-3.5 animate-in fade-in zoom-in-95 duration-150">
+                
+                {/* Header */}
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2.5">
+                  <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900 dark:text-slate-100">
+                    <Tag className="w-4 h-4 text-indigo-500" />
+                    <span>Bộ Lọc Từ Khóa NTXX ({selectedKeywords.length}/{keywords.length})</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[11px]">
+                    <button
+                      onClick={handleSelectAllKeywords}
+                      className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold cursor-pointer"
+                    >
+                      Chọn tất cả
+                    </button>
+                    <span className="text-slate-300 dark:text-slate-700">•</span>
+                    <button
+                      onClick={handleDeselectAllKeywords}
+                      className="text-slate-500 hover:underline cursor-pointer"
+                    >
+                      Bỏ chọn
+                    </button>
+                  </div>
+                </div>
 
-            {/* Supplier Filter */}
-            {availableSuppliers.length > 0 && (
-              <select
-                value={selectedSupplierFilter}
-                onChange={(e) => setSelectedSupplierFilter(e.target.value)}
-                className="px-2.5 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold outline-none cursor-pointer text-slate-700 dark:text-slate-300"
-              >
-                <option value="all">Tất cả Nhà thầu ({availableSuppliers.length})</option>
-                {availableSuppliers.map(s => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
+                {/* Preset List with Multi-select Checkboxes */}
+                <div className="space-y-1.5 max-h-52 overflow-y-auto custom-scrollbar pr-1">
+                  {keywords.map((kw) => {
+                    const isChecked = selectedKeywords.includes(kw);
+                    return (
+                      <div
+                        key={kw}
+                        onClick={() => handleToggleKeyword(kw)}
+                        className={`group flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs font-mono transition-all cursor-pointer select-none border ${
+                          isChecked
+                            ? 'bg-indigo-50 dark:bg-indigo-950/80 text-indigo-900 dark:text-indigo-200 font-bold border-indigo-300 dark:border-indigo-800 shadow-2xs'
+                            : 'bg-slate-50 dark:bg-slate-950/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          {isChecked ? (
+                            <CheckSquare className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                          ) : (
+                            <Square className="w-4 h-4 text-slate-400 shrink-0" />
+                          )}
+                          <span className="truncate">{kw}</span>
+                        </div>
+                        <button
+                          onClick={(e) => handleDeleteKeyword(kw, e)}
+                          className="p-1 rounded hover:bg-rose-500 hover:text-white text-slate-400 opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
+                          title="Xóa từ khóa này"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Add New Keyword Input */}
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Thêm từ khóa tìm kiếm mới:
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      placeholder="VD: subject:NTXX- hoặc label:NTXX..."
+                      value={newKeywordInput}
+                      onChange={(e) => setNewKeywordInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleAddKeyword();
+                      }}
+                      className="flex-1 px-3 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs outline-none font-mono focus:border-indigo-500"
+                    />
+                    <button
+                      onClick={handleAddKeyword}
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shrink-0"
+                    >
+                      Thêm
+                    </button>
+                  </div>
+                </div>
+
+                {/* Footer Actions */}
+                <div className="pt-1 flex items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-800/80">
+                  <button
+                    onClick={() => setIsKeywordPopoverOpen(false)}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+                  >
+                    Đóng
+                  </button>
+                  <button
+                    onClick={handleApplyAndScan}
+                    disabled={isRefreshing}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    <span>Áp dụng &amp; Quét ({selectedKeywords.length})</span>
+                  </button>
+                </div>
+
+              </div>
             )}
           </div>
 
-          {/* Right: Sync & Actions */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => fetchNtxxEmails(true)}
-              disabled={isSyncing}
-              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-              title="Đồng bộ lại hòm thư NTXX từ Gmail"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 text-indigo-500 ${isSyncing ? 'animate-spin' : ''}`} />
-              <span>{isSyncing ? 'Đang đồng bộ...' : 'Đồng bộ'}</span>
-            </button>
+          {/* SCAN GMAIL BUTTON */}
+          <button
+            onClick={() => fetchThreads(buildCombinedQuery(selectedKeywords))}
+            disabled={isRefreshing}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-xs disabled:opacity-60 disabled:cursor-not-allowed"
+            title="Quét kiểm tra email NTXX mới từ Gmail"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>{isRefreshing ? 'Đang quét...' : 'Quét Gmail'}</span>
+          </button>
 
-            <span className="text-[11px] text-slate-400 font-mono hidden sm:inline">
-              Cập nhật: {lastSyncedAt}
-            </span>
-          </div>
+          {/* COMPACT CONFIG ENDPOINT BUTTON */}
+          <button
+            onClick={() => setShowConfigModal(true)}
+            className="p-1.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl transition-colors cursor-pointer border border-slate-200 dark:border-slate-700 shadow-2xs"
+            title="Cấu hình Google Apps Script Web App Endpoint"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
 
         </div>
+
       </div>
 
-      {/* 2. DUAL-PANE INBOX CONTAINER */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+      {/* 2. MAIN 2-COLUMN WEBMAIL LAYOUT (MASTER - DETAIL) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-[640px]">
         
-        {/* LEFT PANE: THREADS LIST (Collapsible) */}
-        {!isSidebarCollapsed && (
-          <div className="lg:col-span-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-2xs flex flex-col max-h-[750px] overflow-hidden animate-in fade-in duration-150">
+        {/* LEFT COLUMN: THREAD LIST (Collapsible) */}
+        {!isReaderExpanded && (
+          <div className={`lg:col-span-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs flex-col overflow-hidden ${
+            mobileShowDetail ? 'hidden lg:flex' : 'flex'
+          }`}>
             
-            {/* Thread List Header */}
-            <div className="p-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-950/40">
-              <div className="flex items-center gap-2">
-                <Inbox className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                <span className="font-bold text-xs text-slate-900 dark:text-slate-100">
-                  Danh Sách Thư NTXX ({filteredThreads.length})
-                </span>
+            {/* Search & Filter bar */}
+            <div className="p-3.5 border-b border-slate-100 dark:border-slate-800 space-y-2.5">
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Tìm theo người gửi, tiêu đề, nội dung thư..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs outline-none focus:border-indigo-500 transition-colors"
+                />
               </div>
-              
-              <button
-                onClick={() => setIsSidebarCollapsed(true)}
-                className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                title="Thu gọn danh sách (Phóng to khung đọc mail)"
-              >
-                <PanelLeftClose className="w-4 h-4" />
-              </button>
+
+              {/* Filter Pills & Collapse Button */}
+              <div className="flex items-center justify-between gap-1.5 pb-0.5 text-[11px]">
+                <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar">
+                  <button
+                    onClick={() => setFilterType('ALL')}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition-colors shrink-0 cursor-pointer ${
+                      filterType === 'ALL'
+                        ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                    }`}
+                  >
+                    Tất cả ({threads.length})
+                  </button>
+                  {newThreadIds.size > 0 && (
+                    <button
+                      onClick={() => setFilterType('NEW')}
+                      className={`px-2.5 py-1 rounded-lg font-bold transition-colors shrink-0 cursor-pointer flex items-center gap-1 ${
+                        filterType === 'NEW'
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800'
+                      }`}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                      <span>Mới nhận ({newThreadIds.size})</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setFilterType(filterType === 'HAS_ATTACHMENT' ? 'ALL' : 'HAS_ATTACHMENT')}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition-colors shrink-0 cursor-pointer flex items-center gap-1 ${
+                      filterType === 'HAS_ATTACHMENT'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                    }`}
+                  >
+                    <Paperclip className="w-3 h-3" />
+                    <span>Có đính kèm</span>
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => setIsReaderExpanded(true)}
+                  className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer hidden lg:block"
+                  title="Thu gọn danh sách (Phóng to khung đọc mail)"
+                >
+                  <PanelLeftClose className="w-4 h-4" />
+                </button>
+              </div>
+
             </div>
 
-            {/* Scrollable Threads */}
-            <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/80 custom-scrollbar">
+            {/* Thread list scroll */}
+            <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/80 max-h-[640px] custom-scrollbar">
               {filteredThreads.length === 0 ? (
-                <div className="text-center py-16 px-4 space-y-2">
-                  <Inbox className="w-8 h-8 text-slate-300 dark:text-slate-700 mx-auto stroke-[1.5]" />
-                  <div className="text-xs text-slate-500 font-medium">
-                    Không tìm thấy luồng thư NTXX nào phù hợp
-                  </div>
+                <div className="p-12 text-center text-slate-400 space-y-2">
+                  <Inbox className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-700 stroke-[1.5]" />
+                  <p className="text-xs">Không tìm thấy luồng thư NTXX nào</p>
                 </div>
               ) : (
-                filteredThreads.map(th => {
-                  const isSelected = activeThread?.threadId === th.threadId;
+                filteredThreads.map((thread) => {
+                  const isSelected = activeThread?.threadId === thread.threadId;
+                  const isNew = newThreadIds.has(thread.threadId);
+
                   return (
                     <div
-                      key={th.threadId}
+                      key={thread.threadId}
                       onClick={() => {
-                        setSelectedThreadId(th.threadId);
+                        setSelectedThreadId(thread.threadId);
+                        setMobileShowDetail(true);
+                        if (isNew) {
+                          setNewThreadIds(prev => {
+                            const next = new Set(prev);
+                            next.delete(thread.threadId);
+                            return next;
+                          });
+                        }
                       }}
-                      className={`p-3.5 cursor-pointer transition-all ${
+                      className={`p-3.5 transition-all cursor-pointer relative ${
                         isSelected 
                           ? 'bg-indigo-50/70 dark:bg-indigo-950/40 border-l-4 border-indigo-600' 
                           : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-2 mb-1.5">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {th.projectCode && (
-                            <span className="px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded font-mono font-bold text-[10px]">
-                              {th.projectCode}
-                            </span>
+                      {/* Sender and Date */}
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <div className="flex items-center gap-1.5 truncate">
+                          {isNew && (
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
                           )}
-                          {th.supplierName && (
-                            <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded font-bold text-[10px]">
-                              {th.supplierName}
-                            </span>
-                          )}
-                          {th.status === 'PASSED' && (
-                            <span className="px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 rounded font-bold text-[10px] flex items-center gap-0.5">
-                              <Check className="w-2.5 h-2.5 stroke-[3]" />
-                              Đạt
-                            </span>
-                          )}
-                          {th.status === 'FAILED' && (
-                            <span className="px-1.5 py-0.5 bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 rounded font-bold text-[10px]">
-                              Không đạt
-                            </span>
-                          )}
-                        </div>
-
-                        <span className="text-[10px] text-slate-400 font-mono shrink-0">
-                          {th.lastUpdated.split(' ')[0]}
-                        </span>
-                      </div>
-
-                      <div className="font-bold text-xs text-slate-900 dark:text-slate-100 line-clamp-1 mb-1">
-                        {th.subject}
-                      </div>
-
-                      <div className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
-                        {th.snippet}
-                      </div>
-
-                      <div className="flex items-center justify-between text-[10px] text-slate-400 mt-2 pt-1 border-t border-slate-100/80 dark:border-slate-800/60">
-                        <span className="truncate max-w-[180px]">
-                          {th.fromName || th.from}
-                        </span>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {th.hasAttachments && (
-                            <span className="flex items-center gap-0.5 text-slate-500">
-                              <Paperclip className="w-3 h-3" />
-                              {th.attachmentsCount || 1}
-                            </span>
-                          )}
-                          <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.2 rounded font-mono font-semibold">
-                            {th.messagesCount || 1} thư
+                          <span className={`text-xs truncate ${isSelected ? 'font-bold text-indigo-950 dark:text-indigo-200' : 'font-semibold text-slate-900 dark:text-slate-100'}`}>
+                            {thread.fromName || thread.from}
                           </span>
                         </div>
+                        <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                          {thread.lastUpdated.split(' ')[0]}
+                        </span>
                       </div>
+
+                      {/* Subject */}
+                      <div className="text-xs font-bold text-slate-900 dark:text-slate-100 line-clamp-1 mb-1">
+                        {thread.subject}
+                      </div>
+
+                      {/* Snippet */}
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
+                        {thread.snippet}
+                      </div>
+
+                      {/* Footer tags */}
+                      <div className="flex items-center justify-end gap-2 mt-2 pt-1 border-t border-slate-100/80 dark:border-slate-800/60 text-[10px] text-slate-400">
+                        {thread.hasAttachments && (
+                          <span className="flex items-center gap-0.5 text-slate-500 font-medium">
+                            <Paperclip className="w-3 h-3" />
+                            {thread.attachmentsCount || 1}
+                          </span>
+                        )}
+                        <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded font-mono font-semibold">
+                          {thread.messagesCount || 1} thư
+                        </span>
+                      </div>
+
                     </div>
                   );
                 })
@@ -780,21 +801,32 @@ export const NtxxInboxView: React.FC<NtxxInboxViewProps> = ({
           </div>
         )}
 
-        {/* RIGHT PANE: THREAD READER & TIMELINE */}
-        <div className={`${isSidebarCollapsed ? 'lg:col-span-12' : 'lg:col-span-7'} bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-2xs flex flex-col min-h-[600px] max-h-[750px] overflow-hidden`}>
+        {/* RIGHT COLUMN: EMAIL READER PANE */}
+        <div className={`${isReaderExpanded ? 'lg:col-span-12' : 'lg:col-span-7'} bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs flex flex-col overflow-hidden ${
+          !mobileShowDetail ? 'hidden lg:flex' : 'flex'
+        }`}>
           
           {activeThread ? (
             <>
               {/* Reader Header */}
-              <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 space-y-2.5">
+              <div className="p-4 border-b border-slate-100 dark:border-slate-800 space-y-3 bg-slate-50/40 dark:bg-slate-950/40">
+                
                 <div className="flex items-start justify-between gap-3">
-                  
-                  {/* Expand list button if collapsed */}
-                  <div className="flex items-center gap-2">
-                    {isSidebarCollapsed && (
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    
+                    {/* Back on Mobile */}
+                    <button
+                      onClick={() => setMobileShowDetail(false)}
+                      className="p-1.5 text-slate-500 hover:bg-slate-200 rounded-lg lg:hidden"
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+
+                    {/* Expand/Collapse sidebar button */}
+                    {isReaderExpanded && (
                       <button
-                        onClick={() => setIsSidebarCollapsed(false)}
-                        className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs"
+                        onClick={() => setIsReaderExpanded(false)}
+                        className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs shrink-0"
                         title="Mở lại danh sách thư"
                       >
                         <PanelLeftOpen className="w-4 h-4 text-indigo-600" />
@@ -802,24 +834,13 @@ export const NtxxInboxView: React.FC<NtxxInboxViewProps> = ({
                       </button>
                     )}
 
-                    <h2 className="font-bold text-sm text-slate-900 dark:text-slate-100 line-clamp-1">
+                    <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 line-clamp-2">
                       {activeThread.subject}
                     </h2>
                   </div>
-
-                  {/* Project Cross-link Button */}
-                  {matchedProject && onOpenProjectDrawer && (
-                    <button
-                      onClick={() => onOpenProjectDrawer(matchedProject)}
-                      className="px-2.5 py-1 text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 rounded-xl transition-colors cursor-pointer flex items-center gap-1 shrink-0"
-                    >
-                      <Factory className="w-3.5 h-3.5" />
-                      <span>Xem Dự Án {matchedProject.projectCode}</span>
-                    </button>
-                  )}
                 </div>
 
-                {/* Stepper Navigation for Messages in Thread */}
+                {/* Message Stepper if Thread has multiple messages */}
                 {activeThread.messages && activeThread.messages.length > 1 && (
                   <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 dark:border-slate-800/60 text-xs">
                     <div className="flex items-center gap-1.5">
@@ -864,10 +885,11 @@ export const NtxxInboxView: React.FC<NtxxInboxViewProps> = ({
                     </div>
                   </div>
                 )}
+
               </div>
 
               {/* Message Details Body */}
-              <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 max-h-[600px] custom-scrollbar">
                 {activeMessage ? (
                   <>
                     {/* Sender Info Card */}
@@ -919,7 +941,7 @@ export const NtxxInboxView: React.FC<NtxxInboxViewProps> = ({
                       <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
                         <div className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
                           <Paperclip className="w-3.5 h-3.5 text-indigo-600" />
-                          <span>Tệp đính kèm & BBNT ({activeMessage.attachments.length}):</span>
+                          <span>Tệp đính kèm ({activeMessage.attachments.length}):</span>
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -945,9 +967,9 @@ export const NtxxInboxView: React.FC<NtxxInboxViewProps> = ({
                               </div>
 
                               <div className="flex items-center gap-1 shrink-0">
-                                {att.isImage && att.url && (
+                                {att.isImage && (att.dataUri || att.url) && (
                                   <button
-                                    onClick={() => setLightboxImageUrl(att.url!)}
+                                    onClick={() => setLightboxImageUrl(att.dataUri || att.url!)}
                                     className="p-1 text-slate-500 hover:text-indigo-600 rounded-md cursor-pointer"
                                     title="Xem ảnh"
                                   >
@@ -986,29 +1008,13 @@ export const NtxxInboxView: React.FC<NtxxInboxViewProps> = ({
                 Chưa chọn luồng thư nào
               </h3>
               <p className="text-xs text-slate-400 mt-1 max-w-sm">
-                Vui lòng chọn một luồng thư từ danh sách bên trái để đọc nội dung trao đổi nghiệm thu xuất xưởng.
+                Vui lòng chọn một luồng thư từ danh sách bên trái để đọc nội dung trao đổi NTXX.
               </p>
             </div>
           )}
 
         </div>
 
-      </div>
-
-      {/* 3. BOTTOM API & APPS SCRIPT SETTINGS BAR */}
-      <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl flex items-center justify-between text-xs flex-wrap gap-2 shadow-2xs">
-        <div className="flex items-center gap-2 text-slate-500">
-          <Settings className="w-3.5 h-3.5 text-indigo-500" />
-          <span>Cấu hình tự động đồng bộ hòm thư Gmail NTXX qua Google Apps Script</span>
-        </div>
-
-        <button
-          onClick={() => setIsSettingsOpen(true)}
-          className="px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-slate-100 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
-        >
-          <Settings className="w-3 h-3" />
-          <span>Cài đặt API NTXX</span>
-        </button>
       </div>
 
       {/* LIGHTBOX MODAL FOR IMAGE PREVIEW */}
@@ -1026,7 +1032,7 @@ export const NtxxInboxView: React.FC<NtxxInboxViewProps> = ({
             </button>
             <img
               src={lightboxImageUrl}
-              alt="BBNT Preview"
+              alt="Attachment Preview"
               className="max-w-full max-h-[85vh] object-contain rounded-xl mx-auto"
               onClick={(e) => e.stopPropagation()}
             />
@@ -1034,17 +1040,17 @@ export const NtxxInboxView: React.FC<NtxxInboxViewProps> = ({
         </div>
       )}
 
-      {/* API SETTINGS MODAL */}
-      {isSettingsOpen && (
+      {/* CONFIG MODAL */}
+      {showConfigModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
               <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
                 <Settings className="w-4 h-4 text-indigo-500" />
-                Cài Đặt Web App API NTXX
+                Cài Đặt Google Apps Script (NTXX)
               </h3>
               <button
-                onClick={() => setIsSettingsOpen(false)}
+                onClick={() => setShowConfigModal(false)}
                 className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -1063,22 +1069,27 @@ export const NtxxInboxView: React.FC<NtxxInboxViewProps> = ({
                 className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl font-mono text-xs outline-none focus:border-indigo-500"
               />
               <p className="text-[11px] text-slate-400">
-                URL triển khai Apps Script đọc nhãn Gmail hoặc bảng phản hồi nghiệm thu xuất xưởng.
+                URL triển khai Apps Script của bạn từ file <code>google-scripts/NTXX_Gmail_Supabase_Sync.gs</code>.
               </p>
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
               <button
-                onClick={() => setIsSettingsOpen(false)}
+                onClick={() => setShowConfigModal(false)}
                 className="px-3.5 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
               >
                 Hủy
               </button>
               <button
                 onClick={() => {
-                  onSaveWebAppUrl(tempUrl);
-                  setIsSettingsOpen(false);
-                  toast.success('Đã lưu cấu hình API NTXX thành công!');
+                  const trimmed = tempUrl.trim();
+                  setAppsScriptUrl(trimmed);
+                  localStorage.setItem('NTXX_GMAIL_APPS_SCRIPT_URL', trimmed);
+                  setShowConfigModal(false);
+                  toast.success('Đã lưu cấu hình Apps Script NTXX!');
+                  if (trimmed) {
+                    fetchThreads(buildCombinedQuery(selectedKeywords));
+                  }
                 }}
                 className="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs cursor-pointer"
               >

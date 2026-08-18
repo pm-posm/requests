@@ -967,13 +967,7 @@ export default function TrackingNtxx() {
           {/* TAB 3: DEDICATED NTXX GMAIL INBOX WORKSPACE */}
           {activeModuleTab === 'INBOX' && (
             <div className="animate-in fade-in duration-150">
-              <NtxxInboxView
-                groupedProjects={groupedProjects}
-                rawNtxxRows={rawData}
-                onOpenProjectDrawer={(p) => setSelectedDetailProject(p)}
-                webAppUrl={webAppUrl}
-                onSaveWebAppUrl={handleSaveWebAppUrl}
-              />
+              <NtxxInboxView />
             </div>
           )}
         </>
