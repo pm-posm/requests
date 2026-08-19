@@ -1,9 +1,9 @@
 /**
  * ==============================================================================
  * HỆ THỐNG ĐỒNG BỘ GMAIL BẢO HÀNH -> SUPABASE CLOUD (SMART INCREMENTAL SYNC)
- * 1. Cơ chế Quét Gia Tăng Thông Minh (Chỉ xử lý khi CÓ MAIL MỚI hoặc PHẢN HỒI MỚI)
- * 2. Tiết kiệm 95% tài nguyên: Bỏ qua email cũ trong 0.01 giây nếu không có thay đổi
- * 3. Chạy 24/7 qua Time-driven trigger & Cung cấp API Web App cho Dashboard
+ * 1. Cơ chế Quét Gia Tăng Thông Minh: Bỏ qua email cũ trong 0.01s nếu không đổi
+ * 2. Chỉ đẩy email MỚI hoặc có PHẢN HỒI MỚI về Supabase
+ * 3. Hỗ trợ quét sâu 50 mail gần nhất để chống sót mail khi dồn ứ nhiều ngày
  * ==============================================================================
  */
 
@@ -12,26 +12,25 @@ const SUPABASE_CONFIG = {
   ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrZnljaG1nbG11bnpuY2VvcG5oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4Njc0MjAsImV4cCI6MjEwMjQ0MzQyMH0.2eMYy8NPMC66OldPPtmm606zlqOByPv-_zbcNKioM_Y',
   TABLE_NAME: 'warranty_emails',
   DEFAULT_QUERY: 'subject:"bảo hành" OR subject:"ĐĂNG KÝ LỊCH BẢO HÀNH"',
-  DEFAULT_LIMIT: 10
+  DEFAULT_LIMIT: 50
 };
 
 /**
- * 1. HÀM TỰ ĐỘNG CHẠY 24/7 (CÀI ĐẶT TIME-DRIVEN TRIGGER MỖI 5 - 10 PHÚT)
- * Chế độ Incremental: Chỉ quét các mail gần đây, phát hiện mail mới là đẩy về Supabase ngay
+ * 1. HÀM CHẠY TRIGGER ĐỊNH KỲ 24/7 (MỖI 5 - 10 PHÚT)
  */
 function autoSyncGmailToSupabase() {
-  Logger.log('Bắt đầu kiểm tra email mới từ Gmail...');
+  Logger.log('Bắt đầu kiểm tra email mới...');
   var result = processGmailSearch({
     q: SUPABASE_CONFIG.DEFAULT_QUERY,
-    limit: 10,
+    limit: 50,
     incremental: true
   });
-  Logger.log('Kết quả kiểm tra: ' + JSON.stringify(result));
+  Logger.log('Kết quả: ' + JSON.stringify(result));
   return result;
 }
 
 /**
- * Lấy danh sách map { [thread_id]: last_updated } hiện có trên Supabase để so khớp siêu tốc
+ * Lấy danh sách map { [thread_id]: last_updated } từ Supabase để so khớp
  */
 function getExistingThreadsMap() {
   try {
@@ -54,22 +53,20 @@ function getExistingThreadsMap() {
       return map;
     }
   } catch (e) {
-    Logger.log('Không thể lấy danh sách thread cũ từ Supabase: ' + e.toString());
+    Logger.log('Lỗi đọc Supabase: ' + e.toString());
   }
   return {};
 }
 
 /**
- * 2. HÀM QUÉT GMAIL THÔNG MINH (CHỈ XỬ LÝ MAIL MỚI / THAY ĐỔI)
+ * 2. QUÉT GMAIL THÔNG MINH - CHỈ XỬ LÝ MAIL MỚI PHÁT SINH
  */
 function processGmailSearch(params) {
   var query = params.q ? decodeURIComponent(params.q) : SUPABASE_CONFIG.DEFAULT_QUERY;
   var limit = parseInt(params.limit || String(SUPABASE_CONFIG.DEFAULT_LIMIT), 10);
   var isIncremental = params.incremental !== false && params.incremental !== 'false';
 
-  // Lấy map email hiện có trên Supabase để kiểm tra trước
   var existingMap = isIncremental ? getExistingThreadsMap() : {};
-  
   var threads = GmailApp.search(query, 0, Math.min(limit, 50));
   var results = [];
   var supabasePayload = [];
@@ -84,13 +81,12 @@ function processGmailSearch(params) {
     var lastMsg = messages[messages.length - 1];
     var lastUpdatedIso = lastMsg.getDate().toISOString();
 
-    // KIỂM TRA ĐỘNG: Nếu email này đã có trên Supabase và thời gian cập nhật không đổi -> BỎ QUA NGAY
+    // NẾU EMAIL ĐÃ CÓ TRÊN SUPABASE VÀ KHÔNG CÓ THAY ĐỔI -> BỎ QUA NGAY
     if (isIncremental && existingMap[threadId] === lastUpdatedIso) {
       skippedCount++;
       continue;
     }
 
-    // CHỈ BÓC TÁCH CHI TIẾT KHI CÓ MAIL MỚI HOẶC CÓ THÊM PHẢN HỒI MỚI
     var msgsData = [];
     var totalAttachments = [];
 
@@ -103,13 +99,11 @@ function processGmailSearch(params) {
         for (var k = 0; k < atts.length; k++) {
           var att = atts[k];
           var contentType = att.getContentType() || 'application/octet-stream';
-          var isImage = contentType.indexOf('image/') === 0;
-
           var attObj = {
             name: att.getName() || ('Tệp đính kèm ' + (k + 1)),
             contentType: contentType,
             size: Math.round(att.getSize() / 1024) + ' KB',
-            isImage: isImage
+            isImage: contentType.indexOf('image/') === 0
           };
           attsData.push(attObj);
           totalAttachments.push(attObj);
@@ -152,7 +146,6 @@ function processGmailSearch(params) {
 
     results.push(threadObj);
 
-    // Chuẩn hóa payload đẩy vào Supabase
     supabasePayload.push({
       thread_id: threadId,
       subject: threadSubject,
@@ -165,7 +158,6 @@ function processGmailSearch(params) {
     });
   }
 
-  // Đẩy trực tiếp vào Supabase qua REST API
   var supabaseStatus = 'skipped (không có mail mới)';
   if (supabasePayload.length > 0) {
     supabaseStatus = pushToSupabase(supabasePayload);
@@ -182,7 +174,7 @@ function processGmailSearch(params) {
 }
 
 /**
- * 3. HÀM GỬI PAYLOAD LÊN SUPABASE REST API
+ * 3. GỬI DỮ LIỆU LÊN SUPABASE
  */
 function pushToSupabase(records) {
   try {
@@ -202,20 +194,18 @@ function pushToSupabase(records) {
     var response = UrlFetchApp.fetch(endpoint, options);
     var statusCode = response.getResponseCode();
     if (statusCode >= 200 && statusCode < 300) {
-      Logger.log('Đã cập nhật ' + records.length + ' mail mới vào Supabase!');
-      return 'success (' + records.length + ' new/updated rows)';
+      Logger.log('Đã lưu ' + records.length + ' mail vào Supabase!');
+      return 'success (' + records.length + ' rows)';
     } else {
-      Logger.log('Supabase API Error: ' + response.getContentText());
       return 'error: ' + response.getContentText();
     }
   } catch (err) {
-    Logger.log('Exception pushing to Supabase: ' + err.toString());
     return 'exception: ' + err.toString();
   }
 }
 
 /**
- * 4. HÀM TẢI ẢNH CHẤT LƯỢNG CAO THEO YÊU CẦU (ON-DEMAND) CHO DASHBOARD
+ * 4. TẢI ẢNH CHẤT LƯỢNG CAO THEO YÊU CẦU (ON-DEMAND)
  */
 function getAttachmentData(params) {
   try {
@@ -227,18 +217,17 @@ function getAttachmentData(params) {
     if (!msg) return { status: 'error', message: 'Không tìm thấy email' };
 
     var atts = msg.getAttachments({ includeInlineImages: true, includeAttachments: true });
-    if (!atts || !atts[attIdx]) return { status: 'error', message: 'Không tìm thấy file đính kèm' };
+    if (!atts || !atts[attIdx]) return { status: 'error', message: 'Không tìm thấy file' };
 
     var att = atts[attIdx];
     var contentType = att.getContentType() || 'image/jpeg';
     var b64 = Utilities.base64Encode(att.getBytes());
-    var dataUri = 'data:' + contentType + ';base64,' + b64;
 
     return {
       status: 'success',
       name: att.getName(),
       contentType: contentType,
-      dataUri: dataUri
+      dataUri: 'data:' + contentType + ';base64,' + b64
     };
   } catch(err) {
     return { status: 'error', message: err.toString() };
@@ -246,25 +235,18 @@ function getAttachmentData(params) {
 }
 
 /**
- * 5. HTTP WEB APP ENDPOINT CHO DASHBOARD (TÌM KIẾM KEYWORD MỚI / TẢI ẢNH)
+ * 5. WEB APP ENDPOINT
  */
 function doGet(e) {
   try {
     const params = (e && e.parameter) ? e.parameter : {};
-    
     if (params.action === 'getAttachmentData') {
-      const attRes = getAttachmentData(params);
-      return ContentService.createTextOutput(JSON.stringify(attRes)).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify(getAttachmentData(params))).setMimeType(ContentService.MimeType.JSON);
     }
-
     if (params.q !== undefined || params.action === 'gmail') {
-      const gmailRes = processGmailSearch(params);
-      return ContentService.createTextOutput(JSON.stringify(gmailRes)).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify(processGmailSearch(params))).setMimeType(ContentService.MimeType.JSON);
     }
-
-    // Mặc định: Chạy quét gia tăng tự động
-    const autoRes = autoSyncGmailToSupabase();
-    return ContentService.createTextOutput(JSON.stringify(autoRes)).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify(autoSyncGmailToSupabase())).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
   }
@@ -275,18 +257,13 @@ function doPost(e) {
     let params = (e && e.parameter) ? e.parameter : {};
     if (e && e.postData && e.postData.contents) {
       try {
-        const jsonBody = JSON.parse(e.postData.contents);
-        params = Object.assign({}, params, jsonBody);
+        params = Object.assign({}, params, JSON.parse(e.postData.contents));
       } catch (pErr) {}
     }
-
     if (params.action === 'getAttachmentData') {
-      const attRes = getAttachmentData(params);
-      return ContentService.createTextOutput(JSON.stringify(attRes)).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify(getAttachmentData(params))).setMimeType(ContentService.MimeType.JSON);
     }
-
-    const gmailRes = processGmailSearch(params);
-    return ContentService.createTextOutput(JSON.stringify(gmailRes)).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify(processGmailSearch(params))).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
   }

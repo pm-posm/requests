@@ -4,7 +4,8 @@
  * (SMART INCREMENTAL SYNC 24/7)
  * 1. Cơ chế Quét Gia Tăng Thông Minh (Chỉ xử lý khi CÓ MAIL MỚI hoặc PHẢN HỒI MỚI)
  * 2. Tiết kiệm 95% tài nguyên: Bỏ qua email cũ trong 0.01 giây nếu không có thay đổi
- * 3. Chạy 24/7 qua Time-driven trigger & Cung cấp API Web App cho Dashboard
+ * 3. Hỗ trợ quét sâu 50 mail gần nhất để chống sót mail khi dồn ứ nhiều ngày
+ * 4. Chạy 24/7 qua Time-driven trigger & Cung cấp API Web App cho Dashboard
  * ==============================================================================
  */
 
@@ -13,18 +14,18 @@ const SUPABASE_CONFIG = {
   ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrZnljaG1nbG11bnpuY2VvcG5oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4Njc0MjAsImV4cCI6MjEwMjQ0MzQyMH0.2eMYy8NPMC66OldPPtmm606zlqOByPv-_zbcNKioM_Y',
   TABLE_NAME: 'ntxx_emails',
   DEFAULT_QUERY: 'subject:"NTXX" OR subject:"nghiệm thu xuất xưởng" OR subject:"nghiệm thu" OR subject:"BBNT" OR label:"NTXX"',
-  DEFAULT_LIMIT: 10
+  DEFAULT_LIMIT: 50
 };
 
 /**
  * 1. HÀM TỰ ĐỘNG CHẠY 24/7 (CÀI ĐẶT TIME-DRIVEN TRIGGER MỖI 5 - 10 PHÚT)
- * Chế độ Incremental: Chỉ quét các mail gần đây, phát hiện mail mới là đẩy về Supabase ngay
+ * Chế độ Incremental: Quét 50 mail gần nhất, phát hiện mail mới là đẩy về Supabase ngay
  */
 function autoSyncNtxxGmailToSupabase() {
   Logger.log('Bắt đầu kiểm tra email NTXX mới từ Gmail...');
   var result = processGmailSearch({
     q: SUPABASE_CONFIG.DEFAULT_QUERY,
-    limit: 10,
+    limit: 50,
     incremental: true
   });
   Logger.log('Kết quả kiểm tra NTXX: ' + JSON.stringify(result));
@@ -153,7 +154,7 @@ function processGmailSearch(params) {
 
     results.push(threadObj);
 
-    // Chuẩn bị payload để Upsert vào Supabase (Đúng 100% schema chuẩn với warranty_emails)
+    // Chuẩn bị payload để Upsert vào Supabase (Chuẩn 100% schema với bảng ntxx_emails)
     supabasePayload.push({
       thread_id: threadId,
       subject: threadSubject,
@@ -196,6 +197,7 @@ function processGmailSearch(params) {
     status: 'success',
     query: query,
     newOrUpdatedFound: results.length,
+    skippedUnchanged: skippedCount,
     supabaseSynced: supabaseStatus,
     data: results
   };
@@ -233,15 +235,10 @@ function doGet(e) {
     if (params.q !== undefined || params.action === 'gmail' || params.action === 'get_ntxx_emails') {
       return ContentService.createTextOutput(JSON.stringify(processGmailSearch(params))).setMimeType(ContentService.MimeType.JSON);
     }
+    return ContentService.createTextOutput(JSON.stringify(autoSyncNtxxGmailToSupabase())).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
   }
-
-  return ContentService.createTextOutput(JSON.stringify({
-    status: 'online',
-    service: 'NTXX Gmail Supabase Sync API',
-    timestamp: new Date().toISOString()
-  })).setMimeType(ContentService.MimeType.JSON);
 }
 
 function doPost(e) {
@@ -249,7 +246,7 @@ function doPost(e) {
     var body = e.postData ? JSON.parse(e.postData.contents) : {};
     var resData = processGmailSearch({
       q: body.q || SUPABASE_CONFIG.DEFAULT_QUERY,
-      limit: body.limit || 10,
+      limit: body.limit || 50,
       incremental: body.incremental !== false
     });
     return ContentService.createTextOutput(JSON.stringify(resData)).setMimeType(ContentService.MimeType.JSON);
