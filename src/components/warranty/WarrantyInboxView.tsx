@@ -435,6 +435,14 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
   const [activeMessageIndex, setActiveMessageIndex] = useState<number>(0);
   const [viewAllMessages, setViewAllMessages] = useState<boolean>(false);
   const [isReaderExpanded, setIsReaderExpanded] = useState<boolean>(false);
+  const readerScrollRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll reader to top when active message or thread changes
+  useEffect(() => {
+    if (readerScrollRef.current) {
+      readerScrollRef.current.scrollTop = 0;
+    }
+  }, [activeMessageIndex, selectedThreadId, viewAllMessages]);
 
   useEffect(() => {
     if (webAppUrl && !appsScriptUrl) {
@@ -464,7 +472,7 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
 
   const [lastSyncedTime, setLastSyncedTime] = useState<string>('');
 
-  // 1. Initial Load & Realtime Sync from Supabase (Persistent Cloud Database for all viewers)
+  // 1. Initial Load & Realtime Sync from Supabase (Independent Subscription)
   useEffect(() => {
     const loadFromSupabase = async () => {
       try {
@@ -480,18 +488,6 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
 
         if (data && data.length > 0) {
           const mappedThreads: WarrantyEmailThread[] = data.map((item: any) => {
-            const fullSubject = item.subject || '';
-            const reqMatch = fullSubject.match(/BH-\d+/i);
-            const reqId = reqMatch ? reqMatch[0].toUpperCase() : '';
-            const prjMatch = fullSubject.match(/\b\d{6}\b/);
-            const prjCode = prjMatch ? prjMatch[0] : '';
-
-            const matchedSheetItem = warrantyItems.find(w => {
-              if (reqId && (w.requestId || '').toUpperCase() === reqId) return true;
-              if (prjCode && (w.projectCode || '').includes(prjCode)) return true;
-              return false;
-            });
-
             const rawTime = item.last_updated ? new Date(item.last_updated).getTime() : Date.now();
             const msgs = Array.isArray(item.messages) ? item.messages : [];
             const attCount = msgs.reduce((acc: number, m: any) => acc + (Array.isArray(m.attachments) ? m.attachments.length : 0), 0);
@@ -549,12 +545,13 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
       if (realtimeDebounceTimer) clearTimeout(realtimeDebounceTimer);
       supabase.removeChannel(channel);
     };
-  }, [warrantyItems]);
+  }, []);
 
   // Fetch threads directly from Gmail Apps Script & Supabase Cloud
   const fetchLiveGmailThreads = async (queryToSearch: string = buildCombinedQuery(selectedKeywords), isSilent = false) => {
     if (isFetchingRef.current) return;
 
+    const toastId = isSilent ? undefined : toast.loading('Đang gửi lệnh quét tới Gmail Server... (khoảng 3 - 5s)');
     try {
       isFetchingRef.current = true;
       setIsRefreshing(true);
@@ -564,12 +561,10 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
       // 1. If Apps Script URL is available, trigger live Gmail search & push to Supabase
       if (activeUrl) {
         try {
-          const targetUrl = `${activeUrl}${activeUrl.includes('?') ? '&' : '?'}action=gmail&q=${encodeURIComponent(queryToSearch || buildCombinedQuery(selectedKeywords))}`;
-          const res = await fetch(targetUrl);
-          const json = await res.json();
-          if (json.status === 'success') {
-            console.log('Apps script live sync triggered:', json.supabaseSynced);
-          }
+          const targetUrl = `${activeUrl}${activeUrl.includes('?') ? '&' : '?'}action=gmail&q=${encodeURIComponent(queryToSearch || buildCombinedQuery(selectedKeywords))}&t=${Date.now()}`;
+          await fetch(targetUrl, { method: 'GET', mode: 'no-cors' });
+          // Cho máy chủ Google 2.5s để hoàn tất bóc tách và Upsert vào Supabase
+          await new Promise(r => setTimeout(r, 2500));
         } catch (scriptErr) {
           console.warn('Apps Script trigger warning:', scriptErr);
         }
@@ -617,8 +612,9 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
         }
         setLastSyncedTime(new Date().toLocaleTimeString('vi-VN'));
 
-        if (!isSilent) {
+        if (!isSilent && toastId) {
           toast.success(`✓ Đã quét Gmail & cập nhật ${mappedThreads.length} email trên Supabase!`, {
+            id: toastId,
             icon: '🚀',
             duration: 4000
           });
@@ -626,19 +622,19 @@ export const WarrantyInboxView: React.FC<WarrantyInboxViewProps> = ({
       } else {
         setThreads([]);
         setSelectedThreadId('');
-        if (!isSilent) {
-          toast('Hộp thư trên Supabase đang trống (0 email).', { icon: 'ℹ️' });
+        if (!isSilent && toastId) {
+          toast('Hộp thư trên Supabase đang trống (0 email).', { id: toastId, icon: 'ℹ️' });
         }
       }
     } catch (err: any) {
       // If network fails, pull from Supabase
       const { data: supaData } = await supabase.from('warranty_emails').select('*').order('last_updated', { ascending: false });
       if (supaData && supaData.length > 0) {
-        if (!isSilent) {
-          toast.success(`Đã tải ${supaData.length} email từ Supabase Cloud`, { icon: '☁️', duration: 3500 });
+        if (!isSilent && toastId) {
+          toast.success(`Đã tải ${supaData.length} email từ Supabase Cloud`, { id: toastId, icon: '☁️', duration: 3500 });
         }
-      } else if (!isSilent) {
-        toast.error('Lỗi kết nối Supabase: ' + err.message);
+      } else if (!isSilent && toastId) {
+        toast.error('Lỗi kết nối Supabase: ' + err.message, { id: toastId });
       }
     } finally {
       isFetchingRef.current = false;
@@ -1212,9 +1208,38 @@ function doGet(e) {
 
           {/* Thread Cards Scrollable Container */}
           <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60 custom-scrollbar max-h-[580px]">
-            {filteredThreads.length === 0 ? (
+            {threads.length === 0 ? (
+              <div className="p-8 text-center space-y-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto shadow-2xs">
+                  <Inbox className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    Hộp thư Bảo Hành chưa có email
+                  </p>
+                  <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
+                    Bấm &quot;Quét Gmail&quot; để tìm và đồng bộ các email yêu cầu bảo hành mới nhất về Supabase Cloud.
+                  </p>
+                </div>
+                <div className="pt-2 flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => fetchLiveGmailThreads(buildCombinedQuery(selectedKeywords))}
+                    disabled={isRefreshing}
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-xs"
+                  >
+                    Quét Gmail Ngay
+                  </button>
+                  <button
+                    onClick={() => setShowConfigModal(true)}
+                    className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                  >
+                    Cài Đặt URL
+                  </button>
+                </div>
+              </div>
+            ) : filteredThreads.length === 0 ? (
               <div className="py-12 text-center text-slate-400 text-xs">
-                Không tìm thấy email nào phù hợp với bộ lọc hoặc keyword hiện tại.
+                Không tìm thấy email nào phù hợp với bộ lọc hoặc từ khóa hiện tại.
               </div>
             ) : (
               filteredThreads.map(thread => {
@@ -1459,7 +1484,7 @@ function doGet(e) {
               </div>
 
               {/* Messages Timeline or Single Focused Message View */}
-              <div className="flex-1 p-3 sm:p-4 space-y-5 overflow-y-auto custom-scrollbar max-h-[540px]">
+              <div ref={readerScrollRef} className="flex-1 p-3 sm:p-4 space-y-5 overflow-y-auto custom-scrollbar max-h-[540px]">
                 {(viewAllMessages ? activeThread.messages : [activeThread.messages[activeMessageIndex] || activeThread.messages[0]]).filter(Boolean).map((msg, displayedIdx) => {
                   const actualMsgIdx = viewAllMessages ? displayedIdx : activeMessageIndex;
                   const isLatest = actualMsgIdx === activeThread.messages.length - 1;

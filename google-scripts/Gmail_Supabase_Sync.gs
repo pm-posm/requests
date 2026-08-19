@@ -2,8 +2,9 @@
  * ==============================================================================
  * HỆ THỐNG ĐỒNG BỘ GMAIL BẢO HÀNH -> SUPABASE CLOUD (SMART INCREMENTAL SYNC)
  * 1. Cơ chế Quét Gia Tăng Thông Minh: Bỏ qua email cũ trong 0.01s nếu không đổi
- * 2. Chỉ đẩy email MỚI hoặc có PHẢN HỒI MỚI về Supabase
+ * 2. Chỉ đẩy email MỚI hoặc có PHẢN HỒI MỚI về Supabase (Gom 1 Batch duy nhất)
  * 3. Hỗ trợ quét sâu 50 mail gần nhất để chống sót mail khi dồn ứ nhiều ngày
+ * 4. Giới hạn an toàn dung lượng HTML Body (100KB) bảo vệ bộ nhớ JSONB Supabase
  * ==============================================================================
  */
 
@@ -30,7 +31,7 @@ function autoSyncGmailToSupabase() {
 }
 
 /**
- * Lấy danh sách map { [thread_id]: last_updated } từ Supabase để so khớp
+ * Lấy danh sách map { [thread_id]: last_updated } từ Supabase để so khớp siêu tốc
  */
 function getExistingThreadsMap() {
   try {
@@ -59,7 +60,7 @@ function getExistingThreadsMap() {
 }
 
 /**
- * 2. QUÉT GMAIL THÔNG MINH - CHỈ XỬ LÝ MAIL MỚI PHÁT SINH
+ * 2. QUÉT GMAIL THÔNG MINH - CHỈ XỬ LÝ MAIL MỚI PHÁT SINH (BATCH 1 LẦN)
  */
 function processGmailSearch(params) {
   var query = params.q ? decodeURIComponent(params.q) : SUPABASE_CONFIG.DEFAULT_QUERY;
@@ -81,7 +82,7 @@ function processGmailSearch(params) {
     var lastMsg = messages[messages.length - 1];
     var lastUpdatedIso = lastMsg.getDate().toISOString();
 
-    // NẾU EMAIL ĐÃ CÓ TRÊN SUPABASE VÀ KHÔNG CÓ THAY ĐỔI -> BỎ QUA NGAY
+    // NẾU EMAIL ĐÃ CÓ TRÊN SUPABASE VÀ KHÔNG CÓ THAY ĐỔI -> BỎ QUA NGAY TRONG 0.01s
     if (isIncremental && existingMap[threadId] === lastUpdatedIso) {
       skippedCount++;
       continue;
@@ -111,7 +112,9 @@ function processGmailSearch(params) {
       }
 
       var msgPlain = msg.getPlainBody() || '';
-      var msgHtml = msg.getBody() || '';
+      var rawHtml = msg.getBody() || '';
+      // Giới hạn an toàn dung lượng HTML tối đa 100KB để bảo vệ Supabase JSONB
+      var msgHtml = rawHtml.length > 100000 ? rawHtml.substring(0, 100000) : rawHtml;
 
       msgsData.push({
         id: msg.getId(),
@@ -174,7 +177,7 @@ function processGmailSearch(params) {
 }
 
 /**
- * 3. GỬI DỮ LIỆU LÊN SUPABASE
+ * 3. GỬI DỮ LIỆU LÊN SUPABASE (BATCH 1 LẦN DUY NHẤT)
  */
 function pushToSupabase(records) {
   try {
