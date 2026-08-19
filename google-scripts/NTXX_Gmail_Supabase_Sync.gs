@@ -1,15 +1,11 @@
 /**
  * ==============================================================================
  * HỆ THỐNG ĐỒNG BỘ GMAIL NGHIỆM THU XUẤT XƯỞNG (NTXX) -> SUPABASE CLOUD
- * (SMART INCREMENTAL SYNC 24/7)
- * 1. Cơ chế Quét Gia Tăng Thông Minh (Chỉ xử lý khi CÓ MAIL MỚI hoặc PHẢN HỒI MỚI)
- * 2. Tiết kiệm 95% tài nguyên: Bỏ qua email cũ trong 0.01 giây nếu không có thay đổi
- * 3. Hỗ trợ quét sâu 50 mail gần nhất để chống sót mail khi dồn ứ nhiều ngày
- * 4. Chạy 24/7 qua Time-driven trigger & Cung cấp API Web App cho Dashboard
+ * Đã đổi tên độc lập: Tiền tố NTXX_ chống xung đột với các file khác
  * ==============================================================================
  */
 
-const SUPABASE_CONFIG = {
+var NTXX_SUPABASE_CONFIG = {
   PROJECT_URL: 'https://ikfychmglmunznceopnh.supabase.co',
   ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrZnljaG1nbG11bnpuY2VvcG5oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4Njc0MjAsImV4cCI6MjEwMjQ0MzQyMH0.2eMYy8NPMC66OldPPtmm606zlqOByPv-_zbcNKioM_Y',
   TABLE_NAME: 'ntxx_emails',
@@ -18,13 +14,12 @@ const SUPABASE_CONFIG = {
 };
 
 /**
- * 1. HÀM TỰ ĐỘNG CHẠY 24/7 (CÀI ĐẶT TIME-DRIVEN TRIGGER MỖI 5 - 10 PHÚT)
- * Chế độ Incremental: Quét 50 mail gần nhất, phát hiện mail mới là đẩy về Supabase ngay
+ * 1. HÀM TỰ ĐỘNG CHẠY 24/7 (TRIGGER NTXX)
  */
 function autoSyncNtxxGmailToSupabase() {
-  Logger.log('Bắt đầu kiểm tra email NTXX mới từ Gmail...');
-  var result = processGmailSearch({
-    q: SUPABASE_CONFIG.DEFAULT_QUERY,
+  Logger.log('Bắt đầu kiểm tra email NTXX mới...');
+  var result = ntxx_processGmailSearch({
+    q: NTXX_SUPABASE_CONFIG.DEFAULT_QUERY,
     limit: 50,
     incremental: true
   });
@@ -33,16 +28,16 @@ function autoSyncNtxxGmailToSupabase() {
 }
 
 /**
- * Lấy danh sách map { [thread_id]: last_updated } hiện có trên Supabase để so khớp siêu tốc
+ * Lấy danh sách map { [thread_id]: last_updated } từ Supabase
  */
-function getExistingThreadsMap() {
+function ntxx_getExistingThreadsMap() {
   try {
-    var endpoint = SUPABASE_CONFIG.PROJECT_URL + '/rest/v1/' + SUPABASE_CONFIG.TABLE_NAME + '?select=thread_id,last_updated';
+    var endpoint = NTXX_SUPABASE_CONFIG.PROJECT_URL + '/rest/v1/' + NTXX_SUPABASE_CONFIG.TABLE_NAME + '?select=thread_id,last_updated';
     var options = {
       method: 'get',
       headers: {
-        'apikey': SUPABASE_CONFIG.ANON_KEY,
-        'Authorization': 'Bearer ' + SUPABASE_CONFIG.ANON_KEY
+        'apikey': NTXX_SUPABASE_CONFIG.ANON_KEY,
+        'Authorization': 'Bearer ' + NTXX_SUPABASE_CONFIG.ANON_KEY
       },
       muteHttpExceptions: true
     };
@@ -56,22 +51,20 @@ function getExistingThreadsMap() {
       return map;
     }
   } catch (e) {
-    Logger.log('Không thể lấy danh sách thread NTXX cũ từ Supabase: ' + e.toString());
+    Logger.log('Lỗi đọc Supabase NTXX: ' + e.toString());
   }
   return {};
 }
 
 /**
- * 2. HÀM QUÉT GMAIL THÔNG MINH (CHỈ XỬ LÝ MAIL MỚI / THAY ĐỔI)
+ * 2. QUÉT GMAIL NTXX - BATCH 1 LẦN
  */
-function processGmailSearch(params) {
-  var query = params.q ? decodeURIComponent(params.q) : SUPABASE_CONFIG.DEFAULT_QUERY;
-  var limit = parseInt(params.limit || String(SUPABASE_CONFIG.DEFAULT_LIMIT), 10);
+function ntxx_processGmailSearch(params) {
+  var query = params.q ? decodeURIComponent(params.q) : NTXX_SUPABASE_CONFIG.DEFAULT_QUERY;
+  var limit = parseInt(params.limit || String(NTXX_SUPABASE_CONFIG.DEFAULT_LIMIT), 10);
   var isIncremental = params.incremental !== false && params.incremental !== 'false';
 
-  // Lấy map email hiện có trên Supabase để kiểm tra trước
-  var existingMap = isIncremental ? getExistingThreadsMap() : {};
-  
+  var existingMap = isIncremental ? ntxx_getExistingThreadsMap() : {};
   var threads = GmailApp.search(query, 0, Math.min(limit, 50));
   var results = [];
   var supabasePayload = [];
@@ -86,13 +79,11 @@ function processGmailSearch(params) {
     var lastMsg = messages[messages.length - 1];
     var lastUpdatedIso = lastMsg.getDate().toISOString();
 
-    // KIỂM TRA ĐỘNG: Nếu email này đã có trên Supabase và thời gian cập nhật không đổi -> BỎ QUA NGAY
     if (isIncremental && existingMap[threadId] === lastUpdatedIso) {
       skippedCount++;
       continue;
     }
 
-    // CHỈ BÓC TÁCH CHI TIẾT KHI CÓ MAIL MỚI HOẶC CÓ THÊM PHẢN HỒI MỚI
     var msgsData = [];
     var totalAttachments = [];
 
@@ -119,7 +110,8 @@ function processGmailSearch(params) {
       }
 
       var msgPlain = msg.getPlainBody() || '';
-      var msgHtml = msg.getBody() || '';
+      var rawHtml = msg.getBody() || '';
+      var msgHtml = rawHtml.length > 100000 ? rawHtml.substring(0, 100000) : rawHtml;
 
       msgsData.push({
         id: msg.getId(),
@@ -154,7 +146,6 @@ function processGmailSearch(params) {
 
     results.push(threadObj);
 
-    // Chuẩn bị payload để Upsert vào Supabase (Chuẩn 100% schema với bảng ntxx_emails)
     supabasePayload.push({
       thread_id: threadId,
       subject: threadSubject,
@@ -167,30 +158,9 @@ function processGmailSearch(params) {
     });
   }
 
-  // Thực hiện UPSERT sang Supabase REST API
   var supabaseStatus = 'skipped (không có mail mới)';
   if (supabasePayload.length > 0) {
-    try {
-      var endpoint = SUPABASE_CONFIG.PROJECT_URL + '/rest/v1/' + SUPABASE_CONFIG.TABLE_NAME + '?on_conflict=thread_id';
-      var supaOptions = {
-        method: 'post',
-        contentType: 'application/json',
-        headers: {
-          'apikey': SUPABASE_CONFIG.ANON_KEY,
-          'Authorization': 'Bearer ' + SUPABASE_CONFIG.ANON_KEY,
-          'Prefer': 'resolution=merge-duplicates'
-        },
-        payload: JSON.stringify(supabasePayload),
-        muteHttpExceptions: true
-      };
-
-      var supaRes = UrlFetchApp.fetch(endpoint, supaOptions);
-      supabaseStatus = supaRes.getResponseCode() >= 200 && supaRes.getResponseCode() < 300 
-        ? ('success (' + supabasePayload.length + ' rows)') 
-        : ('error: ' + supaRes.getContentText());
-    } catch (e) {
-      supabaseStatus = 'exception: ' + e.toString();
-    }
+    supabaseStatus = ntxx_pushToSupabase(supabasePayload);
   }
 
   return {
@@ -204,53 +174,62 @@ function processGmailSearch(params) {
 }
 
 /**
- * 3. LẤY FILE ĐÍNH KÈM BASE64 ĐỂ XEM ẢNH/FILE TRỰC TIẾP
+ * 3. GỬI DỮ LIỆU LÊN SUPABASE (NTXX)
  */
-function getAttachmentData(params) {
+function ntxx_pushToSupabase(records) {
   try {
-    var msg = GmailApp.getMessageById(params.msgId);
-    var atts = msg ? msg.getAttachments({ includeInlineImages: true, includeAttachments: true }) : null;
-    var att = atts ? atts[parseInt(params.attIdx || '0', 10)] : null;
-    if (!att) return { status: 'error', message: 'Không tìm thấy file' };
-    return {
-      status: 'success',
-      name: att.getName(),
-      contentType: att.getContentType() || 'image/jpeg',
-      dataUri: 'data:' + (att.getContentType() || 'image/jpeg') + ';base64,' + Utilities.base64Encode(att.getBytes())
+    var endpoint = NTXX_SUPABASE_CONFIG.PROJECT_URL + '/rest/v1/' + NTXX_SUPABASE_CONFIG.TABLE_NAME + '?on_conflict=thread_id';
+    var options = {
+      method: 'post',
+      contentType: 'application/json',
+      headers: {
+        'apikey': NTXX_SUPABASE_CONFIG.ANON_KEY,
+        'Authorization': 'Bearer ' + NTXX_SUPABASE_CONFIG.ANON_KEY,
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      payload: JSON.stringify(records),
+      muteHttpExceptions: true
     };
-  } catch(e) {
-    return { status: 'error', message: e.toString() };
+
+    var response = UrlFetchApp.fetch(endpoint, options);
+    var statusCode = response.getResponseCode();
+    if (statusCode >= 200 && statusCode < 300) {
+      Logger.log('Đã lưu ' + records.length + ' mail NTXX vào Supabase!');
+      return 'success (' + records.length + ' rows)';
+    } else {
+      return 'error: ' + response.getContentText();
+    }
+  } catch (err) {
+    return 'exception: ' + err.toString();
   }
 }
 
 /**
- * 4. HÀM XỬ LÝ HTTP GET & POST (WEB APP ENDPOINT)
+ * 4. TẢI ẢNH CHẤT LƯỢNG CAO THEO YÊU CẦU (NTXX)
  */
-function doGet(e) {
+function ntxx_getAttachmentData(params) {
   try {
-    var params = (e && e.parameter) ? e.parameter : {};
-    if (params.action === 'getAttachmentData') {
-      return ContentService.createTextOutput(JSON.stringify(getAttachmentData(params))).setMimeType(ContentService.MimeType.JSON);
-    }
-    if (params.q !== undefined || params.action === 'gmail' || params.action === 'get_ntxx_emails') {
-      return ContentService.createTextOutput(JSON.stringify(processGmailSearch(params))).setMimeType(ContentService.MimeType.JSON);
-    }
-    return ContentService.createTextOutput(JSON.stringify(autoSyncNtxxGmailToSupabase())).setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
-  }
-}
+    var msgId = params.msgId;
+    var attIdx = parseInt(params.attIdx || '0', 10);
+    if (!msgId) return { status: 'error', message: 'Thiếu msgId' };
 
-function doPost(e) {
-  try {
-    var body = e.postData ? JSON.parse(e.postData.contents) : {};
-    var resData = processGmailSearch({
-      q: body.q || SUPABASE_CONFIG.DEFAULT_QUERY,
-      limit: body.limit || 50,
-      incremental: body.incremental !== false
-    });
-    return ContentService.createTextOutput(JSON.stringify(resData)).setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+    var msg = GmailApp.getMessageById(msgId);
+    if (!msg) return { status: 'error', message: 'Không tìm thấy email' };
+
+    var atts = msg.getAttachments({ includeInlineImages: true, includeAttachments: true });
+    if (!atts || !atts[attIdx]) return { status: 'error', message: 'Không tìm thấy file' };
+
+    var att = atts[attIdx];
+    var contentType = att.getContentType() || 'image/jpeg';
+    var b64 = Utilities.base64Encode(att.getBytes());
+
+    return {
+      status: 'success',
+      name: att.getName(),
+      contentType: contentType,
+      dataUri: 'data:' + contentType + ';base64,' + b64
+    };
+  } catch(err) {
+    return { status: 'error', message: err.toString() };
   }
 }

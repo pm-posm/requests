@@ -1,14 +1,11 @@
 /**
  * ==============================================================================
  * HỆ THỐNG ĐỒNG BỘ GMAIL BẢO HÀNH -> SUPABASE CLOUD (SMART INCREMENTAL SYNC)
- * 1. Cơ chế Quét Gia Tăng Thông Minh: Bỏ qua email cũ trong 0.01s nếu không đổi
- * 2. Chỉ đẩy email MỚI hoặc có PHẢN HỒI MỚI về Supabase (Gom 1 Batch duy nhất)
- * 3. Hỗ trợ quét sâu 50 mail gần nhất để chống sót mail khi dồn ứ nhiều ngày
- * 4. Giới hạn an toàn dung lượng HTML Body (100KB) bảo vệ bộ nhớ JSONB Supabase
+ * Đã đổi tên độc lập: Tiền tố WARRANTY_ chống xung đột với các file khác
  * ==============================================================================
  */
 
-const SUPABASE_CONFIG = {
+var WARRANTY_SUPABASE_CONFIG = {
   PROJECT_URL: 'https://ikfychmglmunznceopnh.supabase.co',
   ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrZnljaG1nbG11bnpuY2VvcG5oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4Njc0MjAsImV4cCI6MjEwMjQ0MzQyMH0.2eMYy8NPMC66OldPPtmm606zlqOByPv-_zbcNKioM_Y',
   TABLE_NAME: 'warranty_emails',
@@ -17,30 +14,30 @@ const SUPABASE_CONFIG = {
 };
 
 /**
- * 1. HÀM CHẠY TRIGGER ĐỊNH KỲ 24/7 (MỖI 5 - 10 PHÚT)
+ * 1. HÀM CHẠY TRIGGER ĐỊNH KỲ 24/7 (BẢO HÀNH)
  */
-function autoSyncGmailToSupabase() {
-  Logger.log('Bắt đầu kiểm tra email mới...');
-  var result = processGmailSearch({
-    q: SUPABASE_CONFIG.DEFAULT_QUERY,
+function autoSyncWarrantyGmailToSupabase() {
+  Logger.log('Bắt đầu kiểm tra email Bảo Hành mới...');
+  var result = warranty_processGmailSearch({
+    q: WARRANTY_SUPABASE_CONFIG.DEFAULT_QUERY,
     limit: 50,
     incremental: true
   });
-  Logger.log('Kết quả: ' + JSON.stringify(result));
+  Logger.log('Kết quả Bảo Hành: ' + JSON.stringify(result));
   return result;
 }
 
 /**
- * Lấy danh sách map { [thread_id]: last_updated } từ Supabase để so khớp siêu tốc
+ * Lấy danh sách map { [thread_id]: last_updated } từ Supabase
  */
-function getExistingThreadsMap() {
+function warranty_getExistingThreadsMap() {
   try {
-    var endpoint = SUPABASE_CONFIG.PROJECT_URL + '/rest/v1/' + SUPABASE_CONFIG.TABLE_NAME + '?select=thread_id,last_updated';
+    var endpoint = WARRANTY_SUPABASE_CONFIG.PROJECT_URL + '/rest/v1/' + WARRANTY_SUPABASE_CONFIG.TABLE_NAME + '?select=thread_id,last_updated';
     var options = {
       method: 'get',
       headers: {
-        'apikey': SUPABASE_CONFIG.ANON_KEY,
-        'Authorization': 'Bearer ' + SUPABASE_CONFIG.ANON_KEY
+        'apikey': WARRANTY_SUPABASE_CONFIG.ANON_KEY,
+        'Authorization': 'Bearer ' + WARRANTY_SUPABASE_CONFIG.ANON_KEY
       },
       muteHttpExceptions: true
     };
@@ -54,20 +51,20 @@ function getExistingThreadsMap() {
       return map;
     }
   } catch (e) {
-    Logger.log('Lỗi đọc Supabase: ' + e.toString());
+    Logger.log('Lỗi đọc Supabase Warranty: ' + e.toString());
   }
   return {};
 }
 
 /**
- * 2. QUÉT GMAIL THÔNG MINH - CHỈ XỬ LÝ MAIL MỚI PHÁT SINH (BATCH 1 LẦN)
+ * 2. QUÉT GMAIL BẢO HÀNH - BATCH 1 LẦN
  */
-function processGmailSearch(params) {
-  var query = params.q ? decodeURIComponent(params.q) : SUPABASE_CONFIG.DEFAULT_QUERY;
-  var limit = parseInt(params.limit || String(SUPABASE_CONFIG.DEFAULT_LIMIT), 10);
+function warranty_processGmailSearch(params) {
+  var query = params.q ? decodeURIComponent(params.q) : WARRANTY_SUPABASE_CONFIG.DEFAULT_QUERY;
+  var limit = parseInt(params.limit || String(WARRANTY_SUPABASE_CONFIG.DEFAULT_LIMIT), 10);
   var isIncremental = params.incremental !== false && params.incremental !== 'false';
 
-  var existingMap = isIncremental ? getExistingThreadsMap() : {};
+  var existingMap = isIncremental ? warranty_getExistingThreadsMap() : {};
   var threads = GmailApp.search(query, 0, Math.min(limit, 50));
   var results = [];
   var supabasePayload = [];
@@ -82,7 +79,6 @@ function processGmailSearch(params) {
     var lastMsg = messages[messages.length - 1];
     var lastUpdatedIso = lastMsg.getDate().toISOString();
 
-    // NẾU EMAIL ĐÃ CÓ TRÊN SUPABASE VÀ KHÔNG CÓ THAY ĐỔI -> BỎ QUA NGAY TRONG 0.01s
     if (isIncremental && existingMap[threadId] === lastUpdatedIso) {
       skippedCount++;
       continue;
@@ -113,7 +109,6 @@ function processGmailSearch(params) {
 
       var msgPlain = msg.getPlainBody() || '';
       var rawHtml = msg.getBody() || '';
-      // Giới hạn an toàn dung lượng HTML tối đa 100KB để bảo vệ Supabase JSONB
       var msgHtml = rawHtml.length > 100000 ? rawHtml.substring(0, 100000) : rawHtml;
 
       msgsData.push({
@@ -163,7 +158,7 @@ function processGmailSearch(params) {
 
   var supabaseStatus = 'skipped (không có mail mới)';
   if (supabasePayload.length > 0) {
-    supabaseStatus = pushToSupabase(supabasePayload);
+    supabaseStatus = warranty_pushToSupabase(supabasePayload);
   }
 
   return {
@@ -177,17 +172,17 @@ function processGmailSearch(params) {
 }
 
 /**
- * 3. GỬI DỮ LIỆU LÊN SUPABASE (BATCH 1 LẦN DUY NHẤT)
+ * 3. GỬI DỮ LIỆU LÊN SUPABASE (BẢO HÀNH)
  */
-function pushToSupabase(records) {
+function warranty_pushToSupabase(records) {
   try {
-    var endpoint = SUPABASE_CONFIG.PROJECT_URL + '/rest/v1/' + SUPABASE_CONFIG.TABLE_NAME + '?on_conflict=thread_id';
+    var endpoint = WARRANTY_SUPABASE_CONFIG.PROJECT_URL + '/rest/v1/' + WARRANTY_SUPABASE_CONFIG.TABLE_NAME + '?on_conflict=thread_id';
     var options = {
       method: 'post',
       contentType: 'application/json',
       headers: {
-        'apikey': SUPABASE_CONFIG.ANON_KEY,
-        'Authorization': 'Bearer ' + SUPABASE_CONFIG.ANON_KEY,
+        'apikey': WARRANTY_SUPABASE_CONFIG.ANON_KEY,
+        'Authorization': 'Bearer ' + WARRANTY_SUPABASE_CONFIG.ANON_KEY,
         'Prefer': 'resolution=merge-duplicates'
       },
       payload: JSON.stringify(records),
@@ -197,7 +192,7 @@ function pushToSupabase(records) {
     var response = UrlFetchApp.fetch(endpoint, options);
     var statusCode = response.getResponseCode();
     if (statusCode >= 200 && statusCode < 300) {
-      Logger.log('Đã lưu ' + records.length + ' mail vào Supabase!');
+      Logger.log('Đã lưu ' + records.length + ' mail bảo hành vào Supabase!');
       return 'success (' + records.length + ' rows)';
     } else {
       return 'error: ' + response.getContentText();
@@ -208,9 +203,9 @@ function pushToSupabase(records) {
 }
 
 /**
- * 4. TẢI ẢNH CHẤT LƯỢNG CAO THEO YÊU CẦU (ON-DEMAND)
+ * 4. TẢI ẢNH CHẤT LƯỢNG CAO THEO YÊU CẦU
  */
-function getAttachmentData(params) {
+function warranty_getAttachmentData(params) {
   try {
     var msgId = params.msgId;
     var attIdx = parseInt(params.attIdx || '0', 10);
@@ -234,40 +229,5 @@ function getAttachmentData(params) {
     };
   } catch(err) {
     return { status: 'error', message: err.toString() };
-  }
-}
-
-/**
- * 5. WEB APP ENDPOINT
- */
-function doGet(e) {
-  try {
-    const params = (e && e.parameter) ? e.parameter : {};
-    if (params.action === 'getAttachmentData') {
-      return ContentService.createTextOutput(JSON.stringify(getAttachmentData(params))).setMimeType(ContentService.MimeType.JSON);
-    }
-    if (params.q !== undefined || params.action === 'gmail') {
-      return ContentService.createTextOutput(JSON.stringify(processGmailSearch(params))).setMimeType(ContentService.MimeType.JSON);
-    }
-    return ContentService.createTextOutput(JSON.stringify(autoSyncGmailToSupabase())).setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
-  }
-}
-
-function doPost(e) {
-  try {
-    let params = (e && e.parameter) ? e.parameter : {};
-    if (e && e.postData && e.postData.contents) {
-      try {
-        params = Object.assign({}, params, JSON.parse(e.postData.contents));
-      } catch (pErr) {}
-    }
-    if (params.action === 'getAttachmentData') {
-      return ContentService.createTextOutput(JSON.stringify(getAttachmentData(params))).setMimeType(ContentService.MimeType.JSON);
-    }
-    return ContentService.createTextOutput(JSON.stringify(processGmailSearch(params))).setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
   }
 }
