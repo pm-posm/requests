@@ -1,11 +1,11 @@
 import React from 'react';
 import { 
-  ClipboardList, RefreshCw, Table, BarChart3, Download, Settings, Link as LinkIcon 
+  ClipboardList, RefreshCw, Table, BarChart3, Download, Settings, Link as LinkIcon, Mail 
 } from 'lucide-react';
 
 interface InstallationHeaderProps {
-  activeModuleTab: 'DATA_LIST' | 'ANALYST' | 'EXCEL_EXPORT';
-  setActiveModuleTab: (tab: 'DATA_LIST' | 'ANALYST' | 'EXCEL_EXPORT') => void;
+  activeModuleTab: 'DATA_LIST' | 'ANALYST' | 'INBOX' | 'EXCEL_EXPORT';
+  setActiveModuleTab: (tab: 'DATA_LIST' | 'ANALYST' | 'INBOX' | 'EXCEL_EXPORT') => void;
   lastSyncedAt: string;
   autoRefreshEnabled: boolean;
   countdownSeconds: number;
@@ -108,6 +108,20 @@ export const InstallationHeader: React.FC<InstallationHeaderProps> = ({
           >
             <BarChart3 className="w-3.5 h-3.5" />
             <span>Báo Cáo Tiến Độ &amp; Phân Tích</span>
+          </button>
+          <button
+            onClick={() => setActiveModuleTab('INBOX')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              activeModuleTab === 'INBOX'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs font-bold'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+            }`}
+          >
+            <Mail className="w-3.5 h-3.5" />
+            <span>Hộp Thư Gmail</span>
+            <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 uppercase tracking-wider animate-pulse">
+              Live
+            </span>
           </button>
         </div>
 

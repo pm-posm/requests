@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Loader2, AlertCircle, X, Search, Edit3, User, Check, AlertTriangle, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import toast from 'react-hot-toast';
@@ -11,10 +12,34 @@ import { ProjectTableView } from './installation/components/ProjectTableView';
 import { ProjectDetailView } from './installation/components/ProjectDetailView';
 import { AnalystDashboard } from './installation/components/AnalystDashboard';
 import { EditSyncDrawer } from './installation/components/EditSyncDrawer';
+import { InstallationInboxView } from './installation/components/InstallationInboxView';
 import { getStatusBadgeStyle } from './installation/utils/statusCalculators';
 
 export default function TrackingInstallation() {
-  const [activeModuleTab, setActiveModuleTab] = useState<'DATA_LIST' | 'ANALYST' | 'EXCEL_EXPORT'>('DATA_LIST');
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Derive activeModuleTab directly from URL pathname
+  const activeModuleTab = useMemo<'DATA_LIST' | 'ANALYST' | 'INBOX' | 'EXCEL_EXPORT'>(() => {
+    const path = location.pathname.toLowerCase();
+    if (path.includes('/tracking/installation/analytics') || path.includes('/tracking/installation/report')) {
+      return 'ANALYST';
+    }
+    if (path.includes('/tracking/installation/inbox')) {
+      return 'INBOX';
+    }
+    return 'DATA_LIST';
+  }, [location.pathname]);
+
+  const handleTabChange = (tab: 'DATA_LIST' | 'ANALYST' | 'INBOX' | 'EXCEL_EXPORT') => {
+    if (tab === 'ANALYST') {
+      navigate('/tracking/installation/analytics');
+    } else if (tab === 'INBOX') {
+      navigate('/tracking/installation/inbox');
+    } else {
+      navigate('/tracking/installation');
+    }
+  };
 
   // Custom Hook 1: Data & Sync Management
   const {
@@ -161,7 +186,7 @@ export default function TrackingInstallation() {
       {/* HEADER COMPONENT */}
       <InstallationHeader
         activeModuleTab={activeModuleTab}
-        setActiveModuleTab={setActiveModuleTab}
+        setActiveModuleTab={handleTabChange}
         lastSyncedAt={lastSyncedAt}
         autoRefreshEnabled={autoRefreshEnabled}
         countdownSeconds={countdownSeconds}
@@ -259,6 +284,13 @@ export default function TrackingInstallation() {
           contactMap={contactMap}
           handleOpenEdit={handleOpenEdit}
         />
+      )}
+
+      {/* MODULE TAB 3: DEDICATED INSTALLATION GMAIL INBOX */}
+      {activeModuleTab === 'INBOX' && (
+        <div className="animate-in fade-in duration-150">
+          <InstallationInboxView />
+        </div>
       )}
 
       {/* EDIT DRAWER COMPONENT (2-WAY SYNC) */}

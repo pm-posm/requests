@@ -227,6 +227,28 @@ export function Sidebar({
                 isLocked={false}
                 onClick={() => handleRouteClick('/tracking/installation', 'tracking_installation', false)} 
               />
+              {!isCollapsed && pathname.startsWith('/tracking/installation') && (
+                <div className="pl-6 pr-2 py-1 space-y-0.5 border-l border-slate-200 dark:border-slate-800 ml-5 my-1">
+                  <SubSidebarItem 
+                    label="Danh Sách Dự Án" 
+                    active={pathname === '/tracking/installation' || pathname === '/tracking/installation/list'} 
+                    isLocked={false}
+                    onClick={() => handleRouteClick('/tracking/installation', 'tracking_installation', false)} 
+                  />
+                  <SubSidebarItem 
+                    label="Báo Cáo Phân Tích" 
+                    active={pathname.startsWith('/tracking/installation/analytics') || pathname.startsWith('/tracking/installation/report')} 
+                    isLocked={false}
+                    onClick={() => handleRouteClick('/tracking/installation/analytics', 'tracking_installation', false)} 
+                  />
+                  <SubSidebarItem 
+                    label="Hộp Thư Gmail" 
+                    active={pathname.startsWith('/tracking/installation/inbox')} 
+                    isLocked={false}
+                    onClick={() => handleRouteClick('/tracking/installation/inbox', 'tracking_installation', false)} 
+                  />
+                </div>
+              )}
             </div>
           </div>
 
