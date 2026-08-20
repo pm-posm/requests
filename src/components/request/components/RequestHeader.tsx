@@ -1,9 +1,11 @@
 import React from 'react';
 import { 
-  Inbox, RefreshCw, Table, Settings 
+  Inbox, RefreshCw, Table, BarChart3, Settings, Mail 
 } from 'lucide-react';
 
 interface RequestHeaderProps {
+  activeModuleTab: 'DATA_LIST' | 'ANALYST' | 'INBOX';
+  setActiveModuleTab: (tab: 'DATA_LIST' | 'ANALYST' | 'INBOX') => void;
   lastSyncedAt: string;
   autoRefreshEnabled: boolean;
   countdownSeconds: number;
@@ -19,6 +21,8 @@ interface RequestHeaderProps {
 }
 
 export const RequestHeader: React.FC<RequestHeaderProps> = ({
+  activeModuleTab,
+  setActiveModuleTab,
   lastSyncedAt,
   autoRefreshEnabled,
   countdownSeconds,
@@ -105,8 +109,36 @@ export const RequestHeader: React.FC<RequestHeaderProps> = ({
         </div>
       </div>
 
-      {/* QUICK CONTROLS */}
+      {/* TOP MODULE TABS & QUICK CONTROLS */}
       <div className="flex items-center gap-2 self-start md:self-auto flex-wrap">
+        <div className="bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl flex items-center gap-1 border border-slate-200/60 dark:border-slate-700">
+          <button
+            onClick={() => setActiveModuleTab('DATA_LIST')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              activeModuleTab === 'DATA_LIST'
+                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs font-bold'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+            }`}
+          >
+            <Table className="w-3.5 h-3.5" />
+            <span>Danh Sách Request</span>
+          </button>
+          <button
+            onClick={() => setActiveModuleTab('INBOX')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              activeModuleTab === 'INBOX'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs font-bold'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+            }`}
+          >
+            <Mail className="w-3.5 h-3.5" />
+            <span>Hộp Thư Gmail</span>
+            <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 uppercase tracking-wider animate-pulse">
+              Live
+            </span>
+          </button>
+        </div>
+
         <button
           onClick={() => setIsNewRequestOpen(true)}
           className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer"

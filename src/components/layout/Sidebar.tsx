@@ -132,6 +132,12 @@ export function Sidebar({
                     isLocked={false}
                     onClick={() => handleRouteClick('/requests', 'request', false)} 
                   />
+                  <SubSidebarItem 
+                    label="Hộp Thư Gmail (Live)" 
+                    active={pathname === '/requests/inbox'} 
+                    isLocked={false}
+                    onClick={() => handleRouteClick('/requests/inbox', 'request', false)} 
+                  />
                 </div>
               )}
             </div>
