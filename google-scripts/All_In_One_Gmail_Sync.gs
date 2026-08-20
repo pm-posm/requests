@@ -1,15 +1,15 @@
 /**
  * ==============================================================================
- * HỆ THỐNG ĐỒNG BỘ TỔNG HỢP GMAIL 3 TRONG 1 -> SUPABASE CLOUD (ALL-IN-ONE)
- * 1. Hỗ trợ đầy đủ cả 3 luồng: BẢO HÀNH, LẮP ĐẶT, NTXX
+ * HỆ THỐNG ĐỒNG BỘ TỔNG HỢP GMAIL 4 TRONG 1 -> SUPABASE CLOUD (ALL-IN-ONE)
+ * 1. Hỗ trợ đầy đủ cả 4 luồng: BẢO HÀNH, LẮP ĐẶT, NTXX, REQUEST
  * 2. Cơ chế Quét Gia Tăng Thông Minh (Smart Incremental): 0.01s bỏ qua mail cũ
- * 3. 1 Trigger duy nhất autoSyncAllGmailToSupabase() quét cả 3 luồng cùng lúc
+ * 3. 1 Trigger duy nhất autoSyncAllGmailToSupabase() quét cả 4 luồng cùng lúc
  * 4. 1 Web App URL duy nhất phục vụ toàn bộ Dashboard
  * ==============================================================================
  */
 
 // ------------------------------------------------------------------------------
-// CẤU HÌNH SUPABASE CHO 3 BẢNG
+// CẤU HÌNH SUPABASE CHO 4 BẢNG
 // ------------------------------------------------------------------------------
 var SUPABASE_GLOBAL_CONFIG = {
   PROJECT_URL: 'https://ikfychmglmunznceopnh.supabase.co',
@@ -34,23 +34,31 @@ var NTXX_CONFIG = {
   DEFAULT_LIMIT: 50
 };
 
+var REQUEST_CONFIG = {
+  TABLE_NAME: 'request_emails',
+  DEFAULT_QUERY: 'subject:"request" OR subject:"REQUEST" OR subject:"yêu cầu" OR subject:"POSM"',
+  DEFAULT_LIMIT: 50
+};
+
 // ==============================================================================
 // 1. HÀM TRIGGER TỰ ĐỘNG CHẠY 24/7 (CÀI ĐẶT 5 - 10 PHÚT/LẦN)
 // ==============================================================================
 
 /**
- * TRIGGER TỔNG HỢP: Quét cả 3 danh mục (Bảo Hành, Lắp Đặt, NTXX) trong 1 lần chạy
+ * TRIGGER TỔNG HỢP: Quét cả 4 danh mục (Bảo Hành, Lắp Đặt, NTXX, Request) trong 1 lần chạy
  */
 function autoSyncAllGmailToSupabase() {
-  Logger.log('>>> BẮT ĐẦU ĐỒNG BỘ TOÀN BỘ GMAIL (BẢO HÀNH + LẮP ĐẶT + NTXX) <<<');
+  Logger.log('>>> BẮT ĐẦU ĐỒNG BỘ TOÀN BỘ GMAIL (BẢO HÀNH + LẮP ĐẶT + NTXX + REQUEST) <<<');
   var resWarranty = autoSyncWarrantyGmailToSupabase();
   var resInstallation = autoSyncInstallationGmailToSupabase();
   var resNtxx = autoSyncNtxxGmailToSupabase();
+  var resRequest = autoSyncRequestGmailToSupabase();
   return {
     status: 'success',
     warranty: resWarranty,
     installation: resInstallation,
-    ntxx: resNtxx
+    ntxx: resNtxx,
+    request: resRequest
   };
 }
 
@@ -69,8 +77,12 @@ function autoSyncNtxxGmailToSupabase() {
   return syncGenericGmailModule(NTXX_CONFIG, { q: NTXX_CONFIG.DEFAULT_QUERY, limit: 50, incremental: true });
 }
 
+function autoSyncRequestGmailToSupabase() {
+  return syncGenericGmailModule(REQUEST_CONFIG, { q: REQUEST_CONFIG.DEFAULT_QUERY, limit: 50, incremental: true });
+}
+
 // ==============================================================================
-// 2. CORE ENGINE ĐỒNG BỘ GMAIL (CHUNG CHO CẢ 3 BẢNG)
+// 2. CORE ENGINE ĐỒNG BỘ GMAIL (CHUNG CHO CẢ 4 BẢNG)
 // ==============================================================================
 
 function getModuleExistingMap(tableName) {
@@ -279,6 +291,10 @@ function doGet(e) {
     var action = String(params.action || '').toLowerCase();
     var table = String(params.table || '').toLowerCase();
     
+    if (action === 'request' || action === 'get_request_emails' || table === 'request_emails') {
+      return ContentService.createTextOutput(JSON.stringify(syncGenericGmailModule(REQUEST_CONFIG, params))).setMimeType(ContentService.MimeType.JSON);
+    }
+
     if (action === 'installation' || action === 'get_installation_emails' || table === 'installation_emails') {
       return ContentService.createTextOutput(JSON.stringify(syncGenericGmailModule(INSTALLATION_CONFIG, params))).setMimeType(ContentService.MimeType.JSON);
     }
@@ -292,7 +308,7 @@ function doGet(e) {
       return ContentService.createTextOutput(JSON.stringify(syncGenericGmailModule(WARRANTY_CONFIG, params))).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // Nếu gọi không tham số -> Chạy đồng bộ toàn bộ
+    // Nếu gọi không tham số -> Chạy đồng bộ toàn bộ (Cả 4 module)
     return ContentService.createTextOutput(JSON.stringify(autoSyncAllGmailToSupabase())).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
